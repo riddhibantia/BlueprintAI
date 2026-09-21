@@ -1,8 +1,9 @@
 """Central app settings. Source of truth: .env (see .env.example)."""
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     DATABASE_URL: str = "sqlite:///./devblueprint.db"
     JWT_SECRET: str = "change-me-dev-secret-min-32-chars-long!!"
     JWT_ALGORITHM: str = "HS256"
@@ -24,10 +25,6 @@ class Settings(BaseSettings):
     @property
     def use_openai(self) -> bool:
         return bool(self.OPENAI_API_KEY) and self.LLM_PROVIDER == "openai"
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 
 settings = Settings()

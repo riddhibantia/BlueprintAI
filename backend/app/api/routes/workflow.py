@@ -11,11 +11,10 @@ STAGES = ["requirements", "prd", "architecture", "db_api_security", "validation"
 
 def _run_stage(db: Session, pid: str, stage: str):
     # Lazy import to avoid hard dependency at boot on low-RAM machines
-    from app.models.db import Requirement
+    from app.models.db import Project, Requirement
     if stage == "requirements":
         from app.agents.generators import gen_requirements
-        from app.models.db import Project
-        p = db.query(__import__("app.models.db", fromlist=["Project"]).Project).filter_by(id=pid).first()
+        p = db.query(Project).filter_by(id=pid).first()
         reqs = gen_requirements((p.product_idea or p.name) if p else "project")
         n = db.query(Requirement).filter_by(project_id=pid).count()
         for i, r in enumerate(reqs, n + 1):

@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.api.deps import current_user, project_or_403
 from app.models.db import (Requirement, Prd, UserStory, ArchitectureComponent, ArchitectureRelationship,
                            DatabaseEntity, DatabaseField, ApiEndpoint, SecurityRequirement,
-                           ImplementationTask, TestCase, AgentRun)
+                           ImplementationTask, TestCase, AgentRun, Document, DocumentChunk)
 from app.agents.generators import (gen_prd, gen_stories, gen_architecture, gen_db, gen_apis,
                                    gen_security, gen_tasks, gen_tests)
 from app.traceability.engine import add_link
@@ -15,12 +15,9 @@ router = APIRouter(tags=["blueprint"])
 
 
 def _evidence(db: Session, pid: str, query: str) -> str:
-    from app.models.db import DocumentChunk
-    chunks = [{"content": c.content, "section": c.section, "source": c.document_id}
-              for c in db.query(DocumentChunk).join(
-                  __import__("app.models.db", fromlist=["Document"]).Document,
-                  __import__("app.models.db", fromlist=["Document"]).Document.id == DocumentChunk.document_id)
-              .filter(__import__("app.models.db", fromlist=["Document"]).Document.project_id == pid).limit(200).all()]
+    rows = db.query(DocumentChunk).join(Document, Document.id == DocumentChunk.document_id)\
+        .filter(Document.project_id == pid).limit(200).all()
+    chunks = [{"content": c.content, "section": c.section, "source": c.document_id} for c in rows]
     if not chunks:
         return ""
     hits = retrieve(chunks, query)

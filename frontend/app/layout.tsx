@@ -1,19 +1,42 @@
 import "./globals.css";
+import AssistantPanel from "../components/assistant";
+
+const NAV: [string, string][] = [
+  ["Overview", ""],
+  ["Requirements", "requirements"],
+  ["PRD", "prd"],
+  ["User Stories", "stories"],
+  ["Architecture", "architecture"],
+  ["Database", "database"],
+  ["APIs", "apis"],
+  ["Security", "security"],
+  ["Tasks", "tasks"],
+  ["Tests", "tests"],
+  ["Traceability", "traceability"],
+  ["Consistency", "consistency"],
+  ["Knowledge", "knowledge"],
+];
+
+export const metadata = { title: "DevBlueprint", description: "AI-assisted engineering blueprint workspace" };
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
+        <a className="skip" href="#main">Skip to content</a>
         <div className="layout">
-          <nav className="nav">
-            <h3>DevBlueprint</h3>
-            {["Overview", "Requirements", "PRD", "User Stories", "Architecture", "Database", "APIs", "Security", "Tasks", "Tests", "Traceability", "Consistency", "Knowledge", "AI Assistant"].map((m) => (
-              <a key={m} href="#">{m}</a>
+          <nav className="nav" aria-label="Modules">
+            <div className="brand">DevBlueprint<small>engineering workspace</small></div>
+            <div className="sec">Workspace</div>
+            <a href="/dashboard">Dashboard</a>
+            <div className="sec">Blueprint modules</div>
+            {NAV.map(([label]) => (
+              <a key={label} href="/dashboard" title="Open a project first">{label}</a>
             ))}
           </nav>
-          <div className="main">{children}</div>
-          <aside className="panel">
-            <h4>AI Assistant</h4>
-            <p style={{ color: "var(--text-secondary)" }}>Contextual — ask about the artifact in view. Never the primary surface (§29.4).</p>
+          <main className="main" id="main">{children}</main>
+          <aside className="panel" aria-label="AI Assistant">
+            <AssistantPanel />
           </aside>
         </div>
       </body>

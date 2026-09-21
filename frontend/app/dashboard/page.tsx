@@ -1,35 +1,106 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api } from "../../lib/api";
+import { api, isAuthed, logout } from "../../lib/api";
+import { Empty, Loading, ErrorBox, Status } from "../../components/ui";
 
 export default function Dashboard() {
-  const [health, setHealth] = useState<any>(null);
+  const [authed, setAuthed] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("register");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [projects, setProjects] = useState<any[]>([]);
   const [idea, setIdea] = useState("Build an employee expense management platform.");
+  const [health, setHealth] = useState<any>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error">("loading");
+  const [err, setErr] = useState("");
 
-  useEffect(() => {
-    api("/health").then(setHealth).catch(() => setHealth({ status: "backend-down" }));
-    api("/projects").then(setProjects).catch(() => {});
-  }, []);
+  const load = async () => {
+    setState("loading");
+    try {
+      setHealth(await api("/health"));
+      if (isAuthed()) {
+        setAuthed(true);
+        setProjects(await api("/projects"));
+      }
+      setState("idle");
+    } catch (e: any) {
+      setErr(e.message || "Backend unreachable. Start FastAPI on :8000.");
+      setState("error");
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const auth = async () => {
+    try {
+      const r = await api(mode === "login" ? "/auth/login" : "/auth/register", {
+        method: "POST", body: JSON.stringify({ email, password, name }),
+      });
+      localStorage.setItem("token", r.token);
+      setAuthed(true);
+      setProjects(await api("/projects"));
+    } catch (e: any) { setErr(e.message); setState("error"); }
+  };
 
   const create = async () => {
-    const p = await api("/projects", { method: "POST", body: JSON.stringify({ name: idea.slice(0, 60), product_idea: idea }) });
-    setProjects([...projects, { id: p.id, name: p.name }]);
+    const p = await api("/projects", {
+      method: "POST",
+      body: JSON.stringify({ name: idea.slice(0, 60), product_idea: idea }),
+    });
+    window.location.href = `/projects/${p.id}`;
   };
+
+  if (state === "loading") return <Loading stage="Connecting to workspace backend" />;
+  if (state === "error" && !authed && projects.length === 0 && !health)
+    return <ErrorBox message={err} onRetry={() => { setState("loading"); load(); }} />;
+
+  if (!authed)
+    return (
+      <div>
+        <h1>DevBlueprint</h1>
+        <p className="sub">Turn a product idea into a traceable engineering blueprint.</p>
+        <div className="card" style={{ maxWidth: 420 }}>
+          <div className="row">
+            <button className={mode === "login" ? "" : "ghost"} onClick={() => setMode("login")}>Log in</button>
+            <button className={mode === "register" ? "" : "ghost"} onClick={() => setMode("register")}>Sign up</button>
+          </div>
+          <label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" /></label>
+          <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></label>
+          {mode === "register" && <label>Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada" /></label>}
+          <button onClick={auth}>{mode === "login" ? "Log in" : "Create account"}</button>
+          {state === "error" && err && <p className="muted">{err}</p>}
+        </div>
+      </div>
+    );
 
   return (
     <div>
-      <h1>Project dashboard</h1>
-      <div className="card"><span className="mono">health: {JSON.stringify(health)}</span></div>
+      <div className="spread">
+        <div><h1>Projects</h1><p className="sub">Backend: <span className="mono">{health?.db} · {health?.llm}</span></p></div>
+        <button className="ghost" onClick={logout}>Log out</button>
+      </div>
       <div className="card">
-        <h3>No requirements yet — describe your product idea to get started</h3>
-        <textarea rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} />
+        <h3>New project</h3>
+        <p className="muted">Describe the product idea in one line — the pipeline clarifies, then generates.</p>
+        <textarea rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} aria-label="Product idea" />
         <button onClick={create}>Create project</button>
       </div>
-      {projects.map((p) => (
-        <div key={p.id} className="card"><span className="mono">{p.id.slice(0, 8)}</span> <b>{p.name}</b></div>
-      ))}
-      {projects.length === 0 && <p style={{ color: "var(--text-secondary)" }}>Empty state — create your first project above (§29.5).</p>}
+      {projects.length === 0 ? (
+        <Empty title="No projects yet" hint="Describe your product idea above to get started.">
+          <span className="mono muted">Idea → Requirements → PRD → … → Blueprint</span>
+        </Empty>
+      ) : (
+        <div className="grid m2">
+          {projects.map((p) => (
+            <div key={p.id} className="card">
+              <div className="spread"><b>{p.name}</b><Status value={p.status || "draft"} /></div>
+              <p className="muted">{p.idea}</p>
+              <a className="btn" href={`/projects/${p.id}`}>Open workspace</a>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
