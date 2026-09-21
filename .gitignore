@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+devblueprint.db*
+uploads/
+*.pdf
+node_modules/
+.frontend_next/
+.next/
+dist/
+pgdata/

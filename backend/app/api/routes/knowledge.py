@@ -1,0 +1,82 @@
+"""RAG: upload (PDF/text) -> chunk -> embed -> store; query -> hybrid retrieval (§18)."""
+import hashlib, os
+from fastapi import APIRouter, Depends, UploadFile, File
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.config import settings
+from app.api.deps import current_user, project_or_403
+from app.models.db import Document, DocumentChunk, AgentRun
+from app.rag.chunking import chunk_text
+from app.rag.embeddings import embed
+from app.rag.retriever import retrieve
+
+router = APIRouter(tags=["knowledge"])
+
+
+class QueryIn(BaseModel):
+    query: str
+    k: int = 5
+
+
+def _extract(upload: UploadFile, raw: bytes) -> str:
+    name = (upload.filename or "").lower()
+    if name.endswith(".pdf"):
+        try:
+            import fitz
+            doc = fitz.open(stream=raw, filetype="pdf")
+            return "\n".join(page.get_text() for page in doc)
+        except Exception as e:
+            return f"[pdf-parse-failed: {e}]"
+    return raw.decode("utf-8", errors="ignore")
+
+
+@router.post("/projects/{pid}/documents")
+async def upload(pid: str, file: UploadFile = File(...),
+                 db: Session = Depends(get_db), user=Depends(current_user)):
+    project_or_403(pid, db, user)
+    raw = await file.read()
+    if len(raw) > 15 * 1024 * 1024:
+        from fastapi import HTTPException
+        raise HTTPException(400, "File > 15MB")
+    text = _extract(file, raw)
+    checksum = hashlib.sha256(raw).hexdigest()
+    if db.query(Document).filter_by(project_id=pid, checksum=checksum).first():
+        return {"status": "duplicate", "checksum": checksum}
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    doc = Document(project_id=pid, name=file.filename or "upload", checksum=checksum)
+    db.add(doc)
+    db.flush()
+    chunks = chunk_text(text)
+    if settings.STORAGE_MODE == "local":
+        with open(os.path.join(settings.UPLOAD_DIR, f"{doc.id}.txt"), "w", encoding="utf-8") as f:
+            f.write(text[:200000])
+    for i, c in enumerate(chunks[:300]):
+        db.add(DocumentChunk(document_id=doc.id, page_number=i // 3, section=c["section"][:200],
+                             content=c["content"][:4000], meta={"source": doc.name}, embedding=embed(c["content"][:1000])))
+    db.add(AgentRun(project_id=pid, agent="rag-ingest", output_summary=f"{len(chunks)} chunks from {doc.name}"))
+    db.commit()
+    return {"document_id": doc.id, "chunks": len(chunks), "checksum": checksum}
+
+
+@router.post("/projects/{pid}/knowledge/query")
+def query(pid: str, body: QueryIn, db: Session = Depends(get_db), user=Depends(current_user)):
+    from app.models.db import Document as Doc
+    project_or_403(pid, db, user)
+    rows = db.query(DocumentChunk, Doc.name).join(Doc, Doc.id == DocumentChunk.document_id)\
+        .filter(Doc.project_id == pid).limit(300).all()
+    chunks = [{"content": c.content, "section": c.section, "source": name} for c, name in rows]
+    if not chunks:
+        return {"hits": [], "note": "insufficient evidence — upload engineering docs first (§43.20)"}
+    return {"hits": retrieve(chunks, body.query, body.k)}
+
+
+@router.get("/projects/{pid}/documents")
+def list_docs(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    project_or_403(pid, db, user)
+    docs = db.query(Document).filter_by(project_id=pid).all()
+    out = []
+    for d in docs:
+        n = db.query(DocumentChunk).filter_by(document_id=d.id).count()
+        out.append({"id": d.id, "name": d.name, "chunks": n, "checksum": d.checksum[:10]})
+    return out
