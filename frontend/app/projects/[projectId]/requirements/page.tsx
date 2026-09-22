@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { api } from "../../../../lib/api";
 import { Status, Loading, ErrorBox, Empty } from "../../../../components/ui";
 
-export default function Requirements({ params }: { params: { projectId: string } }) {
-  const pid = params.projectId;
+export default function Requirements() {
+  const { projectId: pid } = useParams() as { projectId: string };
   const [reqs, setReqs] = useState<any[]>([]);
   const [questions, setQuestions] = useState<string[]>([]);
   const [answers, setAnswers] = useState("");

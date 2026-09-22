@@ -1,5 +1,4 @@
 """Export blueprint: Markdown / JSON / OpenAPI (§13 export)."""
-import json
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session

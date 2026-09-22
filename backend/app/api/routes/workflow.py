@@ -30,13 +30,17 @@ def run_workflow(pid: str, db: Session = Depends(get_db), user=Depends(current_u
     project_or_403(pid, db, user)
     results = {}
     try:
+        from typing import TypedDict
         from langgraph.graph import StateGraph, END  # type: ignore
+
+        class FlowState(TypedDict, total=False):
+            log: list
         # Minimal graph: linear pass with approval gates recorded as state
         def make_node(stage):
-            def node(state):
+            def node(state: FlowState):
                 return {"log": state.get("log", []) + [_run_stage(db, pid, stage)]}
             return node
-        g = StateGraph(dict)
+        g = StateGraph(FlowState)
         prev = None
         for s in STAGES:
             g.add_node(s, make_node(s))

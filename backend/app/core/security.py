@@ -1,28 +1,40 @@
-"""JWT + password hashing."""
-from datetime import datetime, timedelta
-from jose import jwt
-from passlib.context import CryptContext
+"""JWT (PyJWT) + password hashing (bcrypt, SHA-256 pre-stretch).
+
+Senior note: python-jose (unmaintained since 2022) and passlib (dead since
+2020, broken on bcrypt>=4.1) were dropped. bcrypt direct + SHA-256 pre-hash
+handles >72-byte passwords the way Dropbox-style deployments do.
+"""
+import hashlib
+from datetime import datetime, timedelta, timezone
+
+import bcrypt
+import jwt
 
 from .config import settings
 
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _stretch(pw: str) -> bytes:
+    return hashlib.sha256(pw.encode("utf-8")).hexdigest().encode("utf-8")
 
 
 def hash_password(p: str) -> str:
-    return pwd_ctx.hash(p)
+    return bcrypt.hashpw(_stretch(p), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_ctx.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(_stretch(plain), hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def create_token(sub: str) -> str:
-    exp = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    exp = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode({"sub": sub, "exp": exp}, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
 def decode_token(token: str) -> str | None:
     try:
         return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]).get("sub")
-    except Exception:
+    except jwt.PyJWTError:
         return None

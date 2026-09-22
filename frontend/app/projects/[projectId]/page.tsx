@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { useParams } from "next/navigation";
+import { api, API } from "../../../lib/api";
 import { Metric, Bar, Loading, ErrorBox, Empty, Status } from "../../../components/ui";
 
 const STAGES: [string, string][] = [
@@ -13,14 +14,34 @@ const STAGES: [string, string][] = [
   ["Consistency check", "consistency"],
 ];
 
-export default function Overview({ params }: { params: { projectId: string } }) {
-  const pid = params.projectId;
+export default function Overview() {
+  const { projectId: pid } = useParams() as { projectId: string };
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
   const [done, setDone] = useState<string[]>([]);
 
   const load = () => api(`/projects/${pid}`).then(setData).catch((e) => setErr(e.message));
+
+  /** Authenticated download — plain anchor links would 401 (no Authorization header). */
+  const download = async (kind: "markdown" | "openapi" | "json") => {
+    setErr("");
+    try {
+      const res = await fetch(`${API}/projects/${pid}/export/${kind}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = kind === "markdown"
+        ? await res.blob()
+        : new Blob([JSON.stringify(await res.json(), null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `blueprint-${String(pid).slice(0, 8)}.${kind === "markdown" ? "md" : "json"}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) { setErr(e.message); }
+  };
   useEffect(() => { load(); }, []);
 
   const run = async (stage: string) => {
@@ -85,11 +106,10 @@ export default function Overview({ params }: { params: { projectId: string } }) 
       <div className="card">
         <h3>Export</h3>
         <div className="row">
-          <a className="btn ghost" href={`${process.env.NEXT_PUBLIC_API || "http://localhost:8000"}/projects/${pid}/export/markdown`}>Markdown</a>
-          <a className="btn ghost" href={`${process.env.NEXT_PUBLIC_API || "http://localhost:8000"}/projects/${pid}/export/openapi`}>OpenAPI JSON</a>
-          <a className="btn ghost" href={`${process.env.NEXT_PUBLIC_API || "http://localhost:8000"}/projects/${pid}/export/json`}>Full JSON</a>
+          <button className="ghost" onClick={() => download("markdown")}>Markdown</button>
+          <button className="ghost" onClick={() => download("openapi")}>OpenAPI JSON</button>
+          <button className="ghost" onClick={() => download("json")}>Full JSON</button>
         </div>
-        <p className="muted">Note: exports download from the API directly — log in via the dashboard first.</p>
       </div>
       {m.requirements === 0 && <Empty title="Pipeline not started" hint="Run stage 01 + 02 above to generate the first requirements." />}
     </div>

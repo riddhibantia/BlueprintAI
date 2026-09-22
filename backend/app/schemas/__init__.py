@@ -1,10 +1,10 @@
 """Pydantic schemas (API contract, §27)."""
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RegisterIn(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     name: str = ""
 
 

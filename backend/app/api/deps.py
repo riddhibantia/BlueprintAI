@@ -7,7 +7,7 @@ from app.models.db import User, Project, ProjectMember
 
 
 def current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> User:
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+    token = authorization[7:] if authorization.startswith("Bearer ") else authorization
     sub = decode_token(token) if token else None
     if not sub:
         raise HTTPException(401, "Unauthorized")

@@ -1,10 +1,11 @@
 """RAG: upload (PDF/text) -> chunk -> embed -> store; query -> hybrid retrieval (§18)."""
 import hashlib, os
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.audit import log
 from app.api.deps import current_user, project_or_403
 from app.models.db import Document, DocumentChunk, AgentRun
 from app.rag.chunking import chunk_text
@@ -12,6 +13,7 @@ from app.rag.embeddings import embed
 from app.rag.retriever import retrieve
 
 router = APIRouter(tags=["knowledge"])
+ALLOWED_EXT = (".pdf", ".txt", ".md")
 
 
 class QueryIn(BaseModel):
@@ -35,9 +37,11 @@ def _extract(upload: UploadFile, raw: bytes) -> str:
 async def upload(pid: str, file: UploadFile = File(...),
                  db: Session = Depends(get_db), user=Depends(current_user)):
     project_or_403(pid, db, user)
+    name = (file.filename or "upload").lower()
+    if not name.endswith(ALLOWED_EXT):
+        raise HTTPException(400, f"Only PDF, TXT, or Markdown files are accepted (got {file.filename})")
     raw = await file.read()
     if len(raw) > 15 * 1024 * 1024:
-        from fastapi import HTTPException
         raise HTTPException(400, "File > 15MB")
     text = _extract(file, raw)
     checksum = hashlib.sha256(raw).hexdigest()
@@ -56,15 +60,15 @@ async def upload(pid: str, file: UploadFile = File(...),
                              content=c["content"][:4000], meta={"source": doc.name}, embedding=embed(c["content"][:1000])))
     db.add(AgentRun(project_id=pid, agent="rag-ingest", output_summary=f"{len(chunks)} chunks from {doc.name}"))
     db.commit()
+    log(db, project_id=pid, user_id=user.id, action="knowledge.upload", detail=f"{doc.name} ({len(chunks)} chunks)")
     return {"document_id": doc.id, "chunks": len(chunks), "checksum": checksum}
 
 
 @router.post("/projects/{pid}/knowledge/query")
 def query(pid: str, body: QueryIn, db: Session = Depends(get_db), user=Depends(current_user)):
-    from app.models.db import Document as Doc
     project_or_403(pid, db, user)
-    rows = db.query(DocumentChunk, Doc.name).join(Doc, Doc.id == DocumentChunk.document_id)\
-        .filter(Doc.project_id == pid).limit(300).all()
+    rows = db.query(DocumentChunk, Document.name).join(Document, Document.id == DocumentChunk.document_id)\
+        .filter(Document.project_id == pid).limit(300).all()
     chunks = [{"content": c.content, "section": c.section, "source": name} for c, name in rows]
     if not chunks:
         return {"hits": [], "note": "insufficient evidence — upload engineering docs first (§43.20)"}

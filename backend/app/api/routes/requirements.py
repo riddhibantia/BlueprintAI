@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.audit import log
 from app.api.deps import current_user, project_or_403
 from app.models.db import Requirement, AgentRun, ArtifactVersion
 from app.schemas import RequirementIn, RequirementUpdate, ClarifyIn
@@ -10,8 +11,15 @@ import time
 router = APIRouter(tags=["requirements"])
 
 
+def _used_codes(db: Session, pid: str) -> set[str]:
+    return {r.code for r in db.query(Requirement).filter_by(project_id=pid).all()}
+
+
 def _next_code(db: Session, pid: str) -> str:
-    n = db.query(Requirement).filter_by(project_id=pid).count() + 1
+    used = _used_codes(db, pid)
+    n = len(used) + 1
+    while f"REQ-{n:03d}" in used:
+        n += 1
     return f"REQ-{n:03d}"
 
 
@@ -26,15 +34,20 @@ def generate(pid: str, body: ClarifyIn, db: Session = Depends(get_db), user=Depe
     p = project_or_403(pid, db, user)
     t0 = time.time()
     reqs = gen_requirements(p.product_idea or p.name, body.answers)
+    used = _used_codes(db, pid)
+    counter = len(used) + 1
     for r in reqs:
-        if db.query(Requirement).filter_by(project_id=pid, code=r["code"]).first():
-            r["code"] = _next_code(db, pid)
+        while r["code"] in used:  # batch-safe: count-based bump collides on re-runs
+            r["code"] = f"REQ-{counter:03d}"
+            counter += 1
+        used.add(r["code"])
         db.add(Requirement(project_id=pid, **r))
     db.commit()
     db.add(AgentRun(project_id=pid, agent="requirement", stage="generate",
                     input_summary=(p.product_idea or "")[:300], output_summary=f"{len(reqs)} requirements",
                     latency_ms=int((time.time() - t0) * 1000), tokens=len(reqs) * 40))
     db.commit()
+    log(db, project_id=pid, user_id=user.id, action="requirements.generate", detail=f"{len(reqs)} requirements")
     return {"count": len(reqs), "requirements": reqs}
 
 
@@ -61,7 +74,6 @@ def list_req(pid: str, db: Session = Depends(get_db), user=Depends(current_user)
 def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db), user=Depends(current_user)):
     r = db.query(Requirement).filter_by(id=rid).first()
     if not r:
-        from fastapi import HTTPException
         raise HTTPException(404, "Not found")
     project_or_403(r.project_id, db, user)
     # version on title/desc change (§22 HITL: approved state distinct)
@@ -89,9 +101,12 @@ def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db),
 def approve(rid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     r = db.query(Requirement).filter_by(id=rid).first()
     if not r:
-        from fastapi import HTTPException
         raise HTTPException(404, "Not found")
     project_or_403(r.project_id, db, user)
     r.status = "approved"
+    db.add(ArtifactVersion(project_id=r.project_id, artifact_type="requirement",
+                           artifact_code=r.code, version=r.version,
+                           content={"title": r.title, "status": "approved"}, status="approved"))
     db.commit()
+    log(db, project_id=r.project_id, user_id=user.id, action="requirement.approve", detail=r.code)
     return {"code": r.code, "status": "approved"}

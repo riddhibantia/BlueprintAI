@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.audit import log
 from app.api.deps import current_user, project_or_403
 from app.models.db import Project, ProjectMember, Requirement, UserStory, ApiEndpoint, TestCase, ConsistencyIssue
 from app.schemas import ProjectIn
@@ -16,6 +17,7 @@ def create_project(body: ProjectIn, db: Session = Depends(get_db), user=Depends(
     db.commit()
     db.add(ProjectMember(project_id=p.id, user_id=user.id, role="owner"))
     db.commit()
+    log(db, project_id=p.id, user_id=user.id, action="project.create", detail=p.name)
     return {"id": p.id, "name": p.name, "status": p.status}
 
 

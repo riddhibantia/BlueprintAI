@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { api, apiForm } from "../../../../lib/api";
 import { Loading, ErrorBox, Empty } from "../../../../components/ui";
 
-export default function Knowledge({ params }: { params: { projectId: string } }) {
-  const pid = params.projectId;
+export default function Knowledge() {
+  const { projectId: pid } = useParams() as { projectId: string };
   const [docs, setDocs] = useState<any[]>([]);
   const [q, setQ] = useState("What authentication is required for APIs?");
   const [hits, setHits] = useState<any[]>([]);

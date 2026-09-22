@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { api } from "../../../../lib/api";
 import { Status, Loading, ErrorBox, Empty } from "../../../../components/ui";
 
-export default function Consistency({ params }: { params: { projectId: string } }) {
-  const pid = params.projectId;
+export default function Consistency() {
+  const { projectId: pid } = useParams() as { projectId: string };
   const [issues, setIssues] = useState<any[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);

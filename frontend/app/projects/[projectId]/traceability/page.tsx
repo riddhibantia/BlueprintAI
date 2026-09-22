@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { api } from "../../../../lib/api";
 import { Bar, Loading, ErrorBox, Empty } from "../../../../components/ui";
 
-export default function Traceability({ params }: { params: { projectId: string } }) {
-  const pid = params.projectId;
+export default function Traceability() {
+  const { projectId: pid } = useParams() as { projectId: string };
   const [data, setData] = useState<any>(null);
   const [code, setCode] = useState("REQ-001");
   const [trace, setTrace] = useState<any>(null);
