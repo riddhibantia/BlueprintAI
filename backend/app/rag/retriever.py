@@ -3,6 +3,7 @@ from app.rag.embeddings import embed, cosine
 
 
 def retrieve(chunks: list[dict], query: str, k: int = 5) -> list[dict]:
+    """Hybrid score (vector + lexical) with top-k cutoff; empty base says so upstream."""
     q = query.lower()
     qv = embed(query)
     scored = []

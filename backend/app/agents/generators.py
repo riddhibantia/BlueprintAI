@@ -4,6 +4,7 @@ from app.agents.base import complete
 
 
 def clarify_questions(idea: str) -> list[str]:
+    """Questions that expose the idea's ambiguities (§6.2)."""
     base = [
         "Who are the primary users and roles?",
         "What authentication method is required?",
@@ -21,6 +22,7 @@ def clarify_questions(idea: str) -> list[str]:
 
 
 def gen_requirements(idea: str, answers: str = "", evidence: str = "") -> list[dict]:
+    """Draft typed requirements with acceptance criteria (§6.3)."""
     llm = complete(f"Draft requirements for: {idea}. Clarifications: {answers}", evidence)
     core = [
         ("User registration and login with JWT", "functional", "high"),
@@ -42,6 +44,7 @@ def gen_requirements(idea: str, answers: str = "", evidence: str = "") -> list[d
 
 
 def gen_prd(idea: str, reqs: list[dict], evidence: str = "") -> dict:
+    """Assemble the structured PRD sections (§6.4)."""
     llm = complete(f"PRD outline for {idea} with {len(reqs)} requirements", evidence)
     return {
         "problem": f"Teams building '{idea}' lack connected blueprints.",
@@ -57,15 +60,21 @@ def gen_prd(idea: str, reqs: list[dict], evidence: str = "") -> dict:
 
 
 def gen_stories(reqs: list[dict]) -> list[dict]:
+    """Draft user stories (with acceptance criteria) from functional requirements."""
     out = []
     for i, r in enumerate([x for x in reqs if x["type"] in ("functional", "business-rule")][:15], 1):
-        out.append({"code": f"US-{i:03d}", "title": r["title"],
-                    "story": f"As a user, I want {r['title'].lower()}, so that the goal is achieved.",
-                    "requirement_code": r["code"], "status": "draft"})
+        title = r["title"]
+        out.append({"code": f"US-{i:03d}", "title": title,
+                    "story": f"As a user, I want {title.lower()}, so that the goal is achieved.",
+                    "requirement_code": r["code"], "status": "draft",
+                    "acceptance": [f"{title} is available to authorized users",
+                                   f"Unauthorized access to {title.lower()} is denied",
+                                   f"Completion of {title.lower()} is auditable"]})
     return out
 
 
 def gen_architecture(idea: str, reqs: list[dict], evidence: str = "") -> dict:
+    """Propose components + relationships with auth/deployment boundaries (§8)."""
     complete(f"Architecture for {idea}", evidence)
     comps = [
         {"name": "Web Frontend (Next.js)", "kind": "frontend", "description": "UI workspace", "boundary": "public"},
@@ -84,6 +93,7 @@ def gen_architecture(idea: str, reqs: list[dict], evidence: str = "") -> dict:
 
 
 def gen_db(idea: str) -> dict:
+    """Propose entities with PK/FK-annotated fields (§9)."""
     low = idea.lower()
     if "expense" in low:
         ents = {"User": ["user_id(pk)", "name", "email", "role"],
@@ -97,6 +107,7 @@ def gen_db(idea: str) -> dict:
 
 
 def gen_apis(idea: str) -> list[dict]:
+    """Propose endpoints with auth and schemas (§10)."""
     low = idea.lower()
     if "expense" in low:
         eps = [("POST", "/expenses"), ("GET", "/expenses"), ("GET", "/expenses/{id}"),
@@ -110,6 +121,7 @@ def gen_apis(idea: str) -> list[dict]:
 
 
 def gen_security() -> list[dict]:
+    """Propose security controls (auth, RBAC, validation, secrets) (§11)."""
     items = [("JWT authentication", "All API calls require Bearer JWT"),
              ("RBAC enforcement", "Manager/admin-only approve paths"),
              ("Input validation", "Pydantic schemas on all writes"),
@@ -120,6 +132,7 @@ def gen_security() -> list[dict]:
 
 
 def gen_tasks(reqs: list[dict]) -> list[dict]:
+    """Plan implementation tasks per requirement (§12)."""
     out = []
     for i, r in enumerate(reqs[:12], 1):
         out.append({"code": f"TASK-{i:03d}", "epic": "MVP", "title": f"Implement: {r['title']}",
@@ -128,6 +141,7 @@ def gen_tasks(reqs: list[dict]) -> list[dict]:
 
 
 def gen_tests(reqs: list[dict]) -> list[dict]:
+    """Plan test cases (security kind for security requirements) (§13)."""
     out = []
     for i, r in enumerate(reqs[:12], 1):
         kind = "security" if r["type"] == "security" else "acceptance"

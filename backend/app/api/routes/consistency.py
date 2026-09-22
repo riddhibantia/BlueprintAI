@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.audit import log
 from app.api.deps import current_user, project_or_403
 from app.models.db import ConsistencyIssue, AgentRun
+from app.schemas import StatusPatch
 from app.consistency.rules import run_checks
 from app.agents.base import complete
 
@@ -12,6 +13,7 @@ router = APIRouter(tags=["consistency"])
 
 @router.post("/projects/{pid}/consistency/check")
 def check(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Run deterministic cross-artifact checks; AI explains, the user decides (§15)."""
     project_or_403(pid, db, user)
     found = run_checks(db, pid)
     db.query(ConsistencyIssue).filter_by(project_id=pid, status="open").delete()
@@ -28,7 +30,23 @@ def check(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
 
 @router.get("/projects/{pid}/consistency/issues")
 def issues(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """List recorded issues with severity, evidence and suggested resolution (§33)."""
     project_or_403(pid, db, user)
     rows = db.query(ConsistencyIssue).filter_by(project_id=pid).all()
     return [{"id": r.id, "check": r.check, "severity": r.severity, "description": r.description,
              "affected": r.affected, "suggestion": r.suggestion, "status": r.status} for r in rows]
+
+
+@router.patch("/projects/{pid}/consistency/issues/{iid}")
+def decide(pid: str, iid: str, body: StatusPatch, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Record the human decision on an issue: accepted | rejected | resolved (§22/§33)."""
+    project_or_403(pid, db, user)
+    if body.status not in ("accepted", "rejected", "resolved", "open"):
+        raise HTTPException(400, "status must be accepted|rejected|resolved|open")
+    r = db.query(ConsistencyIssue).filter_by(id=iid, project_id=pid).first()
+    if not r:
+        raise HTTPException(404, "Issue not found")
+    r.status = body.status
+    db.commit()
+    log(db, project_id=pid, user_id=user.id, action="consistency.decide", detail=f"{r.check}:{r.status}")
+    return {"id": r.id, "status": r.status}

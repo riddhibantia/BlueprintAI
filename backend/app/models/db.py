@@ -97,6 +97,7 @@ class DatabaseEntity(Base, TimestampMixin):
     __tablename__ = "database_entities"
     id = Column(String, primary_key=True, default=_id)
     project_id = Column(String, ForeignKey("projects.id"), index=True)
+    code = Column(String, default="")  # DB-001 (stable, human-facing)
     name = Column(String, nullable=False)
     description = Column(Text, default="")
 

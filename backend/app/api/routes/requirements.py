@@ -25,12 +25,14 @@ def _next_code(db: Session, pid: str) -> str:
 
 @router.post("/projects/{pid}/clarify")
 def clarify(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Clarification questions for the product idea (§6.2)."""
     p = project_or_403(pid, db, user)
     return {"questions": clarify_questions(p.product_idea or p.description or p.name)}
 
 
 @router.post("/projects/{pid}/requirements/generate")
 def generate(pid: str, body: ClarifyIn, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Generate stable-ID requirements from the idea + clarifications (§6.3)."""
     p = project_or_403(pid, db, user)
     t0 = time.time()
     reqs = gen_requirements(p.product_idea or p.name, body.answers)
@@ -53,6 +55,7 @@ def generate(pid: str, body: ClarifyIn, db: Session = Depends(get_db), user=Depe
 
 @router.post("/projects/{pid}/requirements")
 def add_one(pid: str, body: RequirementIn, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Hand-add a requirement (gets the next stable code)."""
     project_or_403(pid, db, user)
     r = Requirement(project_id=pid, code=_next_code(db, pid), title=body.title,
                     description=body.description, type=body.type, priority=body.priority,
@@ -64,6 +67,7 @@ def add_one(pid: str, body: RequirementIn, db: Session = Depends(get_db), user=D
 
 @router.get("/projects/{pid}/requirements")
 def list_req(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """List requirements ordered by stable code."""
     project_or_403(pid, db, user)
     return [{"code": r.code, "title": r.title, "type": r.type, "status": r.status,
              "priority": r.priority, "id": r.id, "version": r.version}
@@ -72,10 +76,13 @@ def list_req(pid: str, db: Session = Depends(get_db), user=Depends(current_user)
 
 @router.put("/requirements/{rid}")
 def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Edit a requirement with optimistic locking (stale expected_version -> 409)."""
     r = db.query(Requirement).filter_by(id=rid).first()
     if not r:
         raise HTTPException(404, "Not found")
     project_or_403(r.project_id, db, user)
+    if body.expected_version is not None and body.expected_version != r.version:
+        raise HTTPException(409, f"Version conflict: current v{r.version}, you sent v{body.expected_version}")
     # version on title/desc change (§22 HITL: approved state distinct)
     changed = False
     if body.title and body.title != r.title:
@@ -110,3 +117,19 @@ def approve(rid: str, db: Session = Depends(get_db), user=Depends(current_user))
     db.commit()
     log(db, project_id=r.project_id, user_id=user.id, action="requirement.approve", detail=r.code)
     return {"code": r.code, "status": "approved"}
+
+
+@router.delete("/requirements/{rid}")
+def delete_req(rid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Delete a requirement and its traceability links (full CRUD, §Phase 3)."""
+    from app.models.db import TraceabilityLink
+    r = db.query(Requirement).filter_by(id=rid).first()
+    if not r:
+        raise HTTPException(404, "Not found")
+    project_or_403(r.project_id, db, user)
+    code = r.code
+    db.query(TraceabilityLink).filter_by(project_id=r.project_id, source_type="requirement", source_id=code).delete()
+    db.delete(r)
+    db.commit()
+    log(db, project_id=r.project_id, user_id=user.id, action="requirement.delete", detail=code)
+    return {"deleted": code}

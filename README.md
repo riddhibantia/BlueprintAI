@@ -26,3 +26,21 @@ For full Postgres+pgvector: run `scripts/install_postgres_windows.ps1` as Admin,
 Create Project → Clarify → Generate Requirements → Approve → PRD → Stories → Architecture → DB/APIs/Security → Tasks → Tests → Traceability → Consistency → Impact → Export.
 
 Deterministic metrics only — LLM never invents coverage (§30/§43).
+
+## Verify (§44: the bar is "survives review", not "it runs")
+
+```powershell
+# Backend: unit + E2E + regression (expects 20+ green)
+$env:DATABASE_URL="sqlite:///./e2e_test.db"; $env:PYTHONPATH="backend"
+python -m pytest backend/tests -q
+
+# Measured benchmark (temp DB, real numbers — see docs/EVALUATION.md)
+$env:PYTHONPATH="backend"; python evaluation/benchmark.py --full
+
+# Frontend production build
+cd frontend; npm ci; npm run build
+```
+
+## Modules (§29.3 — all functional, no stubs)
+
+Overview · Requirements · PRD · User Stories · Architecture · Database · APIs · Security · Tasks · Tests · Traceability · Consistency · Knowledge

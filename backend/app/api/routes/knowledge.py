@@ -36,6 +36,7 @@ def _extract(upload: UploadFile, raw: bytes) -> str:
 @router.post("/projects/{pid}/documents")
 async def upload(pid: str, file: UploadFile = File(...),
                  db: Session = Depends(get_db), user=Depends(current_user)):
+    """Ingest a standard (PDF/TXT/MD): parse -> chunk -> embed -> store (§18)."""
     project_or_403(pid, db, user)
     name = (file.filename or "upload").lower()
     if not name.endswith(ALLOWED_EXT):
@@ -66,6 +67,7 @@ async def upload(pid: str, file: UploadFile = File(...),
 
 @router.post("/projects/{pid}/knowledge/query")
 def query(pid: str, body: QueryIn, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Hybrid retrieval over project-scoped chunks; says so when evidence is missing."""
     project_or_403(pid, db, user)
     rows = db.query(DocumentChunk, Document.name).join(Document, Document.id == DocumentChunk.document_id)\
         .filter(Document.project_id == pid).limit(300).all()
@@ -77,6 +79,7 @@ def query(pid: str, body: QueryIn, db: Session = Depends(get_db), user=Depends(c
 
 @router.get("/projects/{pid}/documents")
 def list_docs(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Indexed documents with chunk counts (ingestion status, §35)."""
     project_or_403(pid, db, user)
     docs = db.query(Document).filter_by(project_id=pid).all()
     out = []

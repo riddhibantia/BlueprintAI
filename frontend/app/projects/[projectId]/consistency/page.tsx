@@ -20,6 +20,11 @@ export default function Consistency() {
     setBusy(false);
   };
 
+  const decide = async (id: string, status: string) => {
+    await api(`/projects/${pid}/consistency/issues/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    await load();
+  };
+
   return (
     <div>
       <h1>Consistency</h1>
@@ -30,10 +35,17 @@ export default function Consistency() {
         issues.length === 0 ? <Empty title="No issues recorded" hint="Run a consistency check after generating the blueprint." /> :
         issues.map((i) => (
           <div className="card" key={i.id}>
-            <div className="spread"><Status value={i.severity} /><code>{i.check}</code></div>
+            <div className="spread"><span className="row"><Status value={i.severity} /><Status value={i.status} /></span><code>{i.check}</code></div>
             <p>{i.description}</p>
             <p className="muted">Affected: {(i.affected || []).join(", ") || "—"}</p>
             <p className="muted">Suggestion: {i.suggestion}</p>
+            {i.status === "open" && (
+              <div className="row">
+                <button className="ghost" onClick={() => decide(i.id, "accepted")}>Accept</button>
+                <button className="ghost" onClick={() => decide(i.id, "rejected")}>Reject</button>
+                <button className="ghost" onClick={() => decide(i.id, "resolved")}>Resolve</button>
+              </div>
+            )}
           </div>
         ))}
       {busy && <Loading stage="Comparing architecture, APIs, database and tests" />}

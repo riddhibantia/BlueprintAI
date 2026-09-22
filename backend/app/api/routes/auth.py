@@ -26,6 +26,7 @@ def _payload(u: User) -> dict:
 
 @router.post("/register")
 def register(body: RegisterIn, resp: Response, db: Session = Depends(get_db)):
+    """Create an account; session cookie is set on the response (httpOnly)."""
     email = body.email.strip().lower()
     if db.query(User).filter_by(email=email).first():
         raise HTTPException(400, "Email exists")
@@ -40,6 +41,7 @@ def register(body: RegisterIn, resp: Response, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(body: LoginIn, resp: Response, db: Session = Depends(get_db)):
+    """Log in; session cookie is set on the response (httpOnly)."""
     email = body.email.strip().lower()
     u = db.query(User).filter_by(email=email).first()
     if not u or not verify_password(body.password, u.password_hash):
@@ -52,10 +54,12 @@ def login(body: LoginIn, resp: Response, db: Session = Depends(get_db)):
 
 @router.post("/logout")
 def logout(resp: Response, user: User = Depends(current_user)):
+    """Clear the session cookie."""
     resp.delete_cookie(COOKIE, path="/")
     return {"status": "logged out"}
 
 
 @router.get("/me")
 def me(user: User = Depends(current_user)):
+    """Current session user (drives the frontend auth gate)."""
     return {"id": user.id, "email": user.email, "name": user.name}

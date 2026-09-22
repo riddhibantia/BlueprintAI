@@ -25,13 +25,16 @@ def _bundle(db: Session, pid: str) -> dict:
 
 
 @router.get("/projects/{pid}/export/json")
+@router.get("/projects/{pid}/export/json")
 def export_json(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Export the full blueprint bundle as JSON."""
     project_or_403(pid, db, user)
     return _bundle(db, pid)
 
 
 @router.get("/projects/{pid}/export/markdown")
 def export_md(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Export the blueprint as Markdown."""
     project_or_403(pid, db, user)
     b = _bundle(db, pid)
     lines = [f"# {b['project']['name']}", "", f"> {b['project']['idea']}", "",
@@ -44,6 +47,7 @@ def export_md(pid: str, db: Session = Depends(get_db), user=Depends(current_user
 
 @router.get("/projects/{pid}/export/openapi")
 def export_openapi(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Export endpoints as an OpenAPI 3.0 document (§10)."""
     project_or_403(pid, db, user)
     apis = db.query(ApiEndpoint).filter_by(project_id=pid).all()
     paths = {}
@@ -52,3 +56,33 @@ def export_openapi(pid: str, db: Session = Depends(get_db), user=Depends(current
             "summary": a.code, "security": [{"bearerAuth": []}] if a.auth == "jwt" else [],
             "responses": {"200": {"description": "OK"}}}
     return {"openapi": "3.0.0", "info": {"title": "DevBlueprint API", "version": "1.0.0"}, "paths": paths}
+
+
+@router.get("/projects/{pid}/export/pdf")
+def export_pdf(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Export the blueprint as PDF (§13 export)."""
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from fastapi.responses import Response
+    project_or_403(pid, db, user)
+    b = _bundle(db, pid)
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = [Paragraph(b["project"]["name"], styles["Title"]),
+             Paragraph(f"Idea: {b['project']['idea']}", styles["Normal"]),
+             Paragraph(f"Traceability coverage: {b['coverage']['coverage_pct']}%", styles["Normal"]),
+             Spacer(1, 12), Paragraph("Requirements", styles["Heading2"])]
+    for r in b["requirements"]:
+        story.append(Paragraph(f"<b>{r['code']}</b> {r['title']} ({r['status']})", styles["Normal"]))
+    story += [Spacer(1, 12), Paragraph("APIs", styles["Heading2"])]
+    for a in b["apis"]:
+        story.append(Paragraph(f"{a['method']} {a['path']}", styles["Code"]))
+    story += [Spacer(1, 12), Paragraph("Tests", styles["Heading2"])]
+    for t in b["tests"]:
+        story.append(Paragraph(f"<b>{t['code']}</b> {t['title']}", styles["Normal"]))
+    doc.build(story)
+    return Response(buf.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename=blueprint-{pid[:8]}.pdf"})

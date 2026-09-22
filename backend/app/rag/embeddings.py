@@ -15,6 +15,7 @@ def _hash_embed(text: str, dim: int = DIM) -> list[float]:
 
 
 def embed(text: str) -> list[float]:
+    """8GB-friendly embeddings: deterministic hash vectors, OpenAI when configured."""
     from app.core.config import settings
     if settings.EMBEDDING_PROVIDER == "openai" and settings.OPENAI_API_KEY:
         try:
@@ -28,6 +29,7 @@ def embed(text: str) -> list[float]:
 
 
 def cosine(a: list[float], b: list[float]) -> float:
+    """Cosine similarity for same-dimension vectors."""
     n = min(len(a), len(b))
     if n == 0:
         return 0.0

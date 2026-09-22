@@ -16,6 +16,7 @@ class ImpactIn(BaseModel):
 
 @router.post("/projects/{pid}/impact/analyze")
 def run(pid: str, body: ImpactIn, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Deterministic dependency traversal + LLM explanation for a requirement change (§17)."""
     project_or_403(pid, db, user)
     res = analyze(db, pid, body.requirement_code)
     db.add(ImpactRun(project_id=pid, requirement_code=body.requirement_code,

@@ -1,9 +1,18 @@
 "use client";
 import { useParams } from "next/navigation";
 
+/** Full §29.3 module list — every item is a working page, no stubs. */
 const MODULES: [string, string][] = [
   ["Overview", ""],
   ["Requirements", "requirements"],
+  ["PRD", "prd"],
+  ["User Stories", "stories"],
+  ["Architecture", "architecture"],
+  ["Database", "database"],
+  ["APIs", "apis"],
+  ["Security", "security"],
+  ["Tasks", "tasks"],
+  ["Tests", "tests"],
   ["Traceability", "traceability"],
   ["Consistency", "consistency"],
   ["Knowledge", "knowledge"],

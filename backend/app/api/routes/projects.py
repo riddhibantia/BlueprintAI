@@ -12,6 +12,7 @@ router = APIRouter(tags=["projects"])
 
 @router.post("/projects")
 def create_project(body: ProjectIn, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Create a project; the creator becomes owner (§6.1)."""
     p = Project(name=body.name, description=body.description, product_idea=body.product_idea, owner_id=user.id)
     db.add(p)
     db.commit()
@@ -23,6 +24,7 @@ def create_project(body: ProjectIn, db: Session = Depends(get_db), user=Depends(
 
 @router.get("/projects")
 def list_projects(db: Session = Depends(get_db), user=Depends(current_user)):
+    """Projects the user owns or is a member of."""
     owned = db.query(Project).filter_by(owner_id=user.id).all()
     member_ids = [m.project_id for m in db.query(ProjectMember).filter_by(user_id=user.id).all()]
     shared = db.query(Project).filter(Project.id.in_(member_ids)).all() if member_ids else []
@@ -32,6 +34,7 @@ def list_projects(db: Session = Depends(get_db), user=Depends(current_user)):
 
 @router.get("/projects/{pid}")
 def get_project(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Project detail + deterministic health metrics (§30: computed, never LLM-invented)."""
     p = project_or_403(pid, db, user)
     cov = coverage(db, pid)
     n_req = db.query(Requirement).filter_by(project_id=pid).count()

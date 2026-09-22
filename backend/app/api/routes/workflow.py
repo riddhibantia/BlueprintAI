@@ -27,6 +27,7 @@ def _run_stage(db: Session, pid: str, stage: str):
 
 @router.post("/projects/{pid}/workflow/run")
 def run_workflow(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """LangGraph multi-stage run with human approval checkpoints (§20/§22)."""
     project_or_403(pid, db, user)
     results = {}
     try:

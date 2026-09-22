@@ -17,19 +17,24 @@ const STAGES: [string, string][] = [
 export default function Overview() {
   const { projectId: pid } = useParams() as { projectId: string };
   const [data, setData] = useState<any>(null);
+  const [runs, setRuns] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<string[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
   const [done, setDone] = useState<string[]>([]);
 
-  const load = () => api(`/projects/${pid}`).then(setData).catch((e) => setErr(e.message));
+  const load = () => {
+    api(`/projects/${pid}`).then(setData).catch((e) => setErr(e.message));
+    api(`/projects/${pid}/runs`).then(setRuns).catch(() => {});
+  };
 
   /** Authenticated download — the session cookie travels with credentials. */
-  const download = async (kind: "markdown" | "openapi" | "json") => {
+  const download = async (kind: "markdown" | "pdf" | "openapi" | "json") => {
     setErr("");
     try {
+      const ext = kind === "markdown" ? "md" : kind === "pdf" ? "pdf" : "json";
       await apiDownload(`/projects/${pid}/export/${kind}`,
-        `blueprint-${String(pid).slice(0, 8)}.${kind === "markdown" ? "md" : "json"}`,
-        kind !== "markdown");
+        `blueprint-${String(pid).slice(0, 8)}.${ext}`, kind === "openapi" || kind === "json");
     } catch (e: any) { setErr(e.message); }
   };
   useEffect(() => { load(); }, []);
@@ -39,7 +44,7 @@ export default function Overview() {
     try {
       if (stage === "clarify") {
         const q = await api(`/projects/${pid}/clarify`, { method: "POST" });
-        alert("Clarification questions:\n\n" + q.questions.join("\n"));
+        setQuestions(q.questions || []);
       } else if (stage === "requirements") {
         await api(`/projects/${pid}/requirements/generate`, { method: "POST", body: JSON.stringify({ answers: "" }) });
       } else if (stage === "prd") {
@@ -93,13 +98,39 @@ export default function Overview() {
         ))}
         {busy && <Loading stage={`Running ${busy} (retrieving evidence, generating)`} />}
       </div>
+      {questions.length > 0 && (
+        <div className="card">
+          <h3>Clarification questions</h3>
+          <p className="muted">Answer these on the Requirements page before generating.</p>
+          <ul>{questions.map((q) => <li key={q}>{q}</li>)}</ul>
+        </div>
+      )}
       <div className="card">
         <h3>Export</h3>
         <div className="row">
           <button className="ghost" onClick={() => download("markdown")}>Markdown</button>
+          <button className="ghost" onClick={() => download("pdf")}>PDF</button>
           <button className="ghost" onClick={() => download("openapi")}>OpenAPI JSON</button>
           <button className="ghost" onClick={() => download("json")}>Full JSON</button>
         </div>
+      </div>
+      <div className="card">
+        <h3>Agent activity</h3>
+        {runs.length === 0 ? (
+          <p className="muted">No agent runs yet — every generation, check and ingestion is recorded here.</p>
+        ) : (
+          <table>
+            <thead><tr><th>Agent</th><th>Output</th><th>Latency</th><th>Tokens</th></tr></thead>
+            <tbody>{runs.slice(0, 8).map((r, i) => (
+              <tr key={i}>
+                <td><Status value={r.agent} /></td>
+                <td>{r.output}</td>
+                <td className="mono">{r.latency_ms}ms</td>
+                <td className="mono">{r.tokens}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
       </div>
       {m.requirements === 0 && <Empty title="Pipeline not started" hint="Run stage 01 + 02 above to generate the first requirements." />}
     </div>

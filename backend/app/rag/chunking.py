@@ -5,6 +5,7 @@ HEADING = re.compile(r"^(#{1,4}\s+.+|[A-Z][A-Z0-9 \-_/]{4,80}$|\d+(\.\d+)*\s+[A-
 
 
 def chunk_text(text: str, target: int = 900, overlap: int = 120) -> list[dict]:
+    """Split on headings first, then by size — sections survive chunking (§18)."""
     text = (text or "").strip()
     if not text:
         return []
