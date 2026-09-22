@@ -1,10 +1,13 @@
 """Export blueprint: Markdown / JSON / OpenAPI (§13 export)."""
-from fastapi import APIRouter, Depends
+import re
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.api.deps import current_user, project_or_403
-from app.models.db import Project, Requirement, UserStory, ApiEndpoint, TestCase, Prd
+from app.models.db import (Project, Requirement, UserStory, ApiEndpoint, TestCase, Prd,
+                           ArchitectureComponent, ArchitectureRelationship)
 from app.traceability.engine import coverage
 
 router = APIRouter(tags=["export"])
@@ -86,3 +89,74 @@ def export_pdf(pid: str, db: Session = Depends(get_db), user=Depends(current_use
     doc.build(story)
     return Response(buf.getvalue(), media_type="application/pdf",
                     headers={"Content-Disposition": f"attachment; filename=blueprint-{pid[:8]}.pdf"})
+
+
+KIND_TO_ARCHIFY = {"frontend": "frontend", "api": "backend", "service": "backend", "database": "database",
+                   "external": "external", "queue": "messagebus", "security": "security", "cloud": "cloud"}
+
+
+def _archify_id(name: str, taken: set[str]) -> str:
+    """Slugify a component name to an archify id (pattern ^[a-zA-Z][a-zA-Z0-9_-]*$), deduplicated."""
+    slug = re.sub(r"[^a-zA-Z0-9_-]", "-", (name or "node").strip().lower()) or "node"
+    if not slug[0].isalpha():
+        slug = "n-" + slug
+    base, i = slug, 2
+    while slug in taken:
+        slug = f"{base}-{i}"
+        i += 1
+    taken.add(slug)
+    return slug
+
+
+@router.get("/projects/{pid}/export/archify")
+def export_archify(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Export the stored architecture as archify JSON IR (MIT, tt-a1i/archify).
+
+    Deterministic 1:1 mapping — one node per stored component, one edge per
+    stored relationship whose endpoints both exist. Nothing is invented; dangling
+    relationships are dropped, not guessed. Render with archify's viewer/CLI.
+    """
+    from app.models.db import TraceabilityLink
+    p = project_or_403(pid, db, user)
+    comps = db.query(ArchitectureComponent).filter_by(project_id=pid).all()
+    if not comps:
+        raise HTTPException(404, "No architecture yet — generate it first")
+    rels = db.query(ArchitectureRelationship).filter_by(project_id=pid).all()
+
+    taken: set[str] = set()
+    id_of = {c.name: _archify_id(c.name, taken) for c in comps}
+    nodes = [{"id": id_of[c.name],
+              "type": KIND_TO_ARCHIFY.get((c.kind or "").lower(), "backend"),
+              "label": c.name[:80],
+              "sublabel": " · ".join(x for x in [c.kind, c.boundary] if x)[:120],
+              "row": i // 3, "col": i % 3}
+             for i, c in enumerate(comps)]
+    edges = [{"from": id_of[r.source], "to": id_of[r.target], "label": (r.label or "")[:80]}
+             for r in rels if r.source in id_of and r.target in id_of]
+
+    groups: dict[str, list[str]] = {}
+    for c in comps:
+        if (c.boundary or "").strip():
+            groups.setdefault(c.boundary.strip(), []).append(id_of[c.name])
+    boundaries = [{"kind": "security-group", "label": b[:80], "wraps": ids} for b, ids in groups.items()]
+
+    links = db.query(TraceabilityLink).filter_by(project_id=pid).limit(200).all()
+    trace_items = [f"{l.source_type}:{l.source_id} → {l.target_type}:{l.target_id} ({l.relationship_type})"
+                   for l in links[:12]]
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "schema_version": 1, "diagram_type": "architecture",
+        "meta": {"title": p.name, "subtitle": (p.product_idea or "")[:140], "locale": "en",
+                 "animation": "none", "visual_preset": "blueprint", "quality_profile": "standard"},
+        "layout": {"mode": "grid", "cols": 3},
+        "components": nodes, "connections": edges, "boundaries": boundaries,
+        "cards": [
+            {"dot": "cyan", "title": "DevBlueprint provenance",
+             "items": [f"Exported {now}", f"{len(nodes)} components, {len(edges)} connections",
+                       "Edges mirror stored relationships 1:1 — dangling ones dropped, none invented"]},
+            {"dot": "violet", "title": "Traceability evidence",
+             "items": trace_items or ["No stored links yet"]},
+            {"dot": "slate", "title": "Render with archify (MIT, tt-a1i/archify)",
+             "items": ["node archify/bin/archify.mjs deliver architecture this-file.json out.html"]},
+        ],
+    }

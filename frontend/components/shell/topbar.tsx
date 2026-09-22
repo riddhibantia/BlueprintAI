@@ -24,9 +24,10 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const download = (kind: "markdown" | "pdf" | "openapi" | "json") => {
-    const ext = kind === "markdown" ? "md" : kind === "pdf" ? "pdf" : "json";
-    apiDownload(`/projects/${pid}/export/${kind}`, `blueprint-${String(pid).slice(0, 8)}.${ext}`, kind === "openapi" || kind === "json");
+  const download = (kind: "markdown" | "pdf" | "openapi" | "json" | "archify") => {
+    const ext = kind === "markdown" ? "md" : kind === "pdf" ? "pdf" : kind === "archify" ? "archify.json" : "json";
+    const path = kind === "archify" ? "archify" : kind;
+    apiDownload(`/projects/${pid}/export/${path}`, `blueprint-${String(pid).slice(0, 8)}.${ext}`, kind === "openapi" || kind === "json" || kind === "archify");
   };
 
   const validate = async () => {
@@ -70,6 +71,7 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
               { label: "Markdown", onSelect: () => download("markdown") },
               { label: "PDF", onSelect: () => download("pdf") },
               { label: "OpenAPI JSON", onSelect: () => download("openapi") },
+              { label: "Archify diagram IR", onSelect: () => download("archify") },
               { label: "Full JSON", onSelect: () => download("json") },
             ]} />
           <Button size="sm" loading={validating} onClick={validate}>

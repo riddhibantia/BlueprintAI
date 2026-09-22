@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Share } from "lucide-react";
 import { getArchitecture } from "../../../../lib/api/endpoints";
-import { api } from "../../../../lib/api/client";
+import { api, apiDownload } from "../../../../lib/api/client";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
@@ -35,9 +35,16 @@ export default function Architecture() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h1 className="text-[24px] font-bold tracking-tight">Architecture</h1>
-        <p className="text-[13px] text-secondary">{(arch.components || []).length} components · {(arch.relationships || []).length} relationships</p>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[24px] font-bold tracking-tight">Architecture</h1>
+          <p className="text-[13px] text-secondary">{(arch.components || []).length} components · {(arch.relationships || []).length} relationships</p>
+        </div>
+        {(arch.components || []).length > 0 && (
+          <Button variant="ghost" onClick={() => apiDownload(`/projects/${pid}/export/archify`, `arch-${String(pid).slice(0, 8)}.archify.json`, true)}>
+            <Share size={14} />Archify IR
+          </Button>
+        )}
       </div>
       {err && <div className="mb-3"><ErrorState message={err} /></div>}
       {(arch.components || []).length === 0 ? (
