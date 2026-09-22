@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, API } from "../../../lib/api";
+import { api, apiDownload } from "../../../lib/api";
 import { Metric, Bar, Loading, ErrorBox, Empty, Status } from "../../../components/ui";
 
 const STAGES: [string, string][] = [
@@ -23,23 +23,13 @@ export default function Overview() {
 
   const load = () => api(`/projects/${pid}`).then(setData).catch((e) => setErr(e.message));
 
-  /** Authenticated download — plain anchor links would 401 (no Authorization header). */
+  /** Authenticated download — the session cookie travels with credentials. */
   const download = async (kind: "markdown" | "openapi" | "json") => {
     setErr("");
     try {
-      const res = await fetch(`${API}/projects/${pid}/export/${kind}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const blob = kind === "markdown"
-        ? await res.blob()
-        : new Blob([JSON.stringify(await res.json(), null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `blueprint-${String(pid).slice(0, 8)}.${kind === "markdown" ? "md" : "json"}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await apiDownload(`/projects/${pid}/export/${kind}`,
+        `blueprint-${String(pid).slice(0, 8)}.${kind === "markdown" ? "md" : "json"}`,
+        kind !== "markdown");
     } catch (e: any) { setErr(e.message); }
   };
   useEffect(() => { load(); }, []);

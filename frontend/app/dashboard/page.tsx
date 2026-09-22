@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, isAuthed, logout } from "../../lib/api";
+import { api, me, logout } from "../../lib/api";
 import { Empty, Loading, ErrorBox, Status } from "../../components/ui";
 
 export default function Dashboard() {
@@ -19,7 +19,8 @@ export default function Dashboard() {
     setState("loading");
     try {
       setHealth(await api("/health"));
-      if (isAuthed()) {
+      const user = await me();
+      if (user) {
         setAuthed(true);
         setProjects(await api("/projects"));
       }
@@ -34,10 +35,9 @@ export default function Dashboard() {
 
   const auth = async () => {
     try {
-      const r = await api(mode === "login" ? "/auth/login" : "/auth/register", {
+      await api(mode === "login" ? "/auth/login" : "/auth/register", {
         method: "POST", body: JSON.stringify({ email, password, name }),
       });
-      localStorage.setItem("token", r.token);
       setAuthed(true);
       setProjects(await api("/projects"));
     } catch (e: any) { setErr(e.message); setState("error"); }

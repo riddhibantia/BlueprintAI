@@ -1,13 +1,23 @@
 """Shared dependencies: DB + auth + project access (§34)."""
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.db import User, Project, ProjectMember
 
+COOKIE = "dbp_token"
 
-def current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> User:
-    token = authorization[7:] if authorization.startswith("Bearer ") else authorization
+
+def _bearer_token(authorization: str) -> str:
+    if authorization.startswith("Bearer "):
+        return authorization[7:]
+    return authorization
+
+
+def current_user(request: Request, authorization: str = Header(default=""),
+                 db: Session = Depends(get_db)) -> User:
+    # Explicit header wins (scripts/tests/API clients); browser cookie otherwise.
+    token = _bearer_token(authorization) or request.cookies.get(COOKIE, "")
     sub = decode_token(token) if token else None
     if not sub:
         raise HTTPException(401, "Unauthorized")

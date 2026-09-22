@@ -62,5 +62,7 @@ def test_05_engines_and_export(client):
 
 
 def test_06_unauthorized_blocked(client):
-    r = client.get("/projects")
+    # Fresh client: empty cookie jar, no header -> must be rejected
+    with TestClient(app) as fresh:
+        r = fresh.get("/projects")
     assert r.status_code in (401, 422)
