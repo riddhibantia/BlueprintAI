@@ -129,6 +129,20 @@ def test_pdf_export(client):
     assert r.status_code == 200 and "application/pdf" in r.headers["content-type"] and len(r.content) > 1000
 
 
+def test_activity_feed_and_timestamps(client):
+    pid, h = PID["id"], H["h"]
+    detail = client.get(f"/projects/{pid}", headers=h).json()
+    assert detail["created_at"] and detail["updated_at"]
+    feed = client.get(f"/projects/{pid}/activity", headers=h).json()["events"]
+    assert len(feed) > 0
+    kinds = {e["kind"] for e in feed}
+    assert "audit" in kinds and "agent" in kinds
+    assert all("at" in e and "label" in e for e in feed)
+    # no chain-of-thought, prompts, or secrets leak into the feed
+    blob = " ".join(e.get("detail", "") for e in feed).lower()
+    assert "prompt" not in blob and "secret" not in blob
+
+
 def test_isolation_between_users(client):
     other = _auth(client, "stranger@dev.blue")
     assert client.get(f"/projects/{PID['id']}", headers=other).status_code == 403

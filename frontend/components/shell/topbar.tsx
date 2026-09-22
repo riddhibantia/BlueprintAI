@@ -11,7 +11,7 @@ import { checkConsistency } from "../../lib/api/endpoints";
 
 /** Project top bar (§9): name, status, updated time, palette, share, export, validation, avatar. */
 export function TopBar({ onPalette }: { onPalette: () => void }) {
-  const { pid, project, reload } = useShell();
+  const { pid, project, activity, reload } = useShell();
   const [copied, setCopied] = useState(false);
   const [validating, setValidating] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -50,7 +50,7 @@ export function TopBar({ onPalette }: { onPalette: () => void }) {
           <h1 className="truncate text-[15px] font-semibold tracking-tight">{project?.name || "Loading…"}</h1>
           <p className="flex items-center gap-2 text-[12px] text-secondary">
             {project?.metrics && <StatusBadge value={project.metrics.blueprint_status || "Draft"} />}
-            <span>Updated {timeAgo(project?.updated_at)}</span>
+            <span>Updated {timeAgo(activity[0]?.at || project?.updated_at)}</span>
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">

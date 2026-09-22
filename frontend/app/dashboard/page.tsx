@@ -82,7 +82,7 @@ export default function Dashboard() {
         <div className="spread">
           <div>
             <h1>Blueprint studio</h1>
-            <p>Turn a product idea into a traceable engineering blueprint — <span className="mono">{health?.db} · {health?.llm} mode</span>.</p>
+            <p>Turn a product idea into a traceable engineering blueprint{health?.status === "ok" ? " — workspace connected" : ""}.</p>
           </div>
           <button className="ghost" onClick={logout}>Log out</button>
         </div>

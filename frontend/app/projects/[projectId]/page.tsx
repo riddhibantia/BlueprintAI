@@ -1,138 +1,136 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, apiDownload } from "../../../lib/api/client";
-import { Metric, Bar, Loading, ErrorBox, Empty, Status } from "../../../components/ui";
+import { ArrowRight, Play, History } from "lucide-react";
+import { api } from "../../../lib/api/client";
+import { checkConsistency } from "../../../lib/api/endpoints";
+import { computeLifecycle, continueRoute, stageUpdated, Bundle } from "../../../lib/query/lifecycle";
+import { timeAgo, fmtDate } from "../../../lib/utils/time";
+import { useShell } from "../../../components/shell/context";
+import { Card, Metric } from "../../../components/ui/card";
+import { Button } from "../../../components/ui/button";
+import { StatusBadge } from "../../../components/ui/badge";
+import { LoadingState, ErrorState, EmptyState, Progress } from "../../../components/ui/feedback";
+import { ActivityItem, ArtifactLink } from "../../../components/ui/activity";
 
-const STAGES: [string, string][] = [
-  ["Clarify idea", "clarify"],
-  ["Generate requirements", "requirements"],
-  ["PRD + user stories", "prd"],
-  ["Architecture", "architecture"],
-  ["Database + APIs + security", "data"],
-  ["Tasks + tests", "tests"],
-  ["Consistency check", "consistency"],
-];
-
+/** Project command center (§13): health, lifecycle, activity, attention — real values only. */
 export default function Overview() {
   const { projectId: pid } = useParams() as { projectId: string };
-  const [data, setData] = useState<any>(null);
+  const { project, activity, reload } = useShell();
+  const [b, setB] = useState<Bundle | null>(null);
   const [runs, setRuns] = useState<any[]>([]);
-  const [questions, setQuestions] = useState<string[]>([]);
+  const [issues, setIssues] = useState<any[]>([]);
   const [err, setErr] = useState("");
-  const [busy, setBusy] = useState("");
-  const [done, setDone] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  const load = () => {
-    api(`/projects/${pid}`).then(setData).catch((e) => setErr(e.message));
-    api(`/projects/${pid}/runs`).then(setRuns).catch(() => {});
-  };
-
-  /** Authenticated download — the session cookie travels with credentials. */
-  const download = async (kind: "markdown" | "pdf" | "openapi" | "json") => {
-    setErr("");
+  const load = async () => {
     try {
-      const ext = kind === "markdown" ? "md" : kind === "pdf" ? "pdf" : "json";
-      await apiDownload(`/projects/${pid}/export/${kind}`,
-        `blueprint-${String(pid).slice(0, 8)}.${ext}`, kind === "openapi" || kind === "json");
+      const [reqs, prd, stories, arch, db, apis, security, tasks, tests, trace, iss, runList] = await Promise.all([
+        api(`/projects/${pid}/requirements`), api(`/projects/${pid}/prd`), api(`/projects/${pid}/stories`),
+        api(`/projects/${pid}/architecture`), api(`/projects/${pid}/database`), api(`/projects/${pid}/apis`),
+        api(`/projects/${pid}/security`), api(`/projects/${pid}/tasks`), api(`/projects/${pid}/tests`),
+        api(`/projects/${pid}/traceability`), api(`/projects/${pid}/consistency/issues`), api(`/projects/${pid}/runs`),
+      ]);
+      setB({ reqs, prd, stories, arch, db, apis, security, tasks, tests, coverage: trace.coverage, openIssues: iss.filter((i: any) => i.status === "open").length, links: trace.links });
+      setIssues(iss);
+      setRuns(runList);
     } catch (e: any) { setErr(e.message); }
   };
-  useEffect(() => { load(); }, []);
 
-  const run = async (stage: string) => {
-    setBusy(stage); setErr("");
-    try {
-      if (stage === "clarify") {
-        const q = await api(`/projects/${pid}/clarify`, { method: "POST" });
-        setQuestions(q.questions || []);
-      } else if (stage === "requirements") {
-        await api(`/projects/${pid}/requirements/generate`, { method: "POST", body: JSON.stringify({ answers: "" }) });
-      } else if (stage === "prd") {
-        await api(`/projects/${pid}/prd/generate`, { method: "POST" });
-        await api(`/projects/${pid}/stories/generate`, { method: "POST" });
-      } else if (stage === "architecture") {
-        await api(`/projects/${pid}/architecture/generate`, { method: "POST" });
-      } else if (stage === "data") {
-        await api(`/projects/${pid}/database/generate`, { method: "POST" });
-        await api(`/projects/${pid}/apis/generate`, { method: "POST" });
-        await api(`/projects/${pid}/security/analyze`, { method: "POST" });
-      } else if (stage === "tests") {
-        await api(`/projects/${pid}/tasks/generate`, { method: "POST" });
-        await api(`/projects/${pid}/tests/generate`, { method: "POST" });
-      } else if (stage === "consistency") {
-        await api(`/projects/${pid}/consistency/check`, { method: "POST" });
-      }
-      setDone((d) => [...new Set([...d, stage])]);
-      await load();
-    } catch (e: any) { setErr(e.message); }
-    setBusy("");
+  useEffect(() => { load(); reload(); }, []);
+
+  if (err && !b) return <ErrorState message={err} onRetry={load} />;
+  if (!b || !project) return <LoadingState stage="Loading project command center" />;
+
+  const stages = computeLifecycle(b);
+  const open = issues.filter((i) => i.status === "open");
+  const orphans: string[] = b.coverage?.orphans || [];
+
+  const validate = async () => {
+    setBusy(true);
+    try { await checkConsistency(pid); await load(); await reload(); window.location.href = `/projects/${pid}/consistency`; }
+    catch (e: any) { setErr(e.message); }
+    setBusy(false);
   };
 
-  if (err && !data) return <ErrorBox message={err} onRetry={load} />;
-  if (!data) return <Loading stage="Loading project health metrics" />;
-
-  const m = data.metrics;
   return (
     <div>
-      <div className="spread">
-        <div><h1>{data.name}</h1><p className="sub">{data.idea}</p></div>
-        <Status value={m.blueprint_status} />
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[28px] font-bold tracking-tight">{project.name}</h1>
+          <p className="text-[14px] text-secondary">Engineering blueprint</p>
+          <p className="mt-1.5 flex items-center gap-2 text-[12.5px] text-secondary">
+            <StatusBadge value={project.metrics?.blueprint_status || "Draft"} />
+            <span>Created {fmtDate(project.created_at)} · Updated {timeAgo(activity[0]?.at || project.updated_at)}</span>
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => (window.location.href = `/projects/${pid}/${continueRoute(stages)}`)}>
+            Continue Blueprint<ArrowRight size={14} />
+          </Button>
+          <Button loading={busy} onClick={validate}><Play size={13} />Run Validation</Button>
+        </div>
       </div>
-      {err && <ErrorBox message={err} />}
-      <div className="grid m4">
-        <Metric label="Requirements" value={m.requirements} />
-        <Metric label="Traceability coverage" value={`${m.traceability_coverage}%`} hint="DB-computed, never estimated" />
-        <Metric label="Open consistency issues" value={m.consistency_open} />
-        <Metric label="Test coverage" value={`${m.test_coverage}%`} hint={`${m.tests} tests · ${m.stories} stories · ${m.apis} APIs`} />
+
+      {err && <div className="mb-3"><ErrorState message={err} /></div>}
+
+      <div className="mb-3.5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+        <Metric label="Requirements" value={b.reqs.length} />
+        <Metric label="Traceability" value={`${b.coverage?.coverage_pct || 0}%`} hint="DB-computed" />
+        <Metric label="Open Issues" value={open.length} />
+        <Metric label="Connected Artifacts" value={b.links.length} hint="stored relationships" />
       </div>
-      <div className="card"><b>Traceability coverage</b><Bar pct={m.traceability_coverage} /></div>
-      <div className="card">
-        <h3>Blueprint pipeline</h3>
-        <p className="muted">Each stage needs your review before the next — AI generates, you approve.</p>
-        {STAGES.map(([label, key], i) => (
-          <div className="step" key={key}>
-            <span className="n">{String(i + 1).padStart(2, "0")}</span>
-            <div style={{ flex: 1 }}><b>{label}</b>{done.includes(key) && <span className="muted"> — done</span>}</div>
-            <button onClick={() => run(key)} disabled={!!busy}>{busy === key ? "Running…" : "Run"}</button>
+
+      <Card className="mb-3.5">
+        <h3 className="mb-3 text-[15px] font-semibold">Lifecycle</h3>
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+          {stages.map((s) => (
+            <a key={s.key} href={`/projects/${pid}/${s.route}`}
+              className="rounded-xl border border-border bg-elevated p-3 transition-all duration-150 hover:-translate-y-0.5 hover:border-accent">
+              <p className="text-[11px] font-bold uppercase tracking-[0.07em] text-muted">{s.label}</p>
+              <p className="my-1.5"><StatusBadge value={s.state} /></p>
+              <p className="text-[12px] text-secondary">{s.detail}</p>
+              {(() => { const u = stageUpdated(runs, s.key); return u ? <p className="mt-1 text-[11px] text-muted">Ran {timeAgo(u)}</p> : null; })()}
+            </a>
+          ))}
+        </div>
+      </Card>
+
+      <div className="grid gap-3.5 lg:grid-cols-2">
+        <Card>
+          <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold"><History size={15} />Recent Activity</h3>
+          {activity.length === 0
+            ? <EmptyState title="No activity yet" hint="Generate your first requirements to start the trail." />
+            : activity.slice(0, 8).map((e, i) => (
+              <ActivityItem key={i} icon={<span className="text-[12px] text-accent">●</span>}
+                title={e.label} context={e.detail} time={timeAgo(e.at)} />
+            ))}
+        </Card>
+        <Card>
+          <h3 className="mb-2 text-[15px] font-semibold">Needs Attention</h3>
+          {open.length === 0 && orphans.length === 0
+            ? <EmptyState title="All clear" hint="No open issues and no orphaned requirements." />
+            : <>
+              {open.slice(0, 3).map((i) => (
+                <p key={i.id} className="border-b border-border py-2 text-[13px] last:border-b-0">
+                  <StatusBadge value={i.severity} /> <span className="ml-1">{i.description.slice(0, 110)}</span><br />
+                  <a href={`/projects/${pid}/consistency`} className="text-[12.5px] text-accent hover:underline">Inspect in Consistency →</a>
+                </p>
+              ))}
+              {orphans.length > 0 && (
+                <p className="py-2 text-[13px]">
+                  <span className="mr-1">{orphans.slice(0, 5).map((o) => <ArtifactLink key={o} code={o} />)}</span>
+                  <span className="text-secondary">orphaned — </span>
+                  <a href={`/projects/${pid}/traceability`} className="text-[12.5px] text-accent hover:underline">link in Traceability →</a>
+                </p>
+              )}
+            </>}
+          <div className="mt-2">
+            <p className="mb-1 text-[12px] text-secondary">Traceability coverage</p>
+            <Progress pct={b.coverage?.coverage_pct || 0} label="Traceability coverage" />
           </div>
-        ))}
-        {busy && <Loading stage={`Running ${busy} (retrieving evidence, generating)`} />}
+        </Card>
       </div>
-      {questions.length > 0 && (
-        <div className="card">
-          <h3>Clarification questions</h3>
-          <p className="muted">Answer these on the Requirements page before generating.</p>
-          <ul>{questions.map((q) => <li key={q}>{q}</li>)}</ul>
-        </div>
-      )}
-      <div className="card">
-        <h3>Export</h3>
-        <div className="row">
-          <button className="ghost" onClick={() => download("markdown")}>Markdown</button>
-          <button className="ghost" onClick={() => download("pdf")}>PDF</button>
-          <button className="ghost" onClick={() => download("openapi")}>OpenAPI JSON</button>
-          <button className="ghost" onClick={() => download("json")}>Full JSON</button>
-        </div>
-      </div>
-      <div className="card">
-        <h3>Agent activity</h3>
-        {runs.length === 0 ? (
-          <p className="muted">No agent runs yet — every generation, check and ingestion is recorded here.</p>
-        ) : (
-          <table>
-            <thead><tr><th>Agent</th><th>Output</th><th>Latency</th><th>Tokens</th></tr></thead>
-            <tbody>{runs.slice(0, 8).map((r, i) => (
-              <tr key={i}>
-                <td><Status value={r.agent} /></td>
-                <td>{r.output}</td>
-                <td className="mono">{r.latency_ms}ms</td>
-                <td className="mono">{r.tokens}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        )}
-      </div>
-      {m.requirements === 0 && <Empty title="Pipeline not started" hint="Run stage 01 + 02 above to generate the first requirements." />}
     </div>
   );
 }
