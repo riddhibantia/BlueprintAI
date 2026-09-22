@@ -3,11 +3,16 @@ __pycache__/
 .venv/
 venv/
 .env
+frontend/.env.local
 devblueprint.db*
+e2e_test.db
 uploads/
 *.pdf
+*.log
 node_modules/
 .frontend_next/
 .next/
 dist/
 pgdata/
+.pytest_cache/
+.coverage
