@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* V2 semantic tokens — dark-first (§4). :root IS dark; light overrides below. */
+@theme {
+  --color-canvas: #0a0b0d;
+  --color-surface: #111317;
+  --color-elevated: #171a1f;
+  --color-border: #242830;
+  --color-primary: #f4f6f8;
+  --color-secondary: #8b929e;
+  --color-muted: #626a75;
+  --color-accent: #5eead4;
+  --color-accent2: #818cf8;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #fb7185;
+  --color-info: #60a5fa;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+[data-theme="light"] {
+  --color-canvas: #f3f1ea;
+  --color-surface: #fffdf8;
+  --color-elevated: #ebe7d9;
+  --color-border: #e2dcc9;
+  --color-primary: #211d14;
+  --color-secondary: #6e675a;
+  --color-muted: #a09a8a;
+  --color-accent: #0b7a75;
+  --color-accent2: #7c5cd6;
+  --color-success: #1c7a3d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+  --color-info: #0369a1;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-primary);
+  font-size: 14.5px;
+}
+
+/* Restrained motion only (§41): 120–180ms hovers, 180–250ms drawers. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@keyframes v2-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
