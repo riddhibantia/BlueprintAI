@@ -53,7 +53,8 @@ def prd_get(pid: str, db: Session = Depends(get_db), user=Depends(current_user))
     prd = db.query(Prd).filter_by(project_id=pid).first()
     if not prd:
         return {}
-    return {"content": prd.content, "status": prd.status}
+    return {"content": prd.content, "status": prd.status,
+            "updated_at": prd.updated_at.isoformat() if prd.updated_at else None}
 
 
 @router.put("/projects/{pid}/prd")

@@ -1,23 +1,52 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { Filter, Plus, Search } from "lucide-react";
 import { api } from "../../../../lib/api/client";
-import { Status, Loading, ErrorBox, Empty } from "../../../../components/ui";
+import { linkCounts } from "../../../../lib/query/links";
+import { timeAgo } from "../../../../lib/utils/time";
+import { Button } from "../../../../components/ui/button";
+import { StatusBadge } from "../../../../components/ui/badge";
+import { DataTable } from "../../../../components/ui/data";
+import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
+import { Drawer } from "../../../../components/ui/overlay";
+import { ArtifactLink } from "../../../../components/ui/activity";
+import { traceArtifact } from "../../../../lib/api/endpoints";
 
+/** Requirements workspace (§17): table + search/filter + detail drawer. */
 export default function Requirements() {
   const { projectId: pid } = useParams() as { projectId: string };
   const [reqs, setReqs] = useState<any[]>([]);
+  const [links, setLinks] = useState<any[]>([]);
   const [questions, setQuestions] = useState<string[]>([]);
   const [answers, setAnswers] = useState("");
+  const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sel, setSel] = useState<any>(null);
+  const [selLinks, setSelLinks] = useState<any[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  const load = () => api(`/projects/${pid}/requirements`).then(setReqs).catch((e) => setErr(e.message));
+  const load = async () => {
+    try {
+      const [r, t] = await Promise.all([
+        api(`/projects/${pid}/requirements`), api(`/projects/${pid}/traceability`),
+      ]);
+      setReqs(r); setLinks(t.links || []); setLoaded(true);
+    } catch (e: any) { setErr(e.message); }
+  };
   useEffect(() => { load(); }, []);
 
+  const counts = useMemo(() => linkCounts(links), [links]);
+  const approved = reqs.filter((r) => r.status === "approved").length;
+  const filtered = reqs.filter((r) =>
+    (statusFilter === "all" || r.status === statusFilter) &&
+    (r.code + r.title).toLowerCase().includes(q.toLowerCase()));
+
   const clarify = async () => {
-    const q = await api(`/projects/${pid}/clarify`, { method: "POST" });
-    setQuestions(q.questions);
+    const res = await api(`/projects/${pid}/clarify`, { method: "POST" });
+    setQuestions(res.questions || []);
   };
   const generate = async () => {
     setBusy(true);
@@ -28,48 +57,99 @@ export default function Requirements() {
   const approve = async (id: string) => {
     await api(`/requirements/${id}/approve`, { method: "POST" });
     await load();
+    if (sel?.id === id) open(sel);
   };
+  const open = async (r: any) => {
+    setSel(r);
+    try { setSelLinks((await traceArtifact(pid, r.code)).forward || []); }
+    catch { setSelLinks([]); }
+  };
+
+  if (err && !loaded) return <ErrorState message={err} onRetry={load} />;
+  if (!loaded) return <LoadingState stage="Loading requirements" />;
 
   return (
     <div>
-      <h1>Requirements</h1>
-      <p className="sub">Stable IDs (<span className="mono">REQ-001</span>). Approved requirements are the source of truth for every downstream artifact.</p>
-      {err && <ErrorBox message={err} />}
-      <div className="card">
-        <div className="row">
-          <button className="ghost" onClick={clarify}>1 · Clarify idea</button>
-          <button onClick={generate} disabled={busy}>{busy ? "Generating…" : "2 · Generate requirements"}</button>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[24px] font-bold tracking-tight">Requirements</h1>
+          <p className="text-[13px] text-secondary">{reqs.length} total · {approved} approved · {reqs.length - approved} draft</p>
         </div>
-        {questions.length > 0 && (
-          <div style={{ marginTop: 10 }}>
-            <b>Clarification questions</b>
-            <ul className="muted">{questions.map((q) => <li key={q}>{q}</li>)}</ul>
-            <label>Your answers<textarea rows={2} value={answers} onChange={(e) => setAnswers(e.target.value)} placeholder="Managers approve; email+password auth; receipts required…" /></label>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="relative" aria-label="Search requirements">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search ID or title…"
+              className="w-52 rounded-full border border-border bg-surface py-2 pl-9 pr-3 text-[13px]" />
+          </label>
+          <label className="flex items-center gap-1.5 text-[12.5px] text-secondary">
+            <Filter size={13} aria-hidden />
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status"
+              className="rounded-full border border-border bg-surface px-2.5 py-2 text-[12.5px]">
+              <option value="all">All</option><option value="approved">Approved</option><option value="draft">Draft</option>
+            </select>
+          </label>
+          <Button variant="ghost" onClick={clarify}>Clarify</Button>
+          <Button loading={busy} onClick={generate}><Plus size={14} />Generate</Button>
+        </div>
       </div>
-      {reqs.length === 0 ? (
-        <Empty title="No requirements yet" hint="Clarify the idea, answer the questions, then generate." />
-      ) : (
-        <div className="card" style={{ padding: 0, overflowX: "auto" }}>
-          <table>
-            <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Priority</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              {reqs.map((r) => (
-                <tr key={r.id}>
-                  <td className="mono">{r.code}</td>
-                  <td>{r.title}</td>
-                  <td><Status value={r.type} /></td>
-                  <td>{r.priority}</td>
-                  <td><Status value={r.status} /></td>
-                  <td>{r.status !== "approved" && <button className="ghost" onClick={() => approve(r.id)}>Approve</button>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+      {err && <div className="mb-3"><ErrorState message={err} /></div>}
+      {questions.length > 0 && (
+        <div className="mb-3.5 rounded-2xl border border-border bg-surface p-4">
+          <b className="text-[14px]">Clarification questions</b>
+          <ul className="mt-1 list-disc pl-5 text-[13px] text-secondary">{questions.map((x) => <li key={x}>{x}</li>)}</ul>
+          <label className="mt-2 block text-[13px]">Your answers
+            <textarea rows={2} value={answers} onChange={(e) => setAnswers(e.target.value)}
+              placeholder="Managers approve; email+password auth; receipts required…"
+              className="mt-1 w-full rounded-xl border border-border bg-canvas p-2.5" />
+          </label>
         </div>
       )}
-      {busy && <Loading stage="Drafting requirements from product idea" />}
+
+      {filtered.length === 0 ? (
+        <EmptyState title={reqs.length === 0 ? "No requirements yet" : "No matches"}
+          hint={reqs.length === 0 ? "Start by clarifying your product idea." : "Adjust the search or filter."}
+          action={reqs.length === 0 ? <Button onClick={generate}>Generate requirements</Button> : undefined} />
+      ) : (
+        <DataTable label="Requirements" head={<><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th></>}>
+          {filtered.map((r) => (
+            <tr key={r.id} onClick={() => open(r)} className="cursor-pointer" tabIndex={0}
+              onKeyDown={(e) => e.key === "Enter" && open(r)} aria-label={`Open ${r.code}`}>
+              <td className="font-mono text-[12.5px]">{r.code}</td>
+              <td className="max-w-[320px]">{r.title}</td>
+              <td className="text-secondary">{r.priority}</td>
+              <td><StatusBadge value={r.status} /></td>
+              <td>{counts[r.code] ? <StatusBadge value="linked" /> : <StatusBadge value="orphan" />}</td>
+              <td className="font-mono text-[12.5px]">{counts[r.code] || 0}</td>
+              <td className="text-[12.5px] text-secondary">{timeAgo(r.updated_at)}</td>
+            </tr>
+          ))}
+        </DataTable>
+      )}
+
+      <Drawer open={!!sel} onClose={() => setSel(null)} label={`Requirement ${sel?.code}`} title={<span className="font-mono">{sel?.code}</span>}>
+        {sel && (
+          <div className="grid gap-3 text-[13.5px]">
+            <p className="text-[15px] font-semibold">{sel.title}</p>
+            <p className="flex gap-2"><StatusBadge value={sel.status} /><StatusBadge value={sel.priority} /><span className="text-secondary">v{sel.version}</span></p>
+            {sel.description && <p className="text-secondary">{sel.description}</p>}
+            <div>
+              <b className="text-[12px] uppercase tracking-wide text-secondary">Traceability</b>
+              {selLinks.length === 0
+                ? <p className="mt-1 text-secondary">Orphaned — no downstream links yet.</p>
+                : <ul className="mt-1 grid gap-1.5">{selLinks.map((l: any, i: number) => (
+                  <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to} <span className="text-secondary">({l.rel})</span></li>
+                ))}</ul>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {sel.status !== "approved" && <Button size="sm" onClick={() => approve(sel.id)}>Approve</Button>}
+              <a href={`/projects/${pid}/impact`}><Button variant="ghost" size="sm">View impact</Button></a>
+            </div>
+            <p className="text-[12px] text-secondary">Linked artifacts: {selLinks.map((l: any, i: number) => <span key={i} className="mr-1"><ArtifactLink code={l.to} /></span>)}</p>
+          </div>
+        )}
+      </Drawer>
+      {busy && <div className="mt-3"><LoadingState stage="Drafting requirements from product idea" /></div>}
     </div>
   );
 }

@@ -12,10 +12,9 @@ const tone: Record<string, { cls: string; Icon: any }> = {
 
 function pick(value: string): string {
   const v = (value || "").toLowerCase();
-  if (["approved", "passed", "done", "resolved", "success", "complete", "active"].includes(v)) return "ok";
+  if (["approved", "passed", "done", "resolved", "success", "complete", "active", "linked", "covered", "jwt"].includes(v)) return "ok";
   if (["conflict", "rejected", "failed", "error", "blocked", "danger", "high"].includes(v)) return "bad";
-  if (["warning", "draft", "todo", "open", "pending", "needs review", "medium"].includes(v)) return "warn";
-  if (["approved", "jwt"].includes(v)) return "ok";
+  if (["warning", "draft", "todo", "open", "pending", "needs review", "medium", "orphan", "orphaned", "missing"].includes(v)) return "warn";
   return "info";
 }
 

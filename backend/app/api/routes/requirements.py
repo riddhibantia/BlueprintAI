@@ -67,10 +67,11 @@ def add_one(pid: str, body: RequirementIn, db: Session = Depends(get_db), user=D
 
 @router.get("/projects/{pid}/requirements")
 def list_req(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
-    """List requirements ordered by stable code."""
+    """List requirements ordered by stable code (with version + timestamps for the workspace table)."""
     project_or_403(pid, db, user)
     return [{"code": r.code, "title": r.title, "type": r.type, "status": r.status,
-             "priority": r.priority, "id": r.id, "version": r.version}
+             "priority": r.priority, "id": r.id, "version": r.version,
+             "updated_at": r.updated_at.isoformat() if r.updated_at else None}
             for r in db.query(Requirement).filter_by(project_id=pid).order_by(Requirement.code).all()]
 
 
