@@ -42,6 +42,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         <main id="main" className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-5">
           <Breadcrumb trail={trail} />
           {children}
+          <footer className="mt-8 border-t border-border pt-3 text-[11.5px] text-muted">
+            Motion components by <a href="https://www.rareui.com" target="_blank" rel="noreferrer" className="text-accent hover:underline">Rare UI</a>
+          </footer>
         </main>
       </div>
       <aside aria-label="Blueprint Copilot" className="sticky top-0 hidden h-screen w-[300px] flex-none overflow-auto border-l border-border bg-surface p-4 xl:block">

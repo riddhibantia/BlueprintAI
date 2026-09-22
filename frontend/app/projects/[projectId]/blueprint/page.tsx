@@ -11,6 +11,8 @@ import { timeAgo } from "../../../../lib/utils/time";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
+import { StepPlayer } from "../../../../components/ui/step-player";
+import ScrollProgress from "../../../../components/ui/scroll-progress";
 import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 
 /** Blueprint pipeline (§16): contextual Generate / Review / Approve / Validate per stage. */
@@ -79,9 +81,24 @@ export default function Blueprint() {
       <h1 className="text-[24px] font-bold tracking-tight">Blueprint Pipeline</h1>
       <p className="mb-5 text-[13.5px] text-secondary">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
       {err && <div className="mb-3"><ErrorState message={err} /></div>}
+      {/* RareUI StepPlayer: pipeline progress driven by real stage state; click a step to jump to its workspace. */}
+      <div className="mb-4">
+        <StepPlayer
+          steps={stages.map((s) => ({ label: s.label }))}
+          value={Math.max(0, stages.findIndex((s) => s.state !== "Complete"))}
+          duration={0}
+          seekable
+          showControl={false}
+          onValueChange={(i) => { window.location.href = `/projects/${pid}/${stages[i].route}`; }}
+          aria-label="Pipeline progress"
+        />
+      </div>
+      {/* RareUI ScrollProgress: section pill for jumping between stage cards. */}
+      <ScrollProgress sections={stages.map((s) => ({ id: `stage-${s.key}`, label: s.label }))} className="xl:left-[calc(50%-150px)]" />
       <div className="grid gap-2">
         {stages.map((s, i) => (
-          <Card key={s.key}>
+          <div key={s.key} id={`stage-${s.key}`} className="scroll-mt-20">
+          <Card>
             <div className="flex flex-wrap items-center gap-3">
               <span className="font-mono text-[12px] text-muted">{String(i + 1).padStart(2, "0")}</span>
               <b className="text-[15px]">{s.label}</b>
@@ -97,6 +114,7 @@ export default function Blueprint() {
               </span>
             </div>
           </Card>
+          </div>
         ))}
       </div>
     </div>

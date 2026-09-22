@@ -7,6 +7,9 @@
   --color-elevated: #171a1f;
   --color-border: #242830;
   --color-primary: #f4f6f8;
+  /* shadcn/RareUI bridge: foreground maps to the primary text token */
+  --color-foreground: var(--color-primary);
+  --color-background: var(--color-surface);
   --color-secondary: #8b929e;
   --color-muted: #626a75;
   --color-accent: #5eead4;

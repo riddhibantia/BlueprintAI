@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { getPrd, putPrd } from "../../../../lib/api/endpoints";
 import { fmtDate } from "../../../../lib/utils/time";
 import { Card } from "../../../../components/ui/card";
+import { HookSidebar } from "../../../../components/ui/hook-sidebar";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
@@ -69,13 +70,14 @@ export default function Prd() {
 
       <div className="grid gap-3.5 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
         <Card className="!p-2">
-          <p className="px-2 py-1 text-[11px] font-bold uppercase tracking-[0.07em] text-muted">Outline</p>
-          {keys.map((k) => (
-            <button key={k} onClick={() => setSection(k)}
-              className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] capitalize ${k === shown ? "bg-elevated font-semibold text-primary" : "text-secondary hover:text-primary"}`}>
-              {k.replace(/_/g, " ")}
-            </button>
-          ))}
+          {/* RareUI HookSidebar: outline nav with a spring rail that follows the open section. */}
+          <HookSidebar
+            label="Outline"
+            items={keys.map((k) => k.replace(/_/g, " "))}
+            value={Math.max(0, keys.indexOf(shown))}
+            onChange={(i) => setSection(keys[i])}
+            color="#5eead4"
+          />
         </Card>
         <Card>
           <h3 className="mb-2 text-[17px] font-semibold capitalize">{shown.replace(/_/g, " ")}</h3>

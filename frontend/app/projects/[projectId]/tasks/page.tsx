@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { LayoutGrid, Table2 } from "lucide-react";
+import { LayoutGrid, Table2, ListChecks } from "lucide-react";
 import { listTasks } from "../../../../lib/api/endpoints";
 import { api } from "../../../../lib/api/client";
 import { Card } from "../../../../components/ui/card";
 import { StatusBadge } from "../../../../components/ui/badge";
 import { DataTable } from "../../../../components/ui/data";
+import { TaskList, type Task } from "../../../../components/ui/task-list";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
 
@@ -17,7 +18,7 @@ const NEXT: Record<string, string> = { todo: "doing", doing: "done", done: "todo
 export default function Tasks() {
   const { projectId: pid } = useParams() as { projectId: string };
   const [tasks, setTasks] = useState<any[]>([]);
-  const [view, setView] = useState<"table" | "board">("board");
+  const [view, setView] = useState<"table" | "board" | "checklist">("board");
   const [err, setErr] = useState("");
   const [loaded, setLoaded] = useState(false);
 
@@ -26,6 +27,18 @@ export default function Tasks() {
 
   const advance = async (t: any) => {
     await api(`/projects/${pid}/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ status: NEXT[t.status] || "todo" }) });
+    await load();
+  };
+
+  /** Checklist toggle (RareUI TaskList): done <-> todo, persisted per task. */
+  const checkItems: Task[] = tasks.map((t) => ({ id: String(t.id), label: `${t.code} · ${t.title}`, done: t.status === "done" }));
+  const onCheck = async (next: Task[]) => {
+    const prev = new Map(checkItems.map((t) => [t.id, t.done]));
+    const flipped = next.find((t) => prev.get(t.id) !== t.done);
+    if (!flipped) return;
+    const target = tasks.find((t) => String(t.id) === flipped.id);
+    if (!target) return;
+    await api(`/projects/${pid}/tasks/${target.id}`, { method: "PATCH", body: JSON.stringify({ status: flipped.done ? "done" : "todo" }) });
     await load();
   };
 
@@ -48,11 +61,18 @@ export default function Tasks() {
           <button role="tab" aria-selected={view === "table"} onClick={() => setView("table")}
             className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium ${view === "table" ? "bg-elevated text-primary" : "text-secondary"}`}>
             <Table2 size={13} />Table</button>
+          <button role="tab" aria-selected={view === "checklist"} onClick={() => setView("checklist")}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium ${view === "checklist" ? "bg-elevated text-primary" : "text-secondary"}`}>
+            <ListChecks size={13} />Checklist</button>
         </div>
       </div>
       {err && <div className="mb-3"><ErrorState message={err} /></div>}
       {tasks.length === 0 ? (
         <EmptyState title="No tasks yet" hint="Generate the plan from the Blueprint pipeline." />
+      ) : view === "checklist" ? (
+        <Card className="max-w-xl">
+          <TaskList tasks={checkItems} onTasksChange={onCheck} accent="#5eead4" aria-label="Task checklist" />
+        </Card>
       ) : view === "board" ? (
         <div className="grid gap-3 md:grid-cols-3">
           {COLS.map((col) => (

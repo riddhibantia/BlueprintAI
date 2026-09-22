@@ -5,6 +5,7 @@ import { listApis } from "../../../../lib/api/endpoints";
 import { Card } from "../../../../components/ui/card";
 import { StatusBadge } from "../../../../components/ui/badge";
 import { DataTable } from "../../../../components/ui/data";
+import CodeBlock from "../../../../components/ui/code-block";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { getTraceability } from "../../../../lib/api/endpoints";
@@ -59,9 +60,9 @@ export default function Apis() {
               <p className="font-mono text-[13px] font-bold">{current.method} {current.path}</p>
               <p className="mt-1 flex gap-2"><StatusBadge value={current.auth} /><span className="font-mono text-[12px] text-secondary">{current.code}</span></p>
               <p className="mt-3 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">Request</p>
-              <pre className="mt-1 overflow-auto rounded-xl bg-canvas p-3 font-mono text-[12px]">{JSON.stringify(current.request_schema || {}, null, 2)}</pre>
+              <CodeBlock code={JSON.stringify(current.request_schema || {}, null, 2)} language="json" accent="#5eead4" filename="request.json" showLineNumbers className="mt-1" />
               <p className="mt-3 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">Response · {(current.status_codes || []).join(", ")}</p>
-              <pre className="mt-1 overflow-auto rounded-xl bg-canvas p-3 font-mono text-[12px]">{JSON.stringify(current.response_schema || {}, null, 2)}</pre>
+              <CodeBlock code={JSON.stringify(current.response_schema || {}, null, 2)} language="json" accent="#5eead4" filename="response.json" showLineNumbers className="mt-1" />
               <p className="mt-3 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">Linked</p>
               <p className="mt-1 flex flex-wrap gap-1.5">
                 {linked.length === 0 ? <span className="text-[12.5px] text-secondary">No links yet.</span>

@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { FileUp, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { listDocuments, queryKnowledge, uploadDocument } from "../../../../lib/api/endpoints";
 import { timeAgo } from "../../../../lib/utils/time";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
+import { Folder } from "../../../../components/ui/folder-component";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 
 /** Knowledge workspace (§29): real counts, collections, indexing state, search. */
@@ -48,7 +49,9 @@ export default function Knowledge() {
       {err && <div className="mb-3"><ErrorState message={err} /></div>}
       <div className="grid gap-3.5 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold"><FileUp size={15} />Collections</h3>
+          <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold">
+            <Folder color="blue" size="sm" aria-label="Standards collection" />Collections
+          </h3>
           <label className="block text-[13px]">Upload standard (PDF / TXT / Markdown, ≤15MB)
             <input type="file" accept=".pdf,.txt,.md" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
               aria-label="Upload document" className="mt-1 text-[13px]" />
