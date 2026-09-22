@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, usePathname } from "next/navigation";
-import AssistantPanel from "../../../components/assistant";
+import { CopilotPanel } from "../../../components/copilot/panel";
+import { Drawer } from "../../../components/ui/overlay";
 import { ShellProvider, useShell } from "../../../components/shell/context";
 import { Sidebar } from "../../../components/shell/sidebar";
 import { TopBar } from "../../../components/shell/topbar";
@@ -17,7 +18,7 @@ const NAMES: Record<string, string> = {
 };
 
 function ShellInner({ children }: { children: React.ReactNode }) {
-  const { pid, project, reload } = useShell();
+  const { pid, project, reload, copilotOpen, setCopilotOpen } = useShell();
   const path = usePathname() || "";
   const [palette, setPalette] = useState(false);
   const openPalette = () => setPalette(true);
@@ -39,9 +40,12 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-      <aside aria-label="AI Assistant" className="sticky top-0 hidden h-screen w-[300px] flex-none overflow-auto border-l border-border bg-surface p-4 xl:block">
-        <AssistantPanel />
+      <aside aria-label="Blueprint Copilot" className="sticky top-0 hidden h-screen w-[300px] flex-none overflow-auto border-l border-border bg-surface p-4 xl:block">
+        <CopilotPanel />
       </aside>
+      <Drawer open={copilotOpen} onClose={() => setCopilotOpen(false)} label="Blueprint Copilot" title="Blueprint Copilot">
+        <CopilotPanel />
+      </Drawer>
       <Palette open={palette} onClose={() => setPalette(false)} />
     </div>
   );

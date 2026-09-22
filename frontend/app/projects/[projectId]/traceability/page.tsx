@@ -5,6 +5,7 @@ import { ReactFlow, Background, Controls, Handle, Position, Node, Edge } from "@
 import "@xyflow/react/dist/style.css";
 import { getTraceability, suggestLinks, traceArtifact } from "../../../../lib/api/endpoints";
 import { linkCounts } from "../../../../lib/query/links";
+import { useShell } from "../../../../components/shell/context";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
@@ -36,6 +37,7 @@ const nodeTypes = { typed: TypeNode };
 /** Traceability workspace (§26): stored relationships as an interactive graph. No invented edges. */
 export default function Traceability() {
   const { projectId: pid } = useParams() as { projectId: string };
+  const { setSelection } = useShell();
   const [data, setData] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [sel, setSel] = useState<string | null>(null);
@@ -80,11 +82,12 @@ export default function Traceability() {
   const onNodeClick = useCallback(async (_: any, node: Node) => {
     const id = node.id as string;
     setSel(id);
+    setSelection(id);
     try {
       const t = await traceArtifact(pid, id.split(":").pop() || "");
       setSelLinks([...(t.forward || []), ...(t.backward || [])]);
     } catch { setSelLinks([]); }
-  }, [pid]);
+  }, [pid, setSelection]);
 
   const suggest = async () => {
     setBusy(true);

@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "mock"  # mock | openai
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
+    LLM_API_KEY: str = ""  # Copilot: any OpenAI-compatible provider (OpenAI, Gemini, Groq…)
+    LLM_BASE_URL: str = ""  # e.g. https://generativelanguage.googleapis.com/v1beta/openai/
+    LLM_MODEL: str = ""  # defaults to OPENAI_MODEL when empty
     EMBEDDING_PROVIDER: str = "hash"  # hash | openai
     OPENAI_EMBED_MODEL: str = "text-embedding-3-small"
     STORAGE_MODE: str = "local"
@@ -25,6 +28,16 @@ class Settings(BaseSettings):
     @property
     def use_openai(self) -> bool:
         return bool(self.OPENAI_API_KEY) and self.LLM_PROVIDER == "openai"
+
+    @property
+    def copilot_model(self) -> str:
+        """Model for the Copilot adapter (provider-agnostic)."""
+        return self.LLM_MODEL or self.OPENAI_MODEL
+
+    @property
+    def copilot_configured(self) -> bool:
+        """True only when a key exists — otherwise the rule-based Copilot serves."""
+        return bool(self.LLM_API_KEY or self.OPENAI_API_KEY)
 
 
 settings = Settings()
