@@ -1,33 +1,100 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { api } from "../../../../lib/api/client";
-import { Bar, Loading, ErrorBox, Empty } from "../../../../components/ui";
+import { ReactFlow, Background, Controls, Handle, Position, Node, Edge } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { getTraceability, suggestLinks, traceArtifact } from "../../../../lib/api/endpoints";
+import { linkCounts } from "../../../../lib/query/links";
+import { Card } from "../../../../components/ui/card";
+import { Button } from "../../../../components/ui/button";
+import { StatusBadge } from "../../../../components/ui/badge";
+import { LoadingState, ErrorState, EmptyState, Progress } from "../../../../components/ui/feedback";
+import { Drawer } from "../../../../components/ui/overlay";
+import { ArtifactLink } from "../../../../components/ui/activity";
 
-/** Traceability (§14): coverage, orphans, forward/backward trace, suggestions, impact (§17). */
+const ORDER = ["requirement", "story", "api", "db", "security", "task", "test", "component"];
+const COLORS: Record<string, string> = {
+  requirement: "#5eead4", story: "#818cf8", api: "#60a5fa", db: "#fbbf24",
+  security: "#fb7185", task: "#34d399", test: "#c084fc", component: "#8b929e",
+};
+
+function TypeNode({ data }: any) {
+  const color = COLORS[data.type] || "#8b929e";
+  return (
+    <div style={{ borderColor: color }}
+      className={`rounded-xl border-2 bg-[#171a1f] px-3 py-1.5 text-center shadow ${data.selected ? "ring-2 ring-white/40" : ""}`}>
+      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+      <p className="font-mono text-[12px] font-bold" style={{ color }}>{data.code}</p>
+      <p className="text-[10.5px] uppercase tracking-wide text-[#8b929e]">{data.type}</p>
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+    </div>
+  );
+}
+
+const nodeTypes = { typed: TypeNode };
+
+/** Traceability workspace (§26): stored relationships as an interactive graph. No invented edges. */
 export default function Traceability() {
   const { projectId: pid } = useParams() as { projectId: string };
   const [data, setData] = useState<any>(null);
-  const [code, setCode] = useState("REQ-001");
-  const [trace, setTrace] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [impact, setImpact] = useState<any>(null);
-  const [impactCode, setImpactCode] = useState("REQ-001");
+  const [sel, setSel] = useState<string | null>(null);
+  const [selLinks, setSelLinks] = useState<any[]>([]);
   const [err, setErr] = useState("");
-  const [busy, setBusy] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const load = () => api(`/projects/${pid}/traceability`).then(setData).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, []);
-  const lookup = () => api(`/projects/${pid}/traceability/${code}`).then(setTrace).catch((e) => setErr(e.message));
+  const load = () => getTraceability(pid).then(setData).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, [pid]);
+
+  const { nodes, edges } = useMemo(() => {
+    if (!data) return { nodes: [], edges: [] };
+    const seen = new Map<string, { type: string; code: string }>();
+    for (const l of data.links) {
+      for (const end of [l.from, l.to]) {
+        const [t, c] = end.split(":");
+        const key = `${t}:${c}`;
+        if (!seen.has(key)) seen.set(key, { type: t, code: c });
+      }
+    }
+    const cols: Record<string, { type: string; code: string }[]> = {};
+    for (const n of seen.values()) (cols[n.type] = cols[n.type] || []).push(n);
+    const nodes: Node[] = [];
+    ORDER.forEach((t, ci) => {
+      (cols[t] || []).forEach((n, ri) => {
+        nodes.push({
+          id: `${n.type}:${n.code}`, type: "typed", position: { x: ci * 190, y: ri * 92 },
+          data: { ...n, selected: sel === `${n.type}:${n.code}` }, draggable: true,
+        });
+      });
+    });
+    const ids = new Set(nodes.map((n) => n.id));
+    const edges: Edge[] = data.links
+      .filter((l: any) => ids.has(l.from) && ids.has(l.to))
+      .map((l: any, i: number) => ({
+        id: `e${i}`, source: l.from, target: l.to, label: l.rel, animated: false,
+        style: { stroke: "#3a4150" }, labelStyle: { fill: "#8b929e", fontSize: 10 },
+      }));
+    return { nodes, edges };
+  }, [data, sel]);
+
+  const onNodeClick = useCallback(async (_: any, node: Node) => {
+    const id = node.id as string;
+    setSel(id);
+    try {
+      const t = await traceArtifact(pid, id.split(":").pop() || "");
+      setSelLinks([...(t.forward || []), ...(t.backward || [])]);
+    } catch { setSelLinks([]); }
+  }, [pid]);
 
   const suggest = async () => {
-    setBusy("suggest");
-    try { setSuggestions((await api(`/projects/${pid}/traceability/suggest`, { method: "POST" })).suggestions || []); }
+    setBusy(true);
+    try { setSuggestions((await suggestLinks(pid)).suggestions || []); }
     catch (e: any) { setErr(e.message); }
-    setBusy("");
+    setBusy(false);
   };
 
   const confirm = async (s: any) => {
+    const { api } = await import("../../../../lib/api/client");
     const [tt, tid] = s.to.split(":");
     await api(`/projects/${pid}/traceability/links`, {
       method: "POST",
@@ -37,76 +104,70 @@ export default function Traceability() {
     await load();
   };
 
-  const analyze = async () => {
-    setBusy("impact");
-    try { setImpact(await api(`/projects/${pid}/impact/analyze`, { method: "POST", body: JSON.stringify({ requirement_code: impactCode }) })); }
-    catch (e: any) { setErr(e.message); }
-    setBusy("");
-  };
+  if (err && !data) return <ErrorState message={err} onRetry={load} />;
+  if (!data) return <LoadingState stage="Building traceability graph" />;
 
-  if (err && !data) return <ErrorBox message={err} onRetry={load} />;
-  if (!data) return <Loading stage="Computing traceability coverage" />;
+  const cov = data.coverage || {};
+  const counts = linkCounts(data.links || []);
 
   return (
     <div>
-      <h1>Traceability</h1>
-      <p className="sub">Forward + backward links, orphan detection, coverage — computed from stored relationships.</p>
-      {err && <ErrorBox message={err} />}
-      <div className="card">
-        <b>Coverage: {data.coverage.covered}/{data.coverage.total} ({data.coverage.coverage_pct}%)</b>
-        <Bar pct={data.coverage.coverage_pct} />
-        {data.coverage.orphans.length > 0 ? (
-          <p>▲ Orphaned: {data.coverage.orphans.map((o: string) => <code key={o}>{o} </code>)}</p>
-        ) : <p className="muted">✓ No orphans — every requirement links downstream.</p>}
-      </div>
-      <div className="card">
-        <h3>Trace an artifact</h3>
-        <div className="row">
-          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="REQ-001 or API-001" style={{ maxWidth: 200 }} aria-label="Artifact code" />
-          <button onClick={lookup}>Trace</button>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[24px] font-bold tracking-tight">Traceability</h1>
+          <p className="text-[13px] text-secondary">{cov.covered || 0}/{cov.total || 0} requirements traced · every edge stored, none invented</p>
         </div>
-        {trace && (
-          <>
-            {(trace.forward || []).length === 0 && (trace.backward || []).length === 0
-              ? <Empty title="No links" hint={`${code} is orphaned — generate artifacts or confirm a suggestion below.`} />
-              : <>
-                {(trace.forward || []).length > 0 && <><b>Downstream</b><ul>{trace.forward.map((l: any, i: number) => <li key={i}><code>{l.from}</code> → <code>{l.to}</code> <span className="muted">({l.rel})</span></li>)}</ul></>}
-                {(trace.backward || []).length > 0 && <><b>Upstream</b><ul>{trace.backward.map((l: any, i: number) => <li key={i}><code>{l.from}</code> → <code>{l.to}</code> <span className="muted">({l.rel})</span></li>)}</ul></>}
-              </>}
-          </>
-        )}
+        <Button variant="ghost" onClick={suggest} disabled={busy}>{busy ? "Analyzing…" : "Suggest links"}</Button>
       </div>
-      <div className="card">
-        <div className="spread"><h3>Suggested links</h3><button className="ghost" onClick={suggest} disabled={busy === "suggest"}>{busy === "suggest" ? "Analyzing…" : "Suggest links"}</button></div>
-        {suggestions.length === 0
-          ? <p className="muted">Deterministic keyword-overlap proposals — you confirm each one. Nothing is linked automatically.</p>
-          : <table><thead><tr><th>From</th><th>To</th><th>Why</th><th></th></tr></thead>
-            <tbody>{suggestions.map((s, i) => (
-              <tr key={i}><td className="mono">{s.from}</td><td className="mono">{s.to}</td><td className="muted">{s.reason}</td>
-                <td><button className="ghost" onClick={() => confirm(s)}>Confirm</button></td></tr>
-            ))}</tbody></table>}
-      </div>
-      <div className="card">
-        <h3>Impact analysis</h3>
-        <p className="muted">Change a requirement → see every affected artifact, deterministically (§17).</p>
-        <div className="row">
-          <input value={impactCode} onChange={(e) => setImpactCode(e.target.value)} placeholder="REQ-001" style={{ maxWidth: 160 }} aria-label="Requirement code" />
-          <button onClick={analyze} disabled={busy === "impact"}>{busy === "impact" ? "Analyzing…" : "Analyze impact"}</button>
+      {err && <div className="mb-3"><ErrorState message={err} /></div>}
+
+      <Card className="mb-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <b className="text-[14px]">Coverage {cov.coverage_pct || 0}%</b>
+          <span className="text-[12px] text-secondary">{(cov.orphans || []).length} orphaned</span>
         </div>
-        {impact && (
-          <>
-            <p><b>{impact.affected.length} affected artifacts:</b> {impact.affected.map((a: string) => <code key={a}>{a} </code>)}</p>
-            <p className="muted">{impact.explanation}</p>
-          </>
+        <Progress pct={cov.coverage_pct || 0} label="Traceability coverage" />
+        {(cov.orphans || []).length > 0 && (
+          <p className="mt-2 text-[12.5px] text-secondary">Orphaned: {(cov.orphans || []).map((o: string) => <span key={o} className="mr-1"><ArtifactLink code={o} /></span>)}</p>
         )}
-      </div>
-      <div className="card" style={{ padding: 0, overflowX: "auto" }}>
-        <table>
-          <thead><tr><th>From</th><th>To</th><th>Relationship</th></tr></thead>
-          <tbody>{data.links.map((l: any, i: number) => <tr key={i}><td className="mono">{l.from}</td><td className="mono">{l.to}</td><td>{l.rel}</td></tr>)}</tbody>
-        </table>
-      </div>
-      {data.links.length === 0 && <Empty title="No links yet" hint="Run the pipeline — generation auto-links requirements to stories, APIs, tasks and tests." />}
+      </Card>
+
+      {(data.links || []).length === 0 ? (
+        <EmptyState title="No relationships yet" hint="Approve artifacts to begin building the traceability graph." />
+      ) : (
+        <div className="mb-3.5 h-[420px] overflow-hidden rounded-2xl border border-border bg-canvas">
+          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={onNodeClick}
+            fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.3} maxZoom={1.5}
+            proOptions={{ hideAttribution: false }} colorMode="dark">
+            <Background gap={22} size={1} color="#242830" />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <Card className="mb-3.5">
+          <h3 className="mb-2 text-[14px] font-semibold">Suggested links ({suggestions.length})</h3>
+          <p className="mb-2 text-[12.5px] text-secondary">Deterministic proposals — you confirm each one.</p>
+          {suggestions.slice(0, 8).map((s, i) => (
+            <p key={i} className="flex flex-wrap items-center gap-2 border-b border-border py-1.5 text-[13px] last:border-b-0">
+              <code className="font-mono text-[12.5px]">{s.from}</code>→<code className="font-mono text-[12.5px]">{s.to}</code>
+              <span className="text-secondary">({s.reason})</span>
+              <Button variant="ghost" size="sm" onClick={() => confirm(s)}>Confirm</Button>
+            </p>
+          ))}
+        </Card>
+      )}
+
+      <Drawer open={!!sel} onClose={() => setSel(null)} label={`Artifact ${sel}`} title={<span className="font-mono">{sel}</span>}>
+        <p className="mb-2 text-[13px] text-secondary">{selLinks.length} touching relationships · downstream links: {sel && sel.startsWith("requirement:") ? counts[sel.split(":")[1]] || 0 : "—"}</p>
+        <ul className="grid gap-1.5">
+          {selLinks.map((l: any, i: number) => (
+            <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to} <span className="text-secondary">({l.rel})</span></li>
+          ))}
+        </ul>
+        {selLinks.length === 0 && <p className="text-[13px] text-secondary">Orphaned — no stored relationships touch this node.</p>}
+      </Drawer>
     </div>
   );
 }

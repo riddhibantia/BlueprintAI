@@ -34,7 +34,9 @@ def issues(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     project_or_403(pid, db, user)
     rows = db.query(ConsistencyIssue).filter_by(project_id=pid).all()
     return [{"id": r.id, "check": r.check, "severity": r.severity, "description": r.description,
-             "affected": r.affected, "suggestion": r.suggestion, "status": r.status} for r in rows]
+             "affected": r.affected, "suggestion": r.suggestion, "status": r.status,
+             "created_at": r.created_at.isoformat() if r.created_at else None,
+             "updated_at": r.updated_at.isoformat() if r.updated_at else None} for r in rows]
 
 
 @router.patch("/projects/{pid}/consistency/issues/{iid}")
