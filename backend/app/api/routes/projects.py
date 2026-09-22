@@ -60,6 +60,7 @@ ACTION_LABELS = {
     "requirement.approve": "Requirement approved",
     "requirement.delete": "Requirement deleted",
     "prd.update": "PRD updated",
+    "story.approve": "Story approved",
     "architecture.add": "Architecture updated",
     "architecture.delete": "Architecture updated",
     "knowledge.upload": "Document indexed",

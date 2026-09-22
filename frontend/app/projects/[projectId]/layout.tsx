@@ -21,6 +21,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const { pid, project, reload, copilotOpen, setCopilotOpen } = useShell();
   const path = usePathname() || "";
   const [palette, setPalette] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const openPalette = () => setPalette(true);
   useShortcuts(pid, openPalette);
 
@@ -32,9 +33,12 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-canvas text-primary">
-      <Sidebar />
+      <span className="hidden lg:block"><Sidebar /></span>
+      <Drawer open={navOpen} onClose={() => setNavOpen(false)} label="Project navigation" title="Navigate">
+        <Sidebar onNavigate={() => setNavOpen(false)} />
+      </Drawer>
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onPalette={openPalette} />
+        <TopBar onPalette={openPalette} onMenu={() => setNavOpen(true)} />
         <main id="main" className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-5">
           <Breadcrumb trail={trail} />
           {children}

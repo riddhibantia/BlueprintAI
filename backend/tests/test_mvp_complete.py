@@ -68,6 +68,16 @@ def test_optimistic_locking(client):
     assert r.status_code == 409
     r = client.put(f"/requirements/{target['id']}", json={"title": target["title"] + "!", "expected_version": target["version"]}, headers=h)
     assert r.status_code == 200 and r.json()["version"] == target["version"] + 1
+    r = client.put(f"/requirements/{target['id']}", json={"status": "bogus"}, headers=h)
+    assert r.status_code == 400
+
+
+def test_story_approve(client):
+    pid, h = PID["id"], H["h"]
+    stories = client.get(f"/projects/{pid}/stories", headers=h).json()
+    assert stories
+    r = client.post(f"/projects/{pid}/stories/{stories[0]['code']}/approve", headers=h)
+    assert r.status_code == 200 and r.json()["status"] == "approved"
 
 
 def test_requirement_delete_cleans_links(client):

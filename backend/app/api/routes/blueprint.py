@@ -106,6 +106,19 @@ def stories_list(pid: str, db: Session = Depends(get_db), user=Depends(current_u
     return out
 
 
+@router.post("/projects/{pid}/stories/{code}/approve")
+def story_approve(pid: str, code: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Approve a user story (approved state is authoritative, §22)."""
+    project_or_403(pid, db, user)
+    s = db.query(UserStory).filter_by(project_id=pid, code=code).first()
+    if not s:
+        raise HTTPException(404, "Story not found")
+    s.status = "approved"
+    db.commit()
+    log(db, project_id=pid, user_id=user.id, action="story.approve", detail=code)
+    return {"code": s.code, "status": "approved"}
+
+
 @router.post("/projects/{pid}/architecture/generate")
 def arch_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     """Generate the system architecture from requirements + RAG evidence (§8)."""

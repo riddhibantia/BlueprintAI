@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Check, Download, Moon, Play, Search, Sun } from "lucide-react";
+import { Check, Download, Menu, Moon, Play, Search, Sun } from "lucide-react";
 import { useShell } from "./context";
 import { timeAgo } from "../../lib/utils/time";
 import { StatusBadge } from "../ui/badge";
@@ -10,7 +10,7 @@ import { apiDownload, me } from "../../lib/api/client";
 import { checkConsistency } from "../../lib/api/endpoints";
 
 /** Project top bar (§9): name, status, updated time, palette, share, export, validation, avatar. */
-export function TopBar({ onPalette }: { onPalette: () => void }) {
+export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: () => void }) {
   const { pid, project, activity, reload } = useShell();
   const [copied, setCopied] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -46,6 +46,9 @@ export function TopBar({ onPalette }: { onPalette: () => void }) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-canvas/90 backdrop-blur">
       <div className="flex items-center gap-3 px-5 py-2.5">
+        <span className="lg:hidden">
+          <IconButton label="Open navigation" onClick={onMenu}><Menu size={17} /></IconButton>
+        </span>
         <div className="min-w-0">
           <h1 className="truncate text-[15px] font-semibold tracking-tight">{project?.name || "Loading…"}</h1>
           <p className="flex items-center gap-2 text-[12px] text-secondary">

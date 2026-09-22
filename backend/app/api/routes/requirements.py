@@ -84,6 +84,8 @@ def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db),
     project_or_403(r.project_id, db, user)
     if body.expected_version is not None and body.expected_version != r.version:
         raise HTTPException(409, f"Version conflict: current v{r.version}, you sent v{body.expected_version}")
+    if body.status and body.status not in ("draft", "approved", "rejected", "changed"):
+        raise HTTPException(400, "status must be draft|approved|rejected|changed")
     # version on title/desc change (§22 HITL: approved state distinct)
     changed = False
     if body.title and body.title != r.title:

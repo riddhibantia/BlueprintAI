@@ -1,8 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
+import { FolderKanban, LogOut, Plus } from "lucide-react";
 import { api, me, logout } from "../../lib/api/client";
-import { Empty, Loading, ErrorBox, Status } from "../../components/ui";
+import { Card } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { StatusBadge } from "../../components/ui/badge";
+import { LoadingState, ErrorState, EmptyState } from "../../components/ui/feedback";
 
+/** Workspace dashboard: session gate, project creation, project list (no diagnostics here §9). */
 export default function Dashboard() {
   const [authed, setAuthed] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("register");
@@ -11,27 +16,24 @@ export default function Dashboard() {
   const [name, setName] = useState("");
   const [projects, setProjects] = useState<any[]>([]);
   const [idea, setIdea] = useState("Build an employee expense management platform.");
-  const [health, setHealth] = useState<any>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("loading");
   const [err, setErr] = useState("");
 
-  const load = async () => {
-    setState("loading");
-    try {
-      setHealth(await api("/health"));
-      const user = await me();
-      if (user) {
-        setAuthed(true);
-        setProjects(await api("/projects"));
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = await me();
+        if (user) {
+          setAuthed(true);
+          setProjects(await api("/projects"));
+        }
+        setState("idle");
+      } catch (e: any) {
+        setErr(e.message || "Backend unreachable. Start FastAPI on :8000.");
+        setState("error");
       }
-      setState("idle");
-    } catch (e: any) {
-      setErr(e.message || "Backend unreachable. Start FastAPI on :8000.");
-      setState("error");
-    }
-  };
-
-  useEffect(() => { load(); }, []);
+    })();
+  }, []);
 
   const auth = async () => {
     try {
@@ -40,6 +42,7 @@ export default function Dashboard() {
       });
       setAuthed(true);
       setProjects(await api("/projects"));
+      setState("idle");
     } catch (e: any) { setErr(e.message); setState("error"); }
   };
 
@@ -51,59 +54,68 @@ export default function Dashboard() {
     window.location.href = `/projects/${p.id}`;
   };
 
-  if (state === "loading") return <Loading stage="Connecting to workspace backend" />;
-  if (state === "error" && !authed && projects.length === 0 && !health)
-    return <ErrorBox message={err} onRetry={() => { setState("loading"); load(); }} />;
+  if (state === "loading") return <div className="mx-auto max-w-[720px] px-5 py-10"><LoadingState stage="Connecting to workspace backend" /></div>;
+  if (state === "error" && !authed)
+    return <div className="mx-auto max-w-[720px] px-5 py-10"><ErrorState message={err} onRetry={() => window.location.reload()} /></div>;
 
   if (!authed)
     return (
-      <div>
-        <div className="hero">
-          <h1>DevBlueprint</h1>
-          <p>Turn a product idea into a structured, traceable, validated engineering blueprint — requirements to tests, all connected.</p>
-        </div>
-        <div className="card" style={{ maxWidth: 420 }}>
-          <div className="row">
-            <button className={mode === "login" ? "" : "ghost"} onClick={() => setMode("login")}>Log in</button>
-            <button className={mode === "register" ? "" : "ghost"} onClick={() => setMode("register")}>Sign up</button>
+      <div className="mx-auto max-w-[720px] px-5 py-10">
+        <p className="mb-1 flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.08em] text-accent">
+          <FolderKanban size={14} />DevBlueprint
+        </p>
+        <h1 className="text-[30px] font-bold tracking-tight">Engineering blueprints,<br />kept honest.</h1>
+        <p className="mt-2 text-[14.5px] text-secondary">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
+        <Card className="mt-6 max-w-[420px]">
+          <div className="mb-3 flex gap-2" role="tablist" aria-label="Auth mode">
+            <button role="tab" aria-selected={mode === "login"} onClick={() => setMode("login")}
+              className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium ${mode === "login" ? "bg-elevated text-primary" : "text-secondary"}`}>Log in</button>
+            <button role="tab" aria-selected={mode === "register"} onClick={() => setMode("register")}
+              className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium ${mode === "register" ? "bg-elevated text-primary" : "text-secondary"}`}>Sign up</button>
           </div>
-          <label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" /></label>
-          <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></label>
-          {mode === "register" && <label>Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada" /></label>}
-          <button onClick={auth}>{mode === "login" ? "Log in" : "Create account"}</button>
-          {state === "error" && err && <p className="muted">{err}</p>}
-        </div>
+          <label className="block text-[13px]">Email
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" autoComplete="email"
+              className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2" /></label>
+          <label className="mt-2 block text-[13px]">Password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="•••••••• (min 8)"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2" /></label>
+          {mode === "register" && (
+            <label className="mt-2 block text-[13px]">Name
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada"
+                className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2" /></label>
+          )}
+          <div className="mt-3"><Button onClick={auth}>{mode === "login" ? "Log in" : "Create account"}</Button></div>
+          {state === "error" && err && <p className="mt-2 text-[13px] text-danger">{err}</p>}
+        </Card>
       </div>
     );
 
   return (
-    <div>
-      <div className="hero">
-        <div className="spread">
-          <div>
-            <h1>Blueprint studio</h1>
-            <p>Turn a product idea into a traceable engineering blueprint{health?.status === "ok" ? " — workspace connected" : ""}.</p>
-          </div>
-          <button className="ghost" onClick={logout}>Log out</button>
+    <div className="mx-auto max-w-[960px] px-5 py-8">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[28px] font-bold tracking-tight">Projects</h1>
+          <p className="text-[13.5px] text-secondary">Select a workspace — or describe a new product idea.</p>
         </div>
+        <Button variant="ghost" onClick={logout}><LogOut size={14} />Log out</Button>
       </div>
-      <div className="card">
-        <h3>New project</h3>
-        <p className="muted">Describe the product idea in one line — the pipeline clarifies, then generates.</p>
-        <textarea rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} aria-label="Product idea" />
-        <button onClick={create}>Create project</button>
-      </div>
+      <Card className="mb-4">
+        <h3 className="mb-1 text-[15px] font-semibold">New project</h3>
+        <textarea rows={2} value={idea} onChange={(e) => setIdea(e.target.value)} aria-label="Product idea"
+          className="w-full rounded-xl border border-border bg-canvas p-2.5 text-[13.5px]" />
+        <div className="mt-2"><Button onClick={create}><Plus size={14} />Create project</Button></div>
+      </Card>
       {projects.length === 0 ? (
-        <Empty title="No projects yet" hint="Describe your product idea above to get started.">
-          <span className="mono muted">Idea → Requirements → PRD → … → Blueprint</span>
-        </Empty>
+        <EmptyState title="No projects yet" hint="Describe your product idea above to get started." />
       ) : (
-        <div className="grid m2">
+        <div className="grid gap-3 md:grid-cols-2">
           {projects.map((p) => (
-            <a key={p.id} className="card" href={`/projects/${p.id}`}>
-              <div className="spread"><b>{p.name}</b><Status value={p.status || "draft"} /></div>
-              <p className="muted">{p.idea}</p>
-              <span className="muted">Open workspace →</span>
+            <a key={p.id} href={`/projects/${p.id}`}
+              className="rounded-2xl border border-border bg-surface p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-accent">
+              <p className="flex items-center justify-between gap-2"><b className="text-[14.5px]">{p.name}</b><StatusBadge value={p.status || "draft"} /></p>
+              <p className="mt-1 line-clamp-2 text-[13px] text-secondary">{p.idea}</p>
+              <p className="mt-2 text-[12.5px] font-semibold text-accent">Open workspace →</p>
             </a>
           ))}
         </div>

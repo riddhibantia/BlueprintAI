@@ -38,7 +38,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
 ];
 
 /** Collapsible project sidebar (§8): grouped, icon-led, keyboard accessible. */
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const path = usePathname() || "";
   const { pid, project } = useShell();
   const [collapsed, setCollapsed] = useState(false);
@@ -59,7 +59,7 @@ export function Sidebar() {
             {sec.items.map((it) => {
               const active = it.match.test(path);
               return (
-                <a key={it.label} href={it.slug ? `${base}/${it.slug}` : base}
+                <a key={it.label} href={it.slug ? `${base}/${it.slug}` : base} onClick={onNavigate}
                   aria-current={active ? "page" : undefined} title={collapsed ? it.label : undefined}
                   className={cn("mt-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-120",
                     collapsed && "justify-center px-0",
