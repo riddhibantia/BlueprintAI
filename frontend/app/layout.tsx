@@ -11,7 +11,10 @@ export const metadata = { title: "DevBlueprint", description: "AI-assisted engin
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem("dbp-theme");if(t)document.documentElement.dataset.theme=t;}catch(e){}})();` }} />
+      </head>
       <body className={`${inter.variable} ${mono.variable}`}>
         <a className="skip" href="#main">Skip to content</a>
         <div className="layout">

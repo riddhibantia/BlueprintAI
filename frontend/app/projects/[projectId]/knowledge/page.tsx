@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, apiForm } from "../../../../lib/api";
+import { api, apiForm } from "../../../../lib/api/client";
 import { Loading, ErrorBox, Empty } from "../../../../components/ui";
 
 export default function Knowledge() {

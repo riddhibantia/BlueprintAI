@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api } from "../../../../lib/api";
+import { api } from "../../../../lib/api/client";
 import { Bar, Loading, ErrorBox, Empty } from "../../../../components/ui";
 
 /** Traceability (§14): coverage, orphans, forward/backward trace, suggestions, impact (§17). */

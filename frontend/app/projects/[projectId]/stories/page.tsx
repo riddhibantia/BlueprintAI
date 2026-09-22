@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api } from "../../../../lib/api";
+import { api } from "../../../../lib/api/client";
 import { Status, Loading, ErrorBox, Empty } from "../../../../components/ui";
 
 /** User stories with acceptance criteria, each linked to its source requirement (§7). */

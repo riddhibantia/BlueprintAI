@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api } from "../../../../lib/api";
+import { api } from "../../../../lib/api/client";
 import { Status, Loading, ErrorBox, Empty } from "../../../../components/ui";
 
 /** PRD viewer + editor (§6.4: the PRD remains editable, approval is explicit). */

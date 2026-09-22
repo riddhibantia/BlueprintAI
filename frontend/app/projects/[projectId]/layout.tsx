@@ -1,34 +1,57 @@
 "use client";
-import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, usePathname } from "next/navigation";
+import AssistantPanel from "../../../components/assistant";
+import { ShellProvider, useShell } from "../../../components/shell/context";
+import { Sidebar } from "../../../components/shell/sidebar";
+import { TopBar } from "../../../components/shell/topbar";
+import { Palette } from "../../../components/shell/palette";
+import { Breadcrumb } from "../../../components/ui/data";
+import { useShortcuts } from "../../../lib/shortcuts/keys";
 
-/** Full §29.3 module list — every item is a working page, no stubs. */
-const MODULES: [string, string][] = [
-  ["Overview", ""],
-  ["Requirements", "requirements"],
-  ["PRD", "prd"],
-  ["User Stories", "stories"],
-  ["Architecture", "architecture"],
-  ["Database", "database"],
-  ["APIs", "apis"],
-  ["Security", "security"],
-  ["Tasks", "tasks"],
-  ["Tests", "tests"],
-  ["Traceability", "traceability"],
-  ["Consistency", "consistency"],
-  ["Knowledge", "knowledge"],
-];
+const NAMES: Record<string, string> = {
+  requirements: "Requirements", prd: "Product Spec", stories: "User Stories", architecture: "Architecture",
+  database: "Data Model", apis: "APIs", security: "Security", tasks: "Tasks", tests: "Tests",
+  traceability: "Traceability", consistency: "Consistency", impact: "Impact Analysis", knowledge: "Knowledge",
+  settings: "Settings", profile: "Profile", blueprint: "Blueprint",
+};
+
+function ShellInner({ children }: { children: React.ReactNode }) {
+  const { pid, project, reload } = useShell();
+  const path = usePathname() || "";
+  const [palette, setPalette] = useState(false);
+  const openPalette = () => setPalette(true);
+  useShortcuts(pid, openPalette);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const seg = path.split("/").pop() || "";
+  const trail: { label: string; href?: string }[] = [{ label: project?.name || "Project", href: `/projects/${pid}` }];
+  if (seg && NAMES[seg]) trail.push({ label: NAMES[seg] });
+
+  return (
+    <div className="flex min-h-screen bg-canvas text-primary">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar onPalette={openPalette} />
+        <main id="main" className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-5">
+          <Breadcrumb trail={trail} />
+          {children}
+        </main>
+      </div>
+      <aside aria-label="AI Assistant" className="sticky top-0 hidden h-screen w-[300px] flex-none overflow-auto border-l border-border bg-surface p-4 xl:block">
+        <AssistantPanel />
+      </aside>
+      <Palette open={palette} onClose={() => setPalette(false)} />
+    </div>
+  );
+}
 
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {
-  const { projectId } = useParams();
-  const base = `/projects/${projectId}`;
+  const { projectId } = useParams() as { projectId: string };
   return (
-    <div>
-      <nav className="row" aria-label="Project modules" style={{ marginBottom: 16 }}>
-        {MODULES.map(([label, slug]) => (
-          <a key={label} className="btn ghost" href={slug ? `${base}/${slug}` : base}>{label}</a>
-        ))}
-      </nav>
-      {children}
-    </div>
+    <ShellProvider pid={projectId}>
+      <ShellInner>{children}</ShellInner>
+    </ShellProvider>
   );
 }

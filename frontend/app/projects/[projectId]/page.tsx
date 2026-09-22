@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, apiDownload } from "../../../lib/api";
+import { api, apiDownload } from "../../../lib/api/client";
 import { Metric, Bar, Loading, ErrorBox, Empty, Status } from "../../../components/ui";
 
 const STAGES: [string, string][] = [

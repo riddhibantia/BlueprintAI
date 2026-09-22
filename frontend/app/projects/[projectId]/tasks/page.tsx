@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api } from "../../../../lib/api";
+import { api } from "../../../../lib/api/client";
 import { Status, Loading, ErrorBox, Empty } from "../../../../components/ui";
 
 /** Implementation plan (§12): epics → tasks with requirement links and live status. */

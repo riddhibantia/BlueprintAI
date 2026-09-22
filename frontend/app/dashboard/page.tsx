@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, me, logout } from "../../lib/api";
+import { api, me, logout } from "../../lib/api/client";
 import { Empty, Loading, ErrorBox, Status } from "../../components/ui";
 
 export default function Dashboard() {

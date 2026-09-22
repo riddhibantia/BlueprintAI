@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api } from "../../../../lib/api";
+import { api } from "../../../../lib/api/client";
 import { Loading, ErrorBox, Empty } from "../../../../components/ui";
 
 /** Database design (§9): entities, keys, references — linked to requirements via Traceability. */
