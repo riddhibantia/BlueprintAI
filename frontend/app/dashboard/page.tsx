@@ -58,8 +58,10 @@ export default function Dashboard() {
   if (!authed)
     return (
       <div>
-        <h1>DevBlueprint</h1>
-        <p className="sub">Turn a product idea into a traceable engineering blueprint.</p>
+        <div className="hero">
+          <h1>DevBlueprint</h1>
+          <p>Turn a product idea into a structured, traceable, validated engineering blueprint — requirements to tests, all connected.</p>
+        </div>
         <div className="card" style={{ maxWidth: 420 }}>
           <div className="row">
             <button className={mode === "login" ? "" : "ghost"} onClick={() => setMode("login")}>Log in</button>
@@ -76,9 +78,14 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="spread">
-        <div><h1>Projects</h1><p className="sub">Backend: <span className="mono">{health?.db} · {health?.llm}</span></p></div>
-        <button className="ghost" onClick={logout}>Log out</button>
+      <div className="hero">
+        <div className="spread">
+          <div>
+            <h1>Blueprint studio</h1>
+            <p>Turn a product idea into a traceable engineering blueprint — <span className="mono">{health?.db} · {health?.llm} mode</span>.</p>
+          </div>
+          <button className="ghost" onClick={logout}>Log out</button>
+        </div>
       </div>
       <div className="card">
         <h3>New project</h3>
@@ -93,11 +100,11 @@ export default function Dashboard() {
       ) : (
         <div className="grid m2">
           {projects.map((p) => (
-            <div key={p.id} className="card">
+            <a key={p.id} className="card" href={`/projects/${p.id}`}>
               <div className="spread"><b>{p.name}</b><Status value={p.status || "draft"} /></div>
               <p className="muted">{p.idea}</p>
-              <a className="btn" href={`/projects/${p.id}`}>Open workspace</a>
-            </div>
+              <span className="muted">Open workspace →</span>
+            </a>
           ))}
         </div>
       )}
