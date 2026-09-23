@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Send, Activity as ActivityIcon } from "lucide-react";
-import MatrixOrb from "../ui/matrix-orb";
+import { Bot, Send, Sparkles, Activity as ActivityIcon } from "lucide-react";
 import { useShell } from "../shell/context";
 import { api } from "../../lib/api/client";
 import { checkConsistency, listRuns } from "../../lib/api/endpoints";
@@ -51,7 +50,7 @@ export function CopilotPanel() {
   return (
     <div>
       <h4 className="flex items-center gap-2 text-[13.5px] font-semibold">
-        <MatrixOrb state={busy ? "thinking" : "idle"} size={26} color="#5eead4" labels={{ idle: "Idle", thinking: "Working…" }} aria-label={busy ? "Copilot working" : "Copilot idle"} />
+        {busy ? <ActivityIcon size={15} className="text-accent" aria-hidden /> : mode?.mode === "ai" ? <Sparkles size={15} className="text-accent" aria-hidden /> : <Bot size={15} className="text-secondary" aria-hidden />}
         Blueprint Copilot
       </h4>
       <p className="mt-1">

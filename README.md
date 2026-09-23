@@ -19,7 +19,7 @@ Full spec: `docs/SPEC.md`. Security: `docs/SECURITY.md`. Measured numbers: `docs
 | RAG-grounded generation | Upload PDF/TXT/MD → chunk → hash/OpenAI embeddings → pgvector; every generation cites evidence |
 | Multi-agent pipeline | LangGraph workflow with sequential fallback (reported in benchmark output) |
 | Collaboration safety | httpOnly `SameSite=Lax` sessions, `project_or_403` isolation, optimistic locking (409), audit logs |
-| Export | PRD/architecture PDF (ReportLab), Archify diagram IR (1:1 topology) |
+| Export | Full-blueprint PDF (ReportLab), Archify diagram IR (1:1 topology) |
 | Quality gates | 35 pytest tests green, `evaluation/benchmark.py --full` measures latency/coverage, `npm run build` clean |
 
 ## Tech stack
@@ -81,21 +81,20 @@ Create Project → Clarify → Generate Requirements → Approve → PRD → Sto
 
 | Method + path | Description |
 |---|---|
-| `POST /api/auth/register`, `/login`, `/logout`, `GET /me` | Email + bcrypt auth, httpOnly cookie session |
-| `CRUD /api/projects` | Project create/list, member guard via `project_or_403` |
-| `POST /api/requirements/generate`, `/approve` | RAG-grounded requirement drafts + approval with locking |
-| `GET /api/blueprint/{stage}` | PRD, stories, architecture, DB, APIs, security, tasks, tests |
-| `GET /api/traceability/coverage` | Coverage %, orphans |
-| `POST /api/consistency/check` | Rule-based issue list |
-| `POST /api/impact/analyze` | Affected artifacts for a requirement change |
-| `GET /api/export/prd.pdf` | PDF export |
+| `POST /auth/register`, `/login`, `/logout`, `GET /me` | Email + bcrypt auth, httpOnly cookie session |
+| `POST/GET /projects`, `GET /projects/{id}` | Project create/list/detail, member guard via `project_or_403` |
+| `POST /projects/{id}/requirements/generate`, `POST /requirements/{id}/approve` | RAG-grounded requirement drafts + approval with locking |
+| `GET /projects/{id}/prd`, `/stories`, `/architecture`, `/database`, `/apis`, `/security`, `/tasks`, `/tests` | Artifact retrieval (POST `…/generate` creates them) |
+| `GET /projects/{id}/traceability` | Coverage %, orphans, stored links |
+| `POST /projects/{id}/consistency/check` | Rule-based issue list |
+| `POST /projects/{id}/impact/analyze` | Affected artifacts for a requirement change |
+| `GET /projects/{id}/export/pdf`, `/export/archify` | PDF + Archify diagram IR export |
 
 ## Verify (the bar is "survives review", not "it runs")
 
 ```powershell
-# Backend: unit + E2E + regression (35 green)
-$env:DATABASE_URL="sqlite:///./e2e_test.db"; $env:PYTHONPATH="backend"
-python -m pytest backend/tests -q
+# Backend: unit + E2E + regression (35 green, isolated temp DB per run)
+$env:PYTHONPATH="backend"; python -m pytest backend/tests -q
 
 # Measured benchmark (temp DB, real numbers — see docs/EVALUATION.md)
 $env:PYTHONPATH="backend"; python evaluation/benchmark.py --full

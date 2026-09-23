@@ -28,7 +28,6 @@ def _bundle(db: Session, pid: str) -> dict:
 
 
 @router.get("/projects/{pid}/export/json")
-@router.get("/projects/{pid}/export/json")
 def export_json(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     """Export the full blueprint bundle as JSON."""
     project_or_403(pid, db, user)

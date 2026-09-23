@@ -71,7 +71,7 @@ export default function Tasks() {
         <EmptyState title="No tasks yet" hint="Generate the plan from the Blueprint pipeline." />
       ) : view === "checklist" ? (
         <Card className="max-w-xl">
-          <TaskList tasks={checkItems} onTasksChange={onCheck} accent="#5eead4" aria-label="Task checklist" />
+          <TaskList tasks={checkItems} onTasksChange={onCheck} accent="var(--color-accent)" aria-label="Task checklist" />
         </Card>
       ) : view === "board" ? (
         <div className="grid gap-3 md:grid-cols-3">
