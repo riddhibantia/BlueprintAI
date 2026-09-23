@@ -1,6 +1,7 @@
 "use client";
-import { createContext, useContext, useCallback, useState } from "react";
-import { api } from "../../lib/api/client";
+import { createContext, useContext, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useProject, useActivity } from "../../lib/query/useArtifacts";
 
 export type Project = { id: string; name: string; description?: string; idea?: string; metrics?: any; created_at?: string; updated_at?: string };
 
@@ -19,15 +20,19 @@ const Ctx = createContext<Shell>({ pid: "", project: null, activity: [], selecti
 
 export const useShell = () => useContext(Ctx);
 
-/** Shell data provider: project detail + activity shared by sidebar, topbar, palette (§8/§9). */
+/** Shell data provider: thin UI-state shell over the shared query cache (V3). */
 export function ShellProvider({ pid, children }: { pid: string; children: React.ReactNode }) {
-  const [project, setProject] = useState<Project | null>(null);
-  const [activity, setActivity] = useState<any[]>([]);
+  const qc = useQueryClient();
+  const { data: project } = useProject(pid);
+  const { data: activity } = useActivity(pid);
   const [selection, setSelection] = useState("");
   const [copilotOpen, setCopilotOpen] = useState(false);
-  const reload = useCallback(async () => {
-    try { setProject(await api(`/projects/${pid}`)); } catch { /* pages surface their own errors */ }
-    try { setActivity((await api(`/projects/${pid}/activity`)).events || []); } catch { /* activity is supplementary */ }
-  }, [pid]);
-  return <Ctx.Provider value={{ pid, project, activity, selection, setSelection, reload, copilotOpen, setCopilotOpen }}>{children}</Ctx.Provider>;
+  const reload = async () => {
+    await qc.invalidateQueries({ queryKey: ["p", pid] });
+  };
+  return (
+    <Ctx.Provider value={{ pid, project: project || null, activity: activity || [], selection, setSelection, reload, copilotOpen, setCopilotOpen }}>
+      {children}
+    </Ctx.Provider>
+  );
 }

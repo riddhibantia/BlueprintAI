@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, usePathname } from "next/navigation";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CopilotPanel } from "../../../components/copilot/panel";
 import { Drawer } from "../../../components/ui/overlay";
 import { ShellProvider, useShell } from "../../../components/shell/context";
@@ -18,14 +19,12 @@ const NAMES: Record<string, string> = {
 };
 
 function ShellInner({ children }: { children: React.ReactNode }) {
-  const { pid, project, reload, copilotOpen, setCopilotOpen } = useShell();
+  const { pid, project, copilotOpen, setCopilotOpen } = useShell();
   const path = usePathname() || "";
   const [palette, setPalette] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const openPalette = () => setPalette(true);
   useShortcuts(pid, openPalette);
-
-  useEffect(() => { reload(); }, [reload]);
 
   const seg = path.split("/").pop() || "";
   const trail: { label: string; href?: string }[] = [{ label: project?.name || "Project", href: `/projects/${pid}` }];
@@ -60,9 +59,14 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {
   const { projectId } = useParams() as { projectId: string };
+  const [client] = useState(() => new QueryClient({
+    defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1 } },
+  }));
   return (
-    <ShellProvider pid={projectId}>
-      <ShellInner>{children}</ShellInner>
-    </ShellProvider>
+    <QueryClientProvider client={client}>
+      <ShellProvider pid={projectId}>
+        <ShellInner>{children}</ShellInner>
+      </ShellProvider>
+    </QueryClientProvider>
   );
 }

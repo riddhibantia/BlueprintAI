@@ -3,72 +3,90 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ListChecks, FileText, MessagesSquare, Network, Database,
   Globe, ShieldCheck, KanbanSquare, FlaskConical, GitBranch, Scale, Zap, BookOpen,
-  Settings as SettingsIcon, User, ChevronsLeft, ChevronsRight, Layers,
+  Settings as SettingsIcon, User, ChevronsLeft, ChevronsRight, Layers, Inbox as InboxIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../../lib/utils/cn";
 import { useShell } from "./context";
+import { useTraceability, useIssues } from "../../lib/query/useArtifacts";
 
-type Item = { label: string; slug: string; Icon: any; match: RegExp };
+type Item = { label: string; slug: string; Icon: any; match: RegExp; badge?: number };
+
+const TOP: Item[] = [
+  { label: "Inbox", slug: "", Icon: InboxIcon, match: /^\/projects\/[^/]+$/ },
+  { label: "Blueprint", slug: "blueprint", Icon: Layers, match: /\/blueprint$/ },
+];
 
 const SECTIONS: { title: string; items: Item[] }[] = [
-  { title: "Workspace", items: [
-    { label: "Overview", slug: "", Icon: LayoutDashboard, match: /^\/projects\/[^/]+$/ },
-    { label: "Blueprint", slug: "blueprint", Icon: Layers, match: /\/blueprint$/ },
-  ]},
-  { title: "Engineering", items: [
+  { title: "Discover", items: [
     { label: "Requirements", slug: "requirements", Icon: ListChecks, match: /\/requirements/ },
+  ]},
+  { title: "Define", items: [
     { label: "Product Spec", slug: "prd", Icon: FileText, match: /\/prd/ },
     { label: "User Stories", slug: "stories", Icon: MessagesSquare, match: /\/stories/ },
+  ]},
+  { title: "Design", items: [
     { label: "Architecture", slug: "architecture", Icon: Network, match: /\/architecture/ },
     { label: "Data Model", slug: "database", Icon: Database, match: /\/database/ },
     { label: "APIs", slug: "apis", Icon: Globe, match: /\/apis/ },
     { label: "Security", slug: "security", Icon: ShieldCheck, match: /\/security/ },
   ]},
-  { title: "Delivery", items: [
+  { title: "Build", items: [
     { label: "Tasks", slug: "tasks", Icon: KanbanSquare, match: /\/tasks/ },
-    { label: "Tests", slug: "tests", Icon: FlaskConical, match: /\/tests/ },
   ]},
-  { title: "Intelligence", items: [
+  { title: "Verify", items: [
+    { label: "Tests", slug: "tests", Icon: FlaskConical, match: /\/tests/ },
     { label: "Traceability", slug: "traceability", Icon: GitBranch, match: /\/traceability/ },
     { label: "Consistency", slug: "consistency", Icon: Scale, match: /\/consistency/ },
     { label: "Impact Analysis", slug: "impact", Icon: Zap, match: /\/impact/ },
+  ]},
+  { title: "Knowledge", items: [
     { label: "Knowledge", slug: "knowledge", Icon: BookOpen, match: /\/knowledge/ },
   ]},
 ];
 
-/** Collapsible project sidebar (§8): grouped, icon-led, keyboard accessible. */
+/** Collapsible project sidebar (§8): lifecycle groups, inbox badge, keyboard accessible. */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const path = usePathname() || "";
   const { pid, project } = useShell();
   const [collapsed, setCollapsed] = useState(false);
   const base = `/projects/${pid}`;
+  const { data: trace } = useTraceability(pid);
+  const { data: issues } = useIssues(pid);
+  const inboxCount = (trace?.coverage?.orphans?.length || 0) + (issues?.filter((i: any) => i.status === "open").length || 0);
+
+  const renderItem = (it: Item) => {
+    const active = it.match.test(path);
+    const badge = it.label === "Inbox" ? inboxCount : it.badge;
+    return (
+      <a key={it.label} href={it.slug ? `${base}/${it.slug}` : base} onClick={onNavigate}
+        aria-current={active ? "page" : undefined} title={collapsed ? it.label : undefined}
+        className={cn("mt-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-120",
+          collapsed && "justify-center px-0",
+          active ? "bg-elevated text-primary shadow-[inset_2px_0_0_var(--color-accent)]" : "text-secondary hover:bg-elevated hover:text-primary")}>
+        <it.Icon size={16} className={cn("flex-none", active && "text-accent")} aria-hidden />
+        {!collapsed && it.label}
+        {!collapsed && !!badge && (
+          <span className="ml-auto rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning" aria-label={`${badge} items need triage`}>{badge}</span>
+        )}
+      </a>
+    );
+  };
 
   return (
     <aside aria-label="Project navigation"
       className={cn("sticky top-0 flex h-screen flex-col border-r border-border bg-surface transition-[width] duration-200", collapsed ? "w-[60px] px-2 py-4" : "w-[240px] px-3 py-4")}>
       <div className={cn("mb-2 flex items-center gap-2.5 px-1", collapsed && "justify-center px-0")}>
-        <span className="grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-gradient-to-br from-accent via-info to-accent2 text-[15px] font-extrabold text-[#06201d]" aria-hidden>D</span>
+        <span className="grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-gradient-to-br from-accent via-info to-accent2 text-[15px] font-extrabold text-white" aria-hidden>D</span>
         {!collapsed && <span className="leading-tight"><b className="block text-[13.5px] tracking-tight">DEVBLUEPRINT</b><small className="block text-[11px] text-secondary">Engineering Workspace</small></span>}
       </div>
       {!collapsed && project?.name && <p className="truncate px-2 text-[12px] text-muted" title={project.name}>{project.name}</p>}
       <nav className="mt-1 flex-1 overflow-y-auto" aria-label="Modules">
+        {TOP.map(renderItem)}
         {SECTIONS.map((sec) => (
           <div key={sec.title} className="mt-3">
             {!collapsed && <p className="px-2.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-muted">{sec.title}</p>}
-            {sec.items.map((it) => {
-              const active = it.match.test(path);
-              return (
-                <a key={it.label} href={it.slug ? `${base}/${it.slug}` : base} onClick={onNavigate}
-                  aria-current={active ? "page" : undefined} title={collapsed ? it.label : undefined}
-                  className={cn("mt-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-120",
-                    collapsed && "justify-center px-0",
-                    active ? "bg-elevated text-primary shadow-[inset_2px_0_0_var(--color-accent)]" : "text-secondary hover:bg-elevated hover:text-primary")}>
-                  <it.Icon size={16} className={cn("flex-none", active && "text-accent")} aria-hidden />
-                  {!collapsed && it.label}
-                </a>
-              );
-            })}
+            {sec.items.map(renderItem)}
           </div>
         ))}
       </nav>
