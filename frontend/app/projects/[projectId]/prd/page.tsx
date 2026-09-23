@@ -1,11 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Pencil } from "lucide-react";
-import { getPrd, putPrd } from "../../../../lib/api/endpoints";
+import { usePrd, useWrite } from "../../../../lib/query/useArtifacts";
 import { fmtDate } from "../../../../lib/utils/time";
 import { Card } from "../../../../components/ui/card";
-import { HookSidebar } from "../../../../components/ui/hook-sidebar";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
@@ -14,36 +13,26 @@ import { ApprovalBanner } from "../../../../components/ui/activity";
 /** PRD document workspace (§18): outline + document + context, versioned and approved. */
 export default function Prd() {
   const { projectId: pid } = useParams() as { projectId: string };
-  const [prd, setPrd] = useState<any>(null);
+  const prdQ = usePrd(pid);
+  const write = useWrite(pid, ["prd", "activity", "runs"]);
   const [draft, setDraft] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [section, setSection] = useState("");
-  const [err, setErr] = useState("");
 
-  const load = () => getPrd(pid).then((r) => {
-    setPrd(r);
-    const c = r.content || {};
-    setDraft(c);
-    setSection(Object.keys(c)[0] || "");
-  }).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, []);
-
-  const save = async (status?: string) => {
-    try {
-      await putPrd(pid, { content: draft, ...(status ? { status } : {}) });
-      setEditing(false);
-      await load();
-    } catch (e: any) { setErr(e.message); }
-  };
-
-  if (err && !prd) return <ErrorState message={err} onRetry={load} />;
-  if (!prd) return <LoadingState stage="Loading PRD" />;
+  if (prdQ.isLoading) return <LoadingState stage="Loading PRD" />;
+  if (prdQ.isError) return <ErrorState message={(prdQ.error as Error)?.message} onRetry={() => prdQ.refetch()} />;
+  const prd = prdQ.data || {};
   if (!prd.content || Object.keys(prd.content).length === 0)
     return <EmptyState title="No PRD yet" hint="Generate it from the Blueprint pipeline after approving requirements." />;
+  if (!editing && !draft) { setDraft(prd.content); setSection(Object.keys(prd.content)[0] || ""); }
 
-  const keys = Object.keys(editing ? draft : prd.content);
+  const save = (status?: string) => write.mutate(
+    { path: `/projects/${pid}/prd`, init: { method: "PUT", body: JSON.stringify({ content: draft, ...(status ? { status } : {}) }) } },
+    { onSuccess: () => setEditing(false) });
+
+  const keys = Object.keys(editing ? draft || {} : prd.content);
   const shown = section || keys[0];
-  const val = (editing ? draft : prd.content)[shown];
+  const val = (editing ? draft || {} : prd.content)[shown];
 
   const setSectionText = (text: string) => {
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -59,25 +48,24 @@ export default function Prd() {
         </div>
         <div className="flex gap-2">
           {!editing
-            ? <><Button variant="ghost" onClick={() => setEditing(true)}><Pencil size={14} />Edit</Button>
-              {prd.status !== "approved" && <Button onClick={() => save("approved")}>Approve</Button>}</>
-            : <><Button onClick={() => save(prd.status)}>Save</Button>
+            ? <><Button variant="ghost" onClick={() => { setDraft(prd.content); setEditing(true); }}><Pencil size={14} />Edit</Button>
+              {prd.status !== "approved" && <Button loading={write.isPending} onClick={() => save("approved")}>Approve</Button>}</>
+            : <><Button loading={write.isPending} onClick={() => save(prd.status)}>Save</Button>
               <Button variant="ghost" onClick={() => { setEditing(false); setDraft(prd.content); }}>Cancel</Button></>}
         </div>
       </div>
-      {err && <div className="mb-3"><ErrorState message={err} /></div>}
-      <ApprovalBanner status={prd.status || "draft"} onApprove={() => save("approved")} onEdit={() => setEditing(true)} />
+      {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
+      <ApprovalBanner status={prd.status || "draft"} onApprove={() => save("approved")} onEdit={() => { setDraft(prd.content); setEditing(true); }} />
 
       <div className="grid gap-3.5 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
         <Card className="!p-2">
-          {/* RareUI HookSidebar: outline nav with a spring rail that follows the open section. */}
-          <HookSidebar
-            label="Outline"
-            items={keys.map((k) => k.replace(/_/g, " "))}
-            value={Math.max(0, keys.indexOf(shown))}
-            onChange={(i) => setSection(keys[i])}
-            color="#5eead4"
-          />
+          <p className="px-2 py-1 text-[11px] font-bold uppercase tracking-[0.07em] text-muted">Outline</p>
+          {keys.map((k) => (
+            <button key={k} onClick={() => setSection(k)}
+              className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] capitalize ${k === shown ? "bg-elevated font-semibold text-primary" : "text-secondary hover:text-primary"}`}>
+              {k.replace(/_/g, " ")}
+            </button>
+          ))}
         </Card>
         <Card>
           <h3 className="mb-2 text-[17px] font-semibold capitalize">{shown.replace(/_/g, " ")}</h3>

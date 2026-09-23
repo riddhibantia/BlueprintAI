@@ -1,14 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Code2 } from "lucide-react";
-import { getDatabase, getTraceability } from "../../../../lib/api/endpoints";
+import { useDatabase, useTraceability } from "../../../../lib/query/useArtifacts";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { Dialog } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { touching } from "../../../../lib/query/links";
+import { useState } from "react";
+import { Code2 } from "lucide-react";
 
 /** Render DDL client-side from structured field data (§21: no backend endpoint for SQL). */
 export function toSQL(entities: any[]): string {
@@ -27,35 +27,29 @@ export function toSQL(entities: any[]): string {
 /** Data-model workspace (§21): ERD-style entities, client-rendered SQL, requirement tracing. */
 export default function Database() {
   const { projectId: pid } = useParams() as { projectId: string };
-  const [data, setData] = useState<any>(null);
-  const [links, setLinks] = useState<any[]>([]);
+  const dbQ = useDatabase(pid);
+  const traceQ = useTraceability(pid);
   const [sqlOpen, setSqlOpen] = useState(false);
-  const [err, setErr] = useState("");
 
-  useEffect(() => {
-    Promise.all([getDatabase(pid), getTraceability(pid)])
-      .then(([d, t]) => { setData(d); setLinks(t.links || []); })
-      .catch((e) => setErr(e.message));
-  }, [pid]);
-
-  if (err && !data) return <ErrorState message={err} />;
-  if (!data) return <LoadingState stage="Loading data model" />;
+  if (dbQ.isLoading) return <LoadingState stage="Loading data model" />;
+  if (dbQ.isError) return <ErrorState message={(dbQ.error as Error)?.message} onRetry={() => dbQ.refetch()} />;
+  const data = dbQ.data || { entities: [] };
+  const links = traceQ.data?.links || [];
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-bold tracking-tight">Data Model</h1>
-          <p className="text-[13px] text-secondary">{(data.entities || []).length} entities · keys and references explicit</p>
+          <p className="text-[13px] text-secondary">{data.entities.length} entities · keys and references explicit</p>
         </div>
-        {(data.entities || []).length > 0 && <Button variant="ghost" onClick={() => setSqlOpen(true)}><Code2 size={14} />View SQL</Button>}
+        {data.entities.length > 0 && <Button variant="ghost" onClick={() => setSqlOpen(true)}><Code2 size={14} />View SQL</Button>}
       </div>
-      {err && <div className="mb-3"><ErrorState message={err} /></div>}
-      {(data.entities || []).length === 0 ? (
+      {data.entities.length === 0 ? (
         <EmptyState title="No schema yet" hint="Generate it from the Blueprint pipeline." />
       ) : (
         <div className="grid gap-3.5 md:grid-cols-2">
-          {(data.entities || []).map((e: any) => {
+          {data.entities.map((e: any) => {
             const rel = touching(links, e.code || e.name);
             return (
               <Card key={e.code}>
@@ -85,7 +79,7 @@ export default function Database() {
         </div>
       )}
       <Dialog open={sqlOpen} onClose={() => setSqlOpen(false)} title="Generated SQL (client-rendered)">
-        <pre className="max-h-[50vh] overflow-auto rounded-xl bg-canvas p-3 font-mono text-[12px]">{toSQL(data?.entities || [])}</pre>
+        <pre className="max-h-[50vh] overflow-auto rounded-xl bg-canvas p-3 font-mono text-[12px]">{toSQL(data.entities)}</pre>
       </Dialog>
     </div>
   );

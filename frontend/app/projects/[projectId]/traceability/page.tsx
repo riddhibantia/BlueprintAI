@@ -3,15 +3,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { ReactFlow, Background, Controls, Handle, Position, Node, Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { getTraceability, suggestLinks, traceArtifact } from "../../../../lib/api/endpoints";
+import { useTraceability } from "../../../../lib/query/useArtifacts";
+import { api } from "../../../../lib/api/client";
+import { suggestLinks, traceArtifact } from "../../../../lib/api/endpoints";
 import { linkCounts } from "../../../../lib/query/links";
 import { useShell } from "../../../../components/shell/context";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
-import { StatusBadge } from "../../../../components/ui/badge";
 import { LoadingState, ErrorState, EmptyState, Progress } from "../../../../components/ui/feedback";
 import { Drawer } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { SlashInput } from "../../../../components/ui/slash";
 
 const ORDER = ["requirement", "story", "api", "db", "security", "task", "test", "component"];
 const COLORS: Record<string, string> = {
@@ -38,15 +40,26 @@ const nodeTypes = { typed: TypeNode };
 export default function Traceability() {
   const { projectId: pid } = useParams() as { projectId: string };
   const { setSelection } = useShell();
-  const [data, setData] = useState<any>(null);
+  const traceQ = useTraceability(pid);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [sel, setSel] = useState<string | null>(null);
   const [selLinks, setSelLinks] = useState<any[]>([]);
+  const [lookup, setLookup] = useState("REQ-001");
+  const [trace, setTrace] = useState<any>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = () => getTraceability(pid).then(setData).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, [pid]);
+  const data = traceQ.data;
+  const codes = useMemo(() => {
+    const s = new Set<string>();
+    for (const l of data?.links || []) {
+      for (const end of [l.from, l.to]) {
+        const [t, c] = end.split(":");
+        if (t && c) s.add(t === "requirement" ? c : `${t}:${c}`);
+      }
+    }
+    return [...s].sort();
+  }, [data]);
 
   const { nodes, edges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
@@ -89,6 +102,14 @@ export default function Traceability() {
     } catch { setSelLinks([]); }
   }, [pid, setSelection]);
 
+  const lookupGo = async () => {
+    try {
+      const code = lookup.includes(":") ? lookup : lookup;
+      const bare = code.includes(":") ? code.split(":").pop() || "" : code;
+      setTrace(await traceArtifact(pid, bare));
+    } catch (e: any) { setErr(e.message); }
+  };
+
   const suggest = async () => {
     setBusy(true);
     try { setSuggestions((await suggestLinks(pid)).suggestions || []); }
@@ -97,21 +118,25 @@ export default function Traceability() {
   };
 
   const confirm = async (s: any) => {
-    const { api } = await import("../../../../lib/api/client");
     const [tt, tid] = s.to.split(":");
     await api(`/projects/${pid}/traceability/links`, {
       method: "POST",
       body: JSON.stringify({ source_type: "requirement", source_id: s.from, target_type: tt, target_id: tid, relationship_type: s.rel }),
     });
     setSuggestions(suggestions.filter((x) => x !== s));
-    await load();
+    traceQ.refetch();
   };
 
-  if (err && !data) return <ErrorState message={err} onRetry={load} />;
-  if (!data) return <LoadingState stage="Building traceability graph" />;
+  useEffect(() => {
+    if (sel) onNodeClick({}, { id: sel } as Node);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
-  const cov = data.coverage || {};
-  const counts = linkCounts(data.links || []);
+  if (traceQ.isLoading) return <LoadingState stage="Building traceability graph" />;
+  if (traceQ.isError) return <ErrorState message={(traceQ.error as Error)?.message} onRetry={() => traceQ.refetch()} />;
+
+  const cov = data?.coverage || {};
+  const counts = linkCounts(data?.links || []);
 
   return (
     <div>
@@ -135,23 +160,39 @@ export default function Traceability() {
         )}
       </Card>
 
-      {(data.links || []).length === 0 ? (
+      {(data?.links || []).length === 0 ? (
         <EmptyState title="No relationships yet" hint="Approve artifacts to begin building the traceability graph." />
       ) : (
         <div className="mb-3.5 h-[420px] overflow-hidden rounded-2xl border border-border bg-canvas">
           <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={onNodeClick}
-            fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.3} maxZoom={1.5}
-            proOptions={{ hideAttribution: false }} colorMode="dark">
+            fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.3} maxZoom={1.5} colorMode="dark">
             <Background gap={22} size={1} color="#242830" />
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
       )}
 
+      <Card className="mb-3.5">
+        <h3 className="mb-2 text-[14px] font-semibold">Trace an artifact — type / to pick</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <SlashInput value={lookup} onChange={setLookup} items={codes} placeholder="/REQ-001" label="Artifact code" />
+          <Button onClick={lookupGo}>Trace</Button>
+        </div>
+        {trace && (
+          <div className="mt-2 text-[13px]">
+            {(trace.forward || []).length === 0 && (trace.backward || []).length === 0
+              ? <p className="text-secondary">Orphaned — no stored relationships.</p>
+              : <>
+                {(trace.forward || []).length > 0 && <><b>Downstream</b><ul>{trace.forward.map((l: any, i: number) => <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to}</li>)}</ul></>}
+                {(trace.backward || []).length > 0 && <><b>Upstream</b><ul>{trace.backward.map((l: any, i: number) => <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to}</li>)}</ul></>}
+              </>}
+          </div>
+        )}
+      </Card>
+
       {suggestions.length > 0 && (
         <Card className="mb-3.5">
           <h3 className="mb-2 text-[14px] font-semibold">Suggested links ({suggestions.length})</h3>
-          <p className="mb-2 text-[12.5px] text-secondary">Deterministic proposals — you confirm each one.</p>
           {suggestions.slice(0, 8).map((s, i) => (
             <p key={i} className="flex flex-wrap items-center gap-2 border-b border-border py-1.5 text-[13px] last:border-b-0">
               <code className="font-mono text-[12.5px]">{s.from}</code>→<code className="font-mono text-[12.5px]">{s.to}</code>

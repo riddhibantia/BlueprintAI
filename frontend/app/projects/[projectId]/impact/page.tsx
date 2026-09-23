@@ -2,11 +2,13 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { ArrowDown } from "lucide-react";
+import { useRequirements } from "../../../../lib/query/useArtifacts";
 import { analyzeImpact } from "../../../../lib/api/endpoints";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { ErrorState, EmptyState, LoadingState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { SlashInput } from "../../../../components/ui/slash";
 
 const RANK: Record<string, number> = {
   requirement: 0, story: 1, api: 2, db: 3, security: 4, task: 5, test: 6,
@@ -20,6 +22,7 @@ function rankOf(code: string): number {
 /** Impact workspace (§28): deterministic chain, interactive cards, LLM explanation as supplement. */
 export default function Impact() {
   const { projectId: pid } = useParams() as { projectId: string };
+  const reqsQ = useRequirements(pid);
   const [code, setCode] = useState("REQ-001");
   const [result, setResult] = useState<any>(null);
   const [err, setErr] = useState("");
@@ -33,6 +36,7 @@ export default function Impact() {
   };
 
   const chain = result ? [...result.affected].sort((a: string, b: string) => rankOf(a) - rankOf(b)) : [];
+  const reqCodes = (reqsQ.data || []).map((r: any) => r.code);
 
   return (
     <div>
@@ -41,14 +45,13 @@ export default function Impact() {
       {err && <div className="mb-3"><ErrorState message={err} /></div>}
       <Card className="mb-3.5">
         <div className="flex flex-wrap items-center gap-2">
-          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="REQ-001"
-            aria-label="Requirement code" className="w-40 rounded-xl border border-border bg-canvas px-3 py-2 font-mono text-[13px]" />
+          <SlashInput value={code} onChange={setCode} items={reqCodes} placeholder="/REQ-001" label="Requirement code" />
           <Button loading={busy} onClick={analyze}>Analyze impact</Button>
         </div>
       </Card>
       {busy && <LoadingState stage="Traversing dependent artifacts" />}
       {!result && !busy && (
-        <EmptyState title="No analysis yet" hint="Enter a requirement code — every affected artifact is traced, not guessed." />
+        <EmptyState title="No analysis yet" hint="Pick a requirement with / — every affected artifact is traced, not guessed." />
       )}
       {result && (
         <>

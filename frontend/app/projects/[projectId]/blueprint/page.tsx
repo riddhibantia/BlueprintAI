@@ -1,78 +1,91 @@
 "use client";
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api } from "../../../../lib/api/client";
+import { useState } from "react";
 import {
-  clarify, genRequirements, genPrd, genStories, genArchitecture, genDatabase,
-  genApis, analyzeSecurity, genTasks, genTests, checkConsistency,
-} from "../../../../lib/api/endpoints";
+  useRequirements, usePrd, useStories, useArchitecture, useDatabase, useApis,
+  useSecurity, useTasks, useTests, useTraceability, useIssues, useRuns, useWrite,
+} from "../../../../lib/query/useArtifacts";
+import { genArchitecture, genDatabase, genApis, analyzeSecurity } from "../../../../lib/api/endpoints";
 import { computeLifecycle, stageUpdated, Bundle } from "../../../../lib/query/lifecycle";
 import { timeAgo } from "../../../../lib/utils/time";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
-import { StepPlayer } from "../../../../components/ui/step-player";
-import ScrollProgress from "../../../../components/ui/scroll-progress";
 import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 
 /** Blueprint pipeline (§16): contextual Generate / Review / Approve / Validate per stage. */
 export default function Blueprint() {
   const { projectId: pid } = useParams() as { projectId: string };
-  const [b, setB] = useState<Bundle | null>(null);
-  const [runs, setRuns] = useState<any[]>([]);
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState("");
+  const reqsQ = useRequirements(pid);
+  const prdQ = usePrd(pid);
+  const storiesQ = useStories(pid);
+  const archQ = useArchitecture(pid);
+  const dbQ = useDatabase(pid);
+  const apisQ = useApis(pid);
+  const secQ = useSecurity(pid);
+  const tasksQ = useTasks(pid);
+  const testsQ = useTests(pid);
+  const traceQ = useTraceability(pid);
+  const issuesQ = useIssues(pid);
+  const runsQ = useRuns(pid);
+  const write = useWrite(pid, ["project", "requirements", "prd", "stories", "architecture", "database", "apis", "security", "tasks", "tests", "traceability", "issues", "activity", "runs"]);
+  const [designing, setDesigning] = useState(false);
 
-  const load = async () => {
-    try {
-      const [reqs, prd, stories, arch, db, apis, security, tasks, tests, trace, iss, runList] = await Promise.all([
-        api(`/projects/${pid}/requirements`), api(`/projects/${pid}/prd`), api(`/projects/${pid}/stories`),
-        api(`/projects/${pid}/architecture`), api(`/projects/${pid}/database`), api(`/projects/${pid}/apis`),
-        api(`/projects/${pid}/security`), api(`/projects/${pid}/tasks`), api(`/projects/${pid}/tests`),
-        api(`/projects/${pid}/traceability`), api(`/projects/${pid}/consistency/issues`), api(`/projects/${pid}/runs`),
-      ]);
-      setB({ reqs, prd, stories, arch, db, apis, security, tasks, tests, coverage: trace.coverage, openIssues: iss.filter((i: any) => i.status === "open").length, links: trace.links });
-      setRuns(runList);
-    } catch (e: any) { setErr(e.message); }
+  const queries = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ, runsQ];
+  const loading = queries.some((q) => q.isLoading);
+  const failed = queries.find((q) => q.isError);
+
+  if (loading) return <LoadingState stage="Loading blueprint pipeline" />;
+  if (failed) return <ErrorState message={(failed.error as Error)?.message} />;
+
+  const b: Bundle = {
+    reqs: reqsQ.data || [], prd: prdQ.data, stories: storiesQ.data || [], arch: archQ.data, db: dbQ.data,
+    apis: apisQ.data || [], security: secQ.data || [], tasks: tasksQ.data || [], tests: testsQ.data || [],
+    coverage: traceQ.data?.coverage, openIssues: (issuesQ.data || []).filter((i: any) => i.status === "open").length,
+    links: traceQ.data?.links || [],
   };
-  useEffect(() => { load(); }, []);
-
-  const act = async (key: string, fn: () => Promise<any>, go: string) => {
-    setBusy(key); setErr("");
-    try { await fn(); window.location.href = `/projects/${pid}/${go}`; }
-    catch (e: any) { setErr(e.message); }
-    setBusy("");
-  };
-  const genAllDesign = () =>
-    act("design", async () => { await genArchitecture(pid); await genDatabase(pid); await genApis(pid); await analyzeSecurity(pid); }, "architecture");
-
-  if (err && !b) return <ErrorState message={err} onRetry={load} />;
-  if (!b) return <LoadingState stage="Loading blueprint pipeline" />;
-
   const stages = computeLifecycle(b);
-  const actions: Record<string, { label: string; run: () => void }[]> = {
+  const runs = runsQ.data || [];
+
+  const post = (path: string, go: string) => write.mutate(
+    { path, init: { method: "POST", body: "{}" } },
+    { onSuccess: () => (window.location.href = `/projects/${pid}/${go}`) });
+
+  const genAllDesign = async () => {
+    setDesigning(true);
+    try {
+      await genArchitecture(pid);
+      await genDatabase(pid);
+      await genApis(pid);
+      await analyzeSecurity(pid);
+      window.location.href = `/projects/${pid}/architecture`;
+    } finally {
+      setDesigning(false);
+    }
+  };
+  const actions: Record<string, { label: string; run: () => void; primary?: boolean }[]> = {
     DISCOVER: [
-      { label: "Clarify idea", run: () => act("clarify", () => clarify(pid), "requirements") },
-      { label: "Generate requirements", run: () => act("reqs", () => genRequirements(pid), "requirements") },
+      { label: "Clarify idea", run: () => (window.location.href = `/projects/${pid}/requirements`) },
+      { label: "Generate requirements", primary: true, run: () => post(`/projects/${pid}/requirements/generate`, "requirements") },
       { label: "Review requirements", run: () => (window.location.href = `/projects/${pid}/requirements`) },
     ],
     DEFINE: [
-      { label: "Generate PRD", run: () => act("prd", () => genPrd(pid), "prd") },
-      { label: "Generate stories", run: () => act("stories", () => genStories(pid), "stories") },
+      { label: "Generate PRD", primary: true, run: () => post(`/projects/${pid}/prd/generate`, "prd") },
+      { label: "Generate stories", run: () => post(`/projects/${pid}/stories/generate`, "stories") },
       { label: "Review PRD", run: () => (window.location.href = `/projects/${pid}/prd`) },
     ],
     DESIGN: [
-      { label: "Generate all", run: genAllDesign },
+      { label: "Generate all", primary: true, run: genAllDesign },
       { label: "Review architecture", run: () => (window.location.href = `/projects/${pid}/architecture`) },
     ],
     BUILD: [
-      { label: "Generate tasks", run: () => act("tasks", () => genTasks(pid), "tasks") },
+      { label: "Generate tasks", primary: true, run: () => post(`/projects/${pid}/tasks/generate`, "tasks") },
       { label: "Review tasks", run: () => (window.location.href = `/projects/${pid}/tasks`) },
     ],
     VERIFY: [
-      { label: "Generate tests", run: () => act("tests", () => genTests(pid), "tests") },
-      { label: "Validate consistency", run: () => act("verify", () => checkConsistency(pid), "consistency") },
-      { label: "Analyze impact", run: () => (window.location.href = `/projects/${pid}/traceability`) },
+      { label: "Generate tests", primary: true, run: () => post(`/projects/${pid}/tests/generate`, "tests") },
+      { label: "Validate consistency", run: () => post(`/projects/${pid}/consistency/check`, "consistency") },
+      { label: "Analyze impact", run: () => (window.location.href = `/projects/${pid}/impact`) },
     ],
   };
 
@@ -80,40 +93,26 @@ export default function Blueprint() {
     <div>
       <h1 className="text-[24px] font-bold tracking-tight">Blueprint Pipeline</h1>
       <p className="mb-5 text-[13.5px] text-secondary">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
-      {err && <div className="mb-3"><ErrorState message={err} /></div>}
-      {/* RareUI StepPlayer: pipeline progress driven by real stage state; click a step to jump to its workspace. */}
-      <div className="mb-4">
-        <StepPlayer
-          steps={stages.map((s) => ({ label: s.label }))}
-          value={Math.max(0, stages.findIndex((s) => s.state !== "Complete"))}
-          duration={0}
-          seekable
-          showControl={false}
-          onValueChange={(i) => { window.location.href = `/projects/${pid}/${stages[i].route}`; }}
-          aria-label="Pipeline progress"
-        />
-      </div>
-      {/* RareUI ScrollProgress: section pill for jumping between stage cards. */}
-      <ScrollProgress sections={stages.map((s) => ({ id: `stage-${s.key}`, label: s.label }))} className="xl:left-[calc(50%-150px)]" />
+      {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
       <div className="grid gap-2">
         {stages.map((s, i) => (
           <div key={s.key} id={`stage-${s.key}`} className="scroll-mt-20">
-          <Card>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="font-mono text-[12px] text-muted">{String(i + 1).padStart(2, "0")}</span>
-              <b className="text-[15px]">{s.label}</b>
-              <StatusBadge value={s.state} />
-              <span className="text-[12.5px] text-secondary">{s.detail}</span>
-              {(() => { const u = stageUpdated(runs, s.key); return u ? <span className="text-[11.5px] text-muted">ran {timeAgo(u)}</span> : null; })()}
-              <span className="ml-auto flex flex-wrap gap-1.5">
-                {(actions[s.key] || []).map((a) => (
-                  <Button key={a.label} variant="ghost" size="sm" disabled={!!busy} onClick={a.run}>
-                    {busy ? "Working…" : a.label}
-                  </Button>
-                ))}
-              </span>
-            </div>
-          </Card>
+            <Card>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-mono text-[12px] text-muted">{String(i + 1).padStart(2, "0")}</span>
+                <b className="text-[15px]">{s.label}</b>
+                <StatusBadge value={s.state} />
+                <span className="text-[12.5px] text-secondary">{s.detail}</span>
+                {(() => { const u = stageUpdated(runs, s.key); return u ? <span className="text-[11.5px] text-muted">ran {timeAgo(u)}</span> : null; })()}
+                <span className="ml-auto flex flex-wrap gap-1.5">
+                  {(actions[s.key] || []).map((a) => (
+                    <Button key={a.label} variant={a.primary ? "primary" : "ghost"} size="sm" disabled={write.isPending || designing} onClick={a.run}>
+                      {write.isPending || designing ? "Working…" : a.label}
+                    </Button>
+                  ))}
+                </span>
+              </div>
+            </Card>
           </div>
         ))}
       </div>

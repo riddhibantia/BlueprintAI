@@ -9,6 +9,7 @@ import { timeAgo } from "../../lib/utils/time";
 import { StatusBadge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { ActivityItem } from "../ui/activity";
+import { CitedText } from "../ui/slash";
 
 /** Blueprint Copilot (§30): contextual, mode-explicit, never a blank chatbot. */
 export function CopilotPanel() {
@@ -91,7 +92,9 @@ export function CopilotPanel() {
           {answer && (
             <div className="mt-2.5 rounded-xl border border-border bg-canvas p-2.5">
               <p className="mb-1"><StatusBadge value={answer.mode === "ai" ? "AI Copilot" : "Rule-based Copilot"} /></p>
-              <p className="whitespace-pre-line text-[12.5px] leading-relaxed">{answer.answer}</p>
+              <p className="whitespace-pre-line text-[12.5px] leading-relaxed">
+                <CitedText text={answer.answer} base={`/projects/${pid}`} />
+              </p>
               {(answer.evidence || []).length > 0 && (
                 <><p className="mb-1 mt-2 text-[11.5px] font-bold uppercase tracking-wide text-muted">Evidence</p>
                 {answer.evidence.map((h: any, i: number) => (
