@@ -40,19 +40,17 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    IDEA(["💡 Product idea"]) --> CLAR["Clarify"]
-    CLAR --> REQ["Requirements\n+ approve"]
-    REQ --> PRD["PRD"]
-    PRD --> STO["User stories"]
-    STO --> ARCH["Architecture\nDB · APIs · Security"]
-    ARCH --> TASK["Tasks"]
-    TASK --> TEST["Tests"]
-    TEST --> TRACE["Traceability\ncoverage %"]
+    IDEA(["💡 Product idea\n+ your own words"]) --> CLAR["Clarify"]
+    CLAR --> REQ["Requirements\n(idea-aware, plain words)"]
+    REQ --> APPR{"All approved?"}
+    APPR -->|yes| AUTO["Auto-pipeline:\nPRD → stories → arch →\nDB · APIs · security →\ntasks → tests"]
+    APPR -->|no| REQ
+    AUTO --> TRACE["Traceability\ncoverage %"]
     TRACE --> CONS["Consistency\ncheck"]
     CONS --> IMP["Impact\nanalysis"]
     IMP --> EXPORT[("Export:\nPDF · OpenAPI · Archify")]
     REQ -.->|"RAG evidence"| KNOW[("Knowledge base\nPDF/TXT/MD")]
-    ARCH -.->|"cites"| KNOW
+    AUTO -.->|"cites"| KNOW
     CONS -.->|"orphans/issues"| REQ
 ```
 
@@ -61,11 +59,14 @@ flowchart LR
 | Area | What works |
 |---|---|
 | 13 artifact modules | Requirements, PRD, Stories, Architecture, Database, APIs, Security, Tasks, Tests, Traceability, Consistency, Impact, Knowledge — no stubs |
+| Idea-aware requirements | Keywords from your idea + your own words become the domain entities ("Tables", "Reminders" — never the same list twice); plain-language titles a non-technical approver can read; add-your-own dialog |
+| Auto-pipeline | Approving the final requirement builds PRD → stories → architecture → DB → APIs → security → tasks → tests server-side (`POST /pipeline/run`, idempotent) and lands you on the result |
 | RAG-grounded generation | Upload PDF/TXT/MD (≤15MB) → structure-aware chunks → hash/OpenAI embeddings → hybrid vector+lexical retrieval; generations cite evidence or say what's missing |
 | Multi-agent pipeline | LangGraph workflow with sequential fallback; the engine that ran is reported, not assumed |
+| Architecture diagram | Mermaid flowchart rendered from stored components (boundary subgraphs, kind shapes) + full Archify IR export |
 | Collaboration safety | httpOnly `SameSite=Lax` sessions, `project_or_403` isolation, optimistic locking (409), audit logs, prod fail-closed config |
 | Export | Full-blueprint PDF (ReportLab, markup-escaped), OpenAPI 3.0, Archify diagram IR (1:1 topology) |
-| Quality gates | 35 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean |
+| Quality gates | 37 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, Playwright browser QA (zero console errors) |
 
 ## Measured results (not claims)
 
@@ -79,7 +80,7 @@ From `evaluation/benchmark.py --full --repeats 3` — temp SQLite DB, mock LLM, 
 | Traceability per idea | **100%, 0 orphans** |
 | End-to-end latency per idea | **~0.4–0.9 s** mean, per-stage means <100 ms |
 
-The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all 35 tests still green. See `docs/EVALUATION.md`.
+The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all tests still green. Browser QA (Playwright, real login, every route) runs zero console errors. See `docs/EVALUATION.md`.
 
 ## AI providers: mocked by default, on purpose
 
@@ -120,15 +121,14 @@ Measured quality numbers below are from the mock/hash path unless labeled.
 | Frontend | Next.js 16.3.5, React 19.3, Tailwind 4.3, TanStack Query, @xyflow/react, TypeScript (strict) |
 | Infra | GitHub Actions CI (pytest + typecheck + build), `scripts/init_db.py`, `scripts/seed_demo.py` |
 
-## Screenshots
+## Screenshots (real captures, 1440px, seeded demo project)
 
-> Add 2–3 captures here after first run (`screenshots/`).
+![Dashboard — projects and 3-step start guide](screenshots/dashboard.png)
+![Architecture — Mermaid system diagram + components](screenshots/architecture.png)
+![Traceability — coverage, links, orphans](screenshots/traceability.png)
+![Requirements — approve flow with auto-build banner](screenshots/requirements.png)
 
-```
-screenshots/dashboard.png   # project overview + artifact progress
-screenshots/blueprint.png   # PRD → stories → architecture flow
-screenshots/traceability.png# coverage, orphans, consistency issues
-```
+More in `screenshots/` (every route captured by the Playwright QA run).
 
 ## Demo (2 minutes, local)
 
@@ -179,7 +179,9 @@ and point the frontend's `NEXT_PUBLIC_API` build arg at the API URL.
 
 ## MVP flow
 
-Create Project → Clarify → Generate Requirements → Approve → PRD → Stories → Architecture → DB/APIs/Security → Tasks → Tests → Traceability → Consistency → Impact → Export.
+Create Project → Describe what you want (plain words) → Generate Requirements → Approve all (bulk or one-by-one) → **auto-build** PRD → Stories → Architecture → DB/APIs/Security → Tasks → Tests → Traceability → Consistency → Impact → Export PDF.
+
+Regenerating requirements asks first and replaces (never stacks duplicates).
 
 ## API (selected)
 
@@ -187,7 +189,8 @@ Create Project → Clarify → Generate Requirements → Approve → PRD → Sto
 |---|---|
 | `POST /auth/register`, `/login`, `/logout`, `GET /me` | Email + bcrypt auth, httpOnly cookie session |
 | `POST/GET /projects`, `GET /projects/{id}` | Project create/list/detail, member guard via `project_or_403` |
-| `POST /projects/{id}/requirements/generate`, `POST /requirements/{id}/approve` | RAG-grounded requirement drafts + approval with locking |
+| `POST /projects/{id}/requirements/generate`, `POST /requirements/{id}/approve` | Idea-aware plain-language drafts + approval with locking (`replace=true` regenerates without duplicates) |
+| `POST /projects/{id}/pipeline/run` | Full auto-pipeline: PRD → stories → architecture → DB → APIs → security → tasks → tests, idempotent |
 | `GET /projects/{id}/prd`, `/stories`, `/architecture`, `/database`, `/apis`, `/security`, `/tasks`, `/tests` | Artifact retrieval (POST `…/generate` creates them) |
 | `GET /projects/{id}/traceability` | Coverage %, orphans, stored links (paginated) |
 | `POST /projects/{id}/consistency/check` | Deterministic cross-artifact checks + AI explanation |
@@ -197,7 +200,7 @@ Create Project → Clarify → Generate Requirements → Approve → PRD → Sto
 ## Verify
 
 ```powershell
-# Backend: unit + E2E + regression (35 green, isolated temp DB per run)
+# Backend: unit + E2E + regression (37 green, isolated temp DB per run)
 $env:PYTHONPATH="backend"; python -m pytest backend/tests -q
 
 # Measured benchmark (retrieval fixture + 3-idea pipeline — see docs/EVALUATION.md)
@@ -213,8 +216,8 @@ cd frontend; npm ci; npm run build; npm run typecheck
 ## Project structure
 
 ```
-backend/app/      # api/routes (11), models, rag/, agents/, core/, traceability/, consistency/, impact/
-frontend/         # app/(landing + dashboard + 17 project routes), components, lib/api (+types), lib/query
+backend/app/      # api/routes (11), pipeline.py (auto-build), models, rag/, agents/, core/
+frontend/         # app/(landing + dashboard + 16 project routes), DESIGN.md (Clay), components (+arch-diagram), lib/api (+types), lib/query
 docs/             # SPEC.md, ARCHITECTURE.md, SECURITY.md, EVALUATION.md, THIRD_PARTY_NOTICES.md
 evaluation/       # benchmark.py (43-query retrieval fixture + ablation + pipeline matrix)
 scripts/          # init_db.py, seed_demo.py, install_postgres_windows.ps1

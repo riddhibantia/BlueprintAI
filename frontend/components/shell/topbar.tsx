@@ -33,7 +33,7 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
   }, []);
 
   const seg = path.split("/").pop() || "";
-  const here = NAMES[seg] || (seg ? seg : "Overview");
+  const here = seg === pid ? "Overview" : NAMES[seg] || "Overview";
 
   const share = async () => {
     await navigator.clipboard.writeText(window.location.href);

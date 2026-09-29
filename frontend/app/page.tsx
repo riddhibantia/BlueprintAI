@@ -3,19 +3,19 @@ import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 
 const PIPELINE = [
-  { n: "01", title: "Capture", text: "Product idea → clarified, RAG-grounded requirements with stable IDs and approval gates.", bg: "bg-[#1a3a3a]", fg: "text-white", sub: "text-white/70" },
-  { n: "02", title: "Design", text: "PRD, user stories, architecture, data model, APIs, security controls — all interlinked.", bg: "bg-[#b8a4ed]", fg: "text-[#0a0a0a]", sub: "text-[#0a0a0a]/70" },
-  { n: "03", title: "Verify", text: "Deterministic traceability, consistency checks, and impact analysis. Metrics computed, never invented.", bg: "bg-[#ffb084]", fg: "text-[#0a0a0a]", sub: "text-[#0a0a0a]/70" },
-  { n: "04", title: "Ship", text: "Export PDF, OpenAPI, and Archify diagram IR. Human approval is authoritative state.", bg: "bg-[#e8b94a]", fg: "text-[#0a0a0a]", sub: "text-[#0a0a0a]/70" },
+  { n: "01", title: "Capture", text: "Product idea → clarified, RAG-grounded requirements with stable IDs and approval gates.", chip: "bg-[#1a3a3a] text-white" },
+  { n: "02", title: "Design", text: "PRD, user stories, architecture, data model, APIs, security controls — all interlinked.", chip: "bg-[#b8a4ed] text-[#0a0a0a]" },
+  { n: "03", title: "Verify", text: "Deterministic traceability, consistency checks, and impact analysis. Metrics computed, never invented.", chip: "bg-[#ffb084] text-[#0a0a0a]" },
+  { n: "04", title: "Ship", text: "Export PDF, OpenAPI, and Archify diagram IR. Human approval is authoritative state.", chip: "bg-[#e8b94a] text-[#0a0a0a]" },
 ];
 
 const FEATURES = [
-  { tag: "RAG", title: "Grounded generation", text: "Upload standards docs; every artifact cites retrieved evidence — or says what's missing.", bg: "bg-[#ff4d8b]", fg: "text-white", sub: "text-white/80" },
-  { tag: "Links", title: "Traceability", text: "Requirement → story → API → task → test links with coverage % and orphan detection.", bg: "bg-[#1a3a3a]", fg: "text-white", sub: "text-white/80" },
-  { tag: "Checks", title: "Consistency", text: "Cross-artifact rules with AI explanations you accept or reject.", bg: "bg-[#b8a4ed]", fg: "text-[#0a0a0a]", sub: "text-[#0a0a0a]/70" },
-  { tag: "Change", title: "Impact analysis", text: "Change a requirement, see every downstream artifact it touches before you commit.", bg: "bg-[#ffb084]", fg: "text-[#0a0a0a]", sub: "text-[#0a0a0a]/70" },
-  { tag: "Humans", title: "Approval gates", text: "Optimistic locking, audit trail, explicit approvals. AI proposes, humans dispose.", bg: "bg-[#e8b94a]", fg: "text-[#0a0a0a]", sub: "text-[#0a0a0a]/70" },
-  { tag: "Export", title: "Honest exports", text: "PDF blueprints, OpenAPI specs, Archify diagrams — rendered from stored state, 1:1.", bg: "bg-[#f5f0e0]", fg: "text-[#0a0a0a]", sub: "text-[#3a3a3a]" },
+  { tag: "RAG", title: "Grounded generation", text: "Upload standards docs; every artifact cites retrieved evidence — or says what's missing.", dot: "bg-[#ff4d8b]" },
+  { tag: "Links", title: "Traceability", text: "Requirement → story → API → task → test links with coverage % and orphan detection.", dot: "bg-[#1a3a3a]" },
+  { tag: "Checks", title: "Consistency", text: "Cross-artifact rules with AI explanations you accept or reject.", dot: "bg-[#b8a4ed]" },
+  { tag: "Change", title: "Impact analysis", text: "Change a requirement, see every downstream artifact it touches before you commit.", dot: "bg-[#ffb084]" },
+  { tag: "Humans", title: "Approval gates", text: "Optimistic locking, audit trail, explicit approvals. AI proposes, humans dispose.", dot: "bg-[#e8b94a]" },
+  { tag: "Export", title: "Honest exports", text: "PDF blueprints, OpenAPI specs, Archify diagrams — rendered from stored state, 1:1.", dot: "bg-[#a4d4c5]" },
 ];
 
 const METRICS = [
@@ -98,10 +98,10 @@ export default function Landing() {
         <h2 className="mt-1 max-w-[20ch] text-[32px] font-medium leading-[1.1] md:text-[40px]">Four stages, every handoff stored and traceable.</h2>
         <ol className="mt-8 grid gap-4 md:grid-cols-4">
           {PIPELINE.map((s) => (
-            <li key={s.n} className={`rounded-3xl p-8 ${s.bg} ${s.fg}`}>
-              <p className="font-mono text-[13px]">{s.n}</p>
-              <h3 className="mt-6 text-[18px] font-semibold">{s.title}</h3>
-              <p className={`mt-2 text-[14px] leading-relaxed ${s.sub}`}>{s.text}</p>
+            <li key={s.n} className="rounded-3xl border border-border bg-surface p-8">
+              <p className={`inline-block rounded-lg px-2 py-0.5 font-mono text-[13px] font-semibold ${s.chip}`}>{s.n}</p>
+              <h3 className="mt-5 text-[18px] font-semibold">{s.title}</h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-secondary">{s.text}</p>
             </li>
           ))}
         </ol>
@@ -112,10 +112,12 @@ export default function Landing() {
         <h2 className="mt-1 max-w-[22ch] text-[32px] font-medium leading-[1.1] md:text-[40px]">Guarantees, enforced in code — not promised in copy.</h2>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {FEATURES.map((f) => (
-            <div key={f.title} className={`rounded-3xl p-8 ${f.bg} ${f.fg}`}>
-              <p className="font-mono text-[12px] uppercase tracking-[0.12em] opacity-80">{f.tag}</p>
-              <h3 className="mt-4 text-[18px] font-semibold">{f.title}</h3>
-              <p className={`mt-2 text-[14px] leading-relaxed ${f.sub}`}>{f.text}</p>
+            <div key={f.title} className="rounded-3xl border border-border bg-surface p-8">
+              <p className="flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.12em] text-muted">
+                <span className={`h-2 w-2 rounded-full ${f.dot}`} aria-hidden />{f.tag}
+              </p>
+              <h3 className="mt-3 text-[18px] font-semibold">{f.title}</h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-secondary">{f.text}</p>
             </div>
           ))}
         </div>

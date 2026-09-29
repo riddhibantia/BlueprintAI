@@ -172,6 +172,16 @@ export default function Dashboard() {
         </div>
         <Button variant="ghost" onClick={logout}><LogOut size={14} />Log out</Button>
       </div>
+      {projects.length === 0 && (
+        <Card className="mb-4">
+          <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted">Start here — 3 steps</p>
+          <ol className="mt-2 grid gap-2 text-[13.5px] md:grid-cols-3">
+            <li className="flex gap-2.5"><span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-primary font-mono text-[12px] font-bold text-canvas" aria-hidden>1</span><span><b>Describe your idea</b> <span className="text-secondary">in the box below, plain words fine.</span></span></li>
+            <li className="flex gap-2.5"><span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-primary font-mono text-[12px] font-bold text-canvas" aria-hidden>2</span><span><b>Approve the requirements</b> <span className="text-secondary">we draft — tick them off.</span></span></li>
+            <li className="flex gap-2.5"><span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-primary font-mono text-[12px] font-bold text-canvas" aria-hidden>3</span><span><b>We build the rest</b> <span className="text-secondary">— spec, design, tests, PDF.</span></span></li>
+          </ol>
+        </Card>
+      )}
       <Card className="mb-4">
         <h2 className="mb-1 text-[15px] font-semibold">New project</h2>
         <label className="sr-only" htmlFor="new-idea">Product idea</label>

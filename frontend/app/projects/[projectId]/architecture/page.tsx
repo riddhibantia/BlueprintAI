@@ -79,8 +79,10 @@ export default function Architecture() {
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="grid content-start gap-2.5">
             {arch.components.map((c: any, i: number) => (
-              <button key={c.name} onClick={() => setSel(sel === c.name ? null : c.name)}
-                className={`rounded-2xl border p-4 text-left transition-colors ${sel === c.name ? "border-accent bg-elevated" : "border-border bg-surface hover:border-accent"}`}>
+              <div key={c.name} role="button" tabIndex={0} aria-label={`Select ${c.name}`}
+                onClick={() => setSel(sel === c.name ? null : c.name)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(sel === c.name ? null : c.name); } }}
+                className={`cursor-pointer rounded-2xl border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-accent ${sel === c.name ? "border-accent bg-elevated" : "border-border bg-surface hover:border-accent"}`}>
                 <span className="flex items-start gap-3">
                   <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-elevated font-mono text-[12px] font-bold text-accent">{String(i + 1).padStart(2, "0")}</span>
                   <span className="min-w-0 flex-1">
@@ -94,7 +96,7 @@ export default function Architecture() {
                       className="rounded-lg p-1.5 text-muted hover:bg-canvas hover:text-danger"><Trash2 size={15} /></button>
                   )}
                 </span>
-              </button>
+              </div>
             ))}
             <Card>
               <p className="mb-1 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">Relationships</p>

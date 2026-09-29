@@ -53,6 +53,7 @@ export default function InboxHome() {
   const orphans: string[] = bundle.coverage?.orphans || [];
   const triageCount = open.length + orphans.length;
   const next = stages.find((s) => s.route === continueRoute(stages)) || stages[0];
+  const nextIdx = Math.max(0, stages.indexOf(next));
 
   return (
     <div>
@@ -73,6 +74,11 @@ export default function InboxHome() {
             </li>
           ))}
         </ol>
+        <p className="mt-2 font-mono text-[11px] text-muted" aria-hidden>
+          <span className="mr-3"><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success" />done</span>
+          <span className="mr-3"><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-warning" />needs you</span>
+          <span><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-border-strong" />locked</span>
+        </p>
         <div className="mt-3 border-t border-border pt-3">
           <Progress pct={bundle.coverage?.coverage_pct || 0} label="Traceability coverage" />
         </div>
@@ -81,7 +87,7 @@ export default function InboxHome() {
       <Card className="mb-3.5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted">Next step</p>
+            <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted">Next step · {nextIdx + 1} of {stages.length}</p>
             <p className="mt-0.5 text-[14.5px] font-semibold">{next.label} — {next.detail}</p>
           </div>
           <Button onClick={() => router.push(`/projects/${pid}/${continueRoute(stages)}`)}>
@@ -91,16 +97,16 @@ export default function InboxHome() {
       </Card>
 
       <div className="grid gap-3.5 lg:grid-cols-2">
-        <Card>
+        <Card className="min-w-0">
           <h3 className="mb-2 text-[15px] font-semibold">Needs attention ({triageCount})</h3>
           {triageCount === 0 ? (
             <EmptyState title="All clear" hint="No open issues and no orphaned requirements." />
           ) : (
             <div className="grid gap-1.5">
               {open.slice(0, 3).map((i: any) => (
-                <div key={i.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2">
-                  <span className="min-w-0 flex-1 truncate text-[13px]" title={i.description}>{i.description}</span>
-                  <span className="flex gap-1">
+                <div key={i.id} className="rounded-lg border border-border px-3 py-2">
+                  <p className="truncate text-[13px]" title={i.description}>{i.description}</p>
+                  <div className="mt-1.5 flex gap-1">
                     {(["accepted", "rejected", "resolved"] as const).map((s) => (
                       <button key={s} disabled={decide.isPending}
                         onClick={() => decide.mutate({ path: `/projects/${pid}/consistency/issues/${i.id}`, init: { method: "PATCH", body: JSON.stringify({ status: s }) } })}
@@ -108,7 +114,7 @@ export default function InboxHome() {
                         {s}
                       </button>
                     ))}
-                  </span>
+                  </div>
                 </div>
               ))}
               {orphans.slice(0, 2).map((o) => (
@@ -121,7 +127,7 @@ export default function InboxHome() {
             </div>
           )}
         </Card>
-        <Card>
+        <Card className="min-w-0">
           <h3 className="mb-2 text-[15px] font-semibold">Recent Activity</h3>
           {activity.length === 0
             ? <EmptyState title="No activity yet" hint="Generate your first requirements to start the trail." />
