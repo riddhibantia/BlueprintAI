@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -55,7 +56,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const base = `/projects/${pid}`;
   const { data: trace } = useTraceability(pid);
   const { data: issues } = useIssues(pid);
-  const inboxCount = (trace?.coverage?.orphans?.length || 0) + (issues?.filter((i: any) => i.status === "open").length || 0);
+  const orphans = trace?.coverage?.orphans?.length || 0;
+  const openIssues = issues?.filter((i: any) => i.status === "open").length || 0;
+  // Triage = orphaned requirements + open consistency issues. These are distinct
+  // sets (not duplicates): orphans need linking, issues need decisions.
+  const inboxCount = orphans + openIssues;
+  const inboxTitle = `Needs triage: ${orphans} orphaned, ${openIssues} open issues`;
 
   const renderItem = (it: Item) => {
     const active = it.match.test(path);
@@ -70,7 +76,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <Icon size={16} className={cn("flex-none", active && "text-accent")} aria-hidden />
         {!collapsed && it.label}
         {!collapsed && !!badge && (
-          <span className="ml-auto rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning" aria-label={`${badge} items need triage`}>{badge}</span>
+          <span className="ml-auto rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning"
+            title={it.label === "Inbox" ? inboxTitle : undefined}
+            aria-label={it.label === "Inbox" ? inboxTitle : `${badge} items`}>{badge}</span>
         )}
       </Link>
     );
@@ -80,11 +88,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <aside aria-label="Project navigation"
       className={cn("sticky top-0 flex h-screen flex-col border-r border-border bg-surface transition-[width] duration-200", collapsed ? "w-[60px] px-2 py-4" : "w-[240px] px-3 py-4")}>
       <div className={cn("mb-2 flex items-center gap-2.5 px-1", collapsed && "justify-center px-0")}>
-        <span className="grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-gradient-to-br from-accent via-info to-accent2 text-[15px] font-extrabold text-on-accent" aria-hidden>B</span>
-        {!collapsed && <span className="leading-tight"><b className="block text-[13.5px] tracking-tight">BLUEPRINTAI</b><small className="block text-[11px] text-secondary">Engineering Workspace</small></span>}
+        <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-[10px]" aria-hidden />
+        {!collapsed && <span className="leading-tight"><b className="block text-[13.5px] tracking-tight">Blueprint <span className="text-accent">AI</span></b><small className="block text-[11px] text-secondary">Engineering Workspace</small></span>}
       </div>
       {!collapsed && project?.name && <p className="truncate px-2 text-[12px] text-muted" title={project.name}>{project.name}</p>}
-      <nav className="mt-1 flex-1 overflow-y-auto" aria-label="Modules">
+      <nav className="scroll-thin mt-1 flex-1 overflow-y-auto" aria-label="Modules">
         {TOP.map(renderItem)}
         {SECTIONS.map((sec) => (
           <div key={sec.title} className="mt-3">

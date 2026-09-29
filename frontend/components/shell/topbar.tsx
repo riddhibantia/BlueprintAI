@@ -57,12 +57,12 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-canvas/90 backdrop-blur">
-      <div className="flex items-center gap-3 px-5 py-2.5">
+      <div className="flex min-h-16 items-center gap-3 px-5 py-3">
         <span className="lg:hidden">
           <IconButton label="Open navigation" onClick={onMenu}><Menu size={17} /></IconButton>
         </span>
         <div className="min-w-0">
-          <h1 className="truncate text-[15px] font-semibold tracking-tight">{project?.name || "Loading…"}</h1>
+          <h1 className="max-w-[40ch] truncate text-[15px] font-semibold leading-tight tracking-tight">{project?.name || "Loading…"}</h1>
           <p className="flex items-center gap-2 text-[12px] text-secondary">
             {project?.metrics && <StatusBadge value={project.metrics.blueprint_status || "Draft"} />}
             {(activity[0]?.at || project?.updated_at) && (

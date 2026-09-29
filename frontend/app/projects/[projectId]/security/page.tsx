@@ -1,11 +1,13 @@
 "use client";
 import { useParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { useSecurity, useIssues, useTraceability } from "../../../../lib/query/useArtifacts";
+import { useSecurity, useArchitecture, useIssues, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { useState } from "react";
 import { Card } from "../../../../components/ui/card";
+import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
 
 /** Category rollup: a category is healthy when controls exist AND no open issue touches it. */
@@ -26,13 +28,16 @@ function inCat(text: string, keys: string[]): boolean {
 export default function Security() {
   const { projectId: pid } = useParams() as { projectId: string };
   const controlsQ = useSecurity(pid);
+  const archQ = useArchitecture(pid);
   const issuesQ = useIssues(pid);
   const traceQ = useTraceability(pid);
+  const write = useWrite(pid, ["security", "activity", "runs", "traceability"]);
   const [sel, setSel] = useState<string | null>(null);
 
-  if (controlsQ.isLoading) return <LoadingState stage="Loading security controls" />;
+  if (controlsQ.isLoading || archQ.isLoading) return <LoadingState stage="Loading security controls" />;
   if (controlsQ.isError) return <ErrorState message={(controlsQ.error as Error)?.message} onRetry={() => controlsQ.refetch()} />;
   const controls = controlsQ.data || [];
+  const hasArch = (archQ.data?.components?.length || 0) > 0;
   const issues = (issuesQ.data || []).filter((x: any) => x.status === "open");
   const links = traceQ.data?.links || [];
   const selected = sel ? controls.find((c: any) => c.code === sel) : null;
@@ -45,7 +50,17 @@ export default function Security() {
         <p className="text-[13px] text-secondary">{controls.length} controls · {issues.length} open issues</p>
       </div>
       {controls.length === 0 ? (
-        <EmptyState title="No controls yet" hint="Run security analysis from the Blueprint pipeline." />
+        <div>
+          {!hasArch && (
+            <PrereqBanner text="Controls are scoped to real APIs — generate the architecture first."
+              href={`/projects/${pid}/architecture`} action="Go to Architecture" />
+          )}
+          <StageEmpty title="No controls yet" hint="Analyze the API surface and generate traceable security controls."
+            actionLabel="Analyze security" generating={write.isPending}
+            disabledReason={!hasArch ? "Waiting on architecture components." : undefined}
+            onGenerate={() => write.mutate({ path: `/projects/${pid}/security/analyze`, init: { method: "POST" } })} />
+          {write.isError && <div className="mt-3"><ErrorState message={(write.error as Error)?.message} /></div>}
+        </div>
       ) : (
         <>
           <div className="mb-3.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">

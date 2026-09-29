@@ -34,6 +34,31 @@ export default function Requirements() {
   const filtered = reqs.filter((r) =>
     (statusFilter === "all" || r.status === statusFilter) &&
     (r.code + r.title).toLowerCase().includes(q.toLowerCase()));
+  // Bulk approve: checkbox column + bar. Approvals go through the mutation
+  // cache one row at a time (no bulk endpoint) with per-run pending state.
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleCheck = (id: string, on: boolean) => {
+    setChecked((prev) => { const next = new Set(prev); if (on) next.add(id); else next.delete(id); return next; });
+  };
+  const toggleAll = (on: boolean) => {
+    setChecked(on ? new Set(filtered.filter((r) => r.status !== "approved").map((r) => r.id)) : new Set());
+  };
+  const approveSelected = async () => {
+    const targets = filtered.filter((r) => checked.has(r.id) && r.status !== "approved");
+    if (targets.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      for (const r of targets) {
+        await write.mutateAsync({ path: `/requirements/${r.id}/approve`, init: { method: "POST" } });
+      }
+      setChecked(new Set());
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+  const checkable = filtered.filter((r) => r.status !== "approved");
+  const allChecked = checkable.length > 0 && checkable.every((r) => checked.has(r.id));
 
   const [clarifying, setClarifying] = useState(false);
   const [clarifyError, setClarifyError] = useState("");
@@ -110,11 +135,26 @@ export default function Requirements() {
           hint={reqs.length === 0 ? "Start by clarifying your product idea." : "Adjust the search or filter."}
           action={reqs.length === 0 ? <Button onClick={() => write.mutate({ path: `/projects/${pid}/requirements/generate`, init: { method: "POST", body: JSON.stringify({ answers: "" }) } })}>Generate requirements</Button> : undefined} />
       ) : (
-        <DataTable label="Requirements" head={<><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th></>}>
+        <>
+        {checked.size > 0 && (
+          <div className="mb-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-accent/5 px-3 py-2" role="status">
+            <span className="text-[13px] font-medium">{checked.size} selected</span>
+            <Button size="sm" loading={bulkBusy} onClick={approveSelected}>Approve selected</Button>
+            <Button variant="ghost" size="sm" onClick={() => setChecked(new Set())}>Clear</Button>
+            {write.isError && <span className="text-[12.5px] text-danger">{(write.error as Error)?.message}</span>}
+          </div>
+        )}
+        <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-4 w-4 accent-teal-500" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th></>}>
           {filtered.map((r) => (
             <tr key={r.id} onClick={() => open(r)} className="cursor-pointer" tabIndex={0}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(r); } }}
               aria-label={`Open ${r.code}`}>
+              <td onClick={(e) => e.stopPropagation()}>
+                {r.status !== "approved" && (
+                  <input type="checkbox" checked={checked.has(r.id)} onChange={(e) => toggleCheck(r.id, e.target.checked)}
+                    onKeyDown={(e) => e.stopPropagation()} aria-label={`Select ${r.code}`} className="h-4 w-4 accent-teal-500" />
+                )}
+              </td>
               <td className="font-mono text-[12.5px]">{r.code}</td>
               <td className="max-w-[320px] truncate" title={r.title}>{r.title}</td>
               <td className="text-secondary">{r.priority}</td>
@@ -125,6 +165,7 @@ export default function Requirements() {
             </tr>
           ))}
         </DataTable>
+        </>
       )}
 
       <Drawer open={!!sel} onClose={() => setSel(null)} label={`Requirement ${sel?.code}`} title={<span className="font-mono">{sel?.code}</span>}>

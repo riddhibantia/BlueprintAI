@@ -1,25 +1,29 @@
 "use client";
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { useApis, useTraceability } from "../../../../lib/query/useArtifacts";
+import { useApis, useArchitecture, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { Card } from "../../../../components/ui/card";
 import { StatusBadge } from "../../../../components/ui/badge";
 import { DataTable } from "../../../../components/ui/data";
 import CodeBlock from "../../../../components/ui/code-block";
-import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
+import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
 
 /** API explorer (§22): method, auth, schemas, errors, linked artifacts. */
 export default function Apis() {
   const { projectId: pid } = useParams() as { projectId: string };
   const apisQ = useApis(pid);
+  const archQ = useArchitecture(pid);
   const traceQ = useTraceability(pid);
+  const write = useWrite(pid, ["apis", "activity", "runs", "traceability"]);
   const [sel, setSel] = useState<string | null>(null);
 
-  if (apisQ.isLoading) return <LoadingState stage="Loading API specification" />;
+  if (apisQ.isLoading || archQ.isLoading) return <LoadingState stage="Loading API specification" />;
   if (apisQ.isError) return <ErrorState message={(apisQ.error as Error)?.message} onRetry={() => apisQ.refetch()} />;
   const apis = apisQ.data || [];
+  const hasArch = (archQ.data?.components?.length || 0) > 0;
   const links = traceQ.data?.links || [];
   const current = sel ? apis.find((a: any) => a.code === sel) : apis[0];
   const linked = current ? touching(links, current.code) : [];
@@ -31,7 +35,17 @@ export default function Apis() {
         <p className="text-[13px] text-secondary">{apis.length} endpoints · OpenAPI export on the top bar</p>
       </div>
       {apis.length === 0 ? (
-        <EmptyState title="No endpoints yet" hint="Generate them from the Blueprint pipeline." />
+        <div>
+          {!hasArch && (
+            <PrereqBanner text="Endpoints are derived from the architecture — generate components first."
+              href={`/projects/${pid}/architecture`} action="Go to Architecture" />
+          )}
+          <StageEmpty title="No endpoints yet" hint="Generate the REST surface with auth and schemas from the architecture."
+            actionLabel="Generate APIs" generating={write.isPending}
+            disabledReason={!hasArch ? "Waiting on architecture components." : undefined}
+            onGenerate={() => write.mutate({ path: `/projects/${pid}/apis/generate`, init: { method: "POST" } })} />
+          {write.isError && <div className="mt-3"><ErrorState message={(write.error as Error)?.message} /></div>}
+        </div>
       ) : (
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <DataTable label="API endpoints" head={<><th>ID</th><th>Method</th><th>Path</th><th>Auth</th></>}>

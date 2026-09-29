@@ -41,10 +41,10 @@ export function Tabs({ tabs, active, onChange }: { tabs: string[]; active: strin
 /** Dense engineering table wrapper (§17: ID, priority, status, coverage, links). */
 export function DataTable({ head, children, label }: { head: ReactNode; children: ReactNode; label: string }) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
-      <table aria-label={label} className="w-full border-collapse text-[13px]">
+    <div className="scroll-thin overflow-x-auto rounded-2xl border border-border bg-surface">
+      <table aria-label={label} className="w-full min-w-[640px] border-collapse text-[13px]">
         <thead><tr className="border-b border-border text-left text-[11.5px] uppercase tracking-[0.05em] text-secondary">{head}</tr></thead>
-        <tbody className="[&_td]:border-b [&_td]:border-border [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3 [&_th]:py-2 [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-elevated">{children}</tbody>
+        <tbody className="[&_td]:border-b [&_td]:border-border [&_td]:px-4 [&_td]:py-2.5 [&_th]:px-4 [&_th]:py-2 [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-elevated">{children}</tbody>
       </table>
     </div>
   );

@@ -1,8 +1,9 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FolderKanban, LogOut, Plus } from "lucide-react";
+import { Eye, EyeOff, FolderKanban, GitBranch, LogOut, Plus, Scale } from "lucide-react";
 import { api, me, logout } from "../../lib/api/client";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -10,6 +11,18 @@ import { StatusBadge } from "../../components/ui/badge";
 import { LoadingState, ErrorState, EmptyState } from "../../components/ui/feedback";
 
 type Project = { id: string; name: string; idea?: string; status?: string };
+
+const STOP = new Set("a,an,the,to,for,of,and,or,with,app,application,my,our,new,do,does,did,make,build,create".split(","));
+
+/** Short title-case project name from a raw idea (B7: never use the raw sentence). */
+export function shortName(idea: string): string {
+  const words = idea.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter(Boolean)
+    .filter((w) => !STOP.has(w.toLowerCase()));
+  const picked = words.slice(0, 4);
+  const title = (picked.length > 0 ? picked : words.slice(0, 4))
+    .map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+  return (title || "Untitled project").slice(0, 48);
+}
 
 /** Workspace dashboard: session gate, project creation, project list (no diagnostics here §9). */
 export default function Dashboard() {
@@ -26,6 +39,8 @@ export default function Dashboard() {
   const [fieldError, setFieldError] = useState("");
   const [authError, setAuthError] = useState("");
   const [createError, setCreateError] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const pwStrength = password.length === 0 ? "" : password.length < 8 ? "Too short (min 8)" : password.length < 12 ? "OK" : "Strong";
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +89,7 @@ export default function Dashboard() {
     try {
       const p = await api<{ id: string }>("/projects", {
         method: "POST",
-        body: { name: trimmed.slice(0, 60), product_idea: trimmed },
+        body: { name: shortName(trimmed), product_idea: trimmed },
       });
       router.push(`/projects/${p.id}`);
     } catch (e) { setCreateError(e instanceof Error ? e.message : "Could not create project."); setState("idle"); }
@@ -86,13 +101,22 @@ export default function Dashboard() {
 
   if (!authed)
     return (
-      <div className="mx-auto max-w-[720px] px-5 py-10">
-        <p className="mb-1 flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.08em] text-accent">
-          <FolderKanban size={14} />BlueprintAI
-        </p>
-        <h1 className="text-[30px] font-bold tracking-tight">Engineering blueprints,<br />kept honest.</h1>
-        <p className="mt-2 text-[14.5px] text-secondary">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
-        <Card className="mt-6 max-w-[420px]">
+      <div className="mx-auto grid max-w-[960px] items-center gap-8 px-5 py-10 md:grid-cols-2 md:py-16">
+        <div>
+          <p className="mb-3 flex items-center gap-2.5">
+            <Image src="/logo.svg" alt="BlueprintAI logo" width={40} height={40} className="rounded-xl" />
+            <b className="text-[17px] tracking-tight">Blueprint <span className="text-accent">AI</span></b>
+          </p>
+          <h1 className="text-[30px] font-bold leading-tight tracking-tight md:text-[36px]">Engineering blueprints,<br />kept honest.</h1>
+          <p className="mt-2 text-[14.5px] text-secondary">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
+          <ul className="mt-5 grid gap-2.5 text-[13.5px]">
+            <li className="flex items-start gap-2.5"><FolderKanban size={16} className="mt-0.5 flex-none text-accent" aria-hidden />RAG-grounded drafts that cite your standards docs.</li>
+            <li className="flex items-start gap-2.5"><GitBranch size={16} className="mt-0.5 flex-none text-accent" aria-hidden />100% traceability — every link stored, none invented.</li>
+            <li className="flex items-start gap-2.5"><Scale size={16} className="mt-0.5 flex-none text-accent" aria-hidden />Consistency checks with human approve / reject.</li>
+          </ul>
+          <p className="mt-5 text-[12.5px] text-muted"><Link href="/" className="text-accent hover:underline">← What is BlueprintAI?</Link></p>
+        </div>
+        <Card className="w-full">
           <div className="mb-3 flex gap-2" role="tablist" aria-label="Auth mode">
             <button role="tab" aria-selected={mode === "login"} onClick={() => { setMode("login"); setFieldError(""); setAuthError(""); }}
               className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium ${mode === "login" ? "bg-elevated font-semibold text-primary" : "text-secondary hover:text-primary"}`}>Log in</button>
@@ -100,28 +124,41 @@ export default function Dashboard() {
               className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium ${mode === "register" ? "bg-elevated font-semibold text-primary" : "text-secondary hover:text-primary"}`}>Sign up</button>
           </div>
           <form onSubmit={auth} noValidate>
-            <label className="block text-[13px]">Email
+            {mode === "register" && (
+              <label className="block text-[13px]">Name
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada" autoComplete="name"
+                  className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2 placeholder:text-muted focus:border-accent focus:outline-none" /></label>
+            )}
+            <label className={`${mode === "register" ? "mt-2 " : ""}block text-[13px]`}>Email
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" autoComplete="email"
                 aria-invalid={!!fieldError} aria-describedby={fieldError ? "auth-field-error" : undefined}
                 className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2 placeholder:text-muted focus:border-accent focus:outline-none" /></label>
             <label className="mt-2 block text-[13px]">Password
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="•••••••• (min 8)"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                aria-invalid={!!fieldError} aria-describedby={fieldError ? "auth-field-error" : undefined}
-                className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2 placeholder:text-muted focus:border-accent focus:outline-none" /></label>
-            {mode === "register" && (
-              <label className="mt-2 block text-[13px]">Name
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada" autoComplete="name"
-                  className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2 placeholder:text-muted focus:border-accent focus:outline-none" /></label>
+              <span className="relative mt-1 block">
+                <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="•••••••• (min 8)"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  aria-invalid={!!fieldError} aria-describedby={fieldError ? "auth-field-error" : undefined}
+                  className="w-full rounded-xl border border-border bg-canvas px-3 py-2 pr-10 placeholder:text-muted focus:border-accent focus:outline-none" />
+                <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? "Hide password" : "Show password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-secondary hover:text-primary">
+                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </span>
+            </label>
+            {mode === "register" && pwStrength && (
+              <p className="mt-1 text-[12px] text-secondary" role="status">Strength: {pwStrength}</p>
             )}
-            <div className="mt-3">
+            <div className="mt-3 flex items-center justify-between gap-2">
               <Button type="submit" loading={state === "busy"}>{mode === "login" ? "Log in" : "Create account"}</Button>
+              {mode === "login" && (
+                <button type="button" onClick={() => setAuthError("Password reset isn't available in this build — ask your workspace admin.")}
+                  className="text-[12.5px] text-secondary hover:text-primary hover:underline">Forgot password?</button>
+              )}
             </div>
             {fieldError && <p id="auth-field-error" className="mt-2 text-[13px] text-danger" role="alert">{fieldError}</p>}
             {authError && <p className="mt-2 text-[13px] text-danger" role="alert">{authError}</p>}
           </form>
         </Card>
-        <p className="mt-4 text-[12.5px] text-muted"><Link href="/" className="text-accent hover:underline">← What is BlueprintAI?</Link></p>
       </div>
     );
 

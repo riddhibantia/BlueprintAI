@@ -2,13 +2,14 @@
 import { useParams } from "next/navigation";
 import { LayoutGrid, Table2, ListChecks } from "lucide-react";
 import { useState } from "react";
-import { useTasks, useWrite } from "../../../../lib/query/useArtifacts";
+import { useTasks, useRequirements, useWrite } from "../../../../lib/query/useArtifacts";
 import { Card } from "../../../../components/ui/card";
 import { StatusBadge } from "../../../../components/ui/badge";
 import { DataTable } from "../../../../components/ui/data";
 import { TaskList, type Task } from "../../../../components/ui/task-list";
-import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
+import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 
 /** Delivery workspace (§24): board, table, or checklist — one shared cache. */
 const COLS = ["todo", "doing", "done"] as const;
@@ -18,12 +19,14 @@ const ADVANCE_LABEL: Record<string, string> = { todo: "→ doing", doing: "→ d
 export default function Tasks() {
   const { projectId: pid } = useParams() as { projectId: string };
   const tasksQ = useTasks(pid);
-  const write = useWrite(pid, ["tasks", "activity", "runs"]);
+  const reqsQ = useRequirements(pid);
+  const write = useWrite(pid, ["tasks", "activity", "runs", "traceability"]);
   const [view, setView] = useState<"table" | "board" | "checklist">("board");
 
-  if (tasksQ.isLoading) return <LoadingState stage="Loading implementation plan" />;
+  if (tasksQ.isLoading || reqsQ.isLoading) return <LoadingState stage="Loading implementation plan" />;
   if (tasksQ.isError) return <ErrorState message={(tasksQ.error as Error)?.message} onRetry={() => tasksQ.refetch()} />;
   const tasks = tasksQ.data || [];
+  const hasReqs = (reqsQ.data || []).length > 0;
   const done = tasks.filter((t: any) => t.status === "done").length;
 
   const patch = (id: string, status: string) => write.mutate({
@@ -57,7 +60,17 @@ export default function Tasks() {
       </div>
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
       {tasks.length === 0 ? (
-        <EmptyState title="No tasks yet" hint="Generate the plan from the Blueprint pipeline." />
+        <div>
+          {!hasReqs && (
+            <PrereqBanner text="Tasks are cut from requirements — generate them first."
+              href={`/projects/${pid}/requirements`} action="Go to Requirements" />
+          )}
+          <StageEmpty title="No tasks yet" hint="Generate the implementation plan with requirement links."
+            actionLabel="Generate tasks" generating={write.isPending}
+            disabledReason={!hasReqs ? "Waiting on requirements." : undefined}
+            onGenerate={() => write.mutate({ path: `/projects/${pid}/tasks/generate`, init: { method: "POST" } })} />
+          {write.isError && <div className="mt-3"><ErrorState message={(write.error as Error)?.message} /></div>}
+        </div>
       ) : view === "checklist" ? (
         <Card className="max-w-xl">
           <TaskList tasks={checkItems} onTasksChange={onCheck} accent="var(--color-accent)" aria-label="Task checklist" />

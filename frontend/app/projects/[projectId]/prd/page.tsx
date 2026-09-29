@@ -3,18 +3,20 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Pencil } from "lucide-react";
-import { usePrd, useWrite } from "../../../../lib/query/useArtifacts";
+import { usePrd, useRequirements, useWrite } from "../../../../lib/query/useArtifacts";
 import { fmtDate } from "../../../../lib/utils/time";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
-import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
+import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 import { ApprovalBanner } from "../../../../components/ui/activity";
+import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 
 /** PRD document workspace (§18): outline + document + context, versioned and approved. */
 export default function Prd() {
   const { projectId: pid } = useParams() as { projectId: string };
   const prdQ = usePrd(pid);
+  const reqsQ = useRequirements(pid);
   const write = useWrite(pid, ["prd", "activity", "runs"]);
   const [draft, setDraft] = useState<any>(null);
   const [editing, setEditing] = useState(false);
@@ -29,11 +31,24 @@ export default function Prd() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
-  if (prdQ.isLoading) return <LoadingState stage="Loading PRD" />;
+  if (prdQ.isLoading || reqsQ.isLoading) return <LoadingState stage="Loading PRD" />;
   if (prdQ.isError) return <ErrorState message={(prdQ.error as Error)?.message} onRetry={() => prdQ.refetch()} />;
   const prd = prdQ.data ?? { content: {}, status: "draft" };
+  const approved = (reqsQ.data || []).filter((r: any) => r.status === "approved").length;
   if (!prd.content || Object.keys(prd.content).length === 0)
-    return <EmptyState title="No PRD yet" hint="Generate it from the Blueprint pipeline after approving requirements." />;
+    return (
+      <div>
+        {approved === 0 && (
+          <PrereqBanner text="PRD generation needs at least one approved requirement — approvals are the gate."
+            href={`/projects/${pid}/requirements`} action="Approve requirements" />
+        )}
+        <StageEmpty title="No PRD yet" hint="Generate the spec from your approved requirements."
+          actionLabel="Generate PRD" generating={write.isPending}
+          disabledReason={approved === 0 ? `Waiting on approvals (0 approved) — the button unlocks at 1.` : undefined}
+          onGenerate={() => write.mutate({ path: `/projects/${pid}/prd/generate`, init: { method: "POST" } })} />
+        {write.isError && <div className="mt-3"><ErrorState message={(write.error as Error)?.message} /></div>}
+      </div>
+    );
 
   const save = (status?: string) => write.mutate(
     { path: `/projects/${pid}/prd`, init: { method: "PUT", body: JSON.stringify({ content: draft, ...(status ? { status } : {}) }) } },

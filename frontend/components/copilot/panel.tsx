@@ -5,6 +5,7 @@ import { Bot, Send, Sparkles, Activity as ActivityIcon } from "lucide-react";
 import { useShell } from "../shell/context";
 import { api } from "../../lib/api/client";
 import { checkConsistency, listRuns } from "../../lib/api/endpoints";
+import { useRequirements, useTraceability } from "../../lib/query/useArtifacts";
 import { timeAgo } from "../../lib/utils/time";
 import { StatusBadge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -22,6 +23,13 @@ export function CopilotPanel() {
   const [runs, setRuns] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Staleness guard (B1): answers are computed from live data at ask time.
+  // If requirements/links change afterwards, say so instead of looking wrong.
+  const reqsQ = useRequirements(pid);
+  const traceQ = useTraceability(pid);
+  const fingerprint = `${reqsQ.data?.length || 0}:${(reqsQ.data || []).filter((r: any) => r.status === "approved").length}:${traceQ.data?.links?.length || 0}`;
+  const [answeredAt, setAnsweredAt] = useState<string | null>(null);
+  const stale = answeredAt !== null && answeredAt !== fingerprint;
 
   useEffect(() => {
     if (!pid) return;
@@ -37,6 +45,7 @@ export function CopilotPanel() {
         method: "POST",
         body: { question, page: path.split("/").pop() || "", selection: selection || "" },
       }));
+      setAnsweredAt(fingerprint);
     } catch (e: any) { setErr(e.message); }
     setBusy(false);
   };
@@ -92,6 +101,11 @@ export function CopilotPanel() {
           {answer && (
             <div className="mt-2.5 rounded-xl border border-border bg-canvas p-2.5">
               <p className="mb-1"><StatusBadge value={answer.mode === "ai" ? "AI Copilot" : "Rule-based Copilot"} /></p>
+              {stale && (
+                <p className="mb-1.5 rounded-lg border border-warning/40 bg-warning/10 px-2 py-1 text-[11.5px] text-warning" role="status">
+                  Project changed since this answer — re-ask for fresh numbers.
+                </p>
+              )}
               <p className="whitespace-pre-line text-[12.5px] leading-relaxed">
                 <CitedText text={answer.answer} base={`/projects/${pid}`} />
               </p>

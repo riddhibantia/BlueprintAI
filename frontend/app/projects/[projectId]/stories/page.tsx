@@ -1,25 +1,28 @@
 "use client";
 import { useParams } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
-import { useStories, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
+import { useStories, usePrd, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { siblings } from "../../../../lib/query/links";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
-import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
+import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 
 /** User stories (§19): structured narrative + AC + real linked artifacts. */
 export default function Stories() {
   const { projectId: pid } = useParams() as { projectId: string };
   const storiesQ = useStories(pid);
+  const prdQ = usePrd(pid);
   const traceQ = useTraceability(pid);
   const approve = useWrite(pid, ["stories", "activity", "runs"]);
 
-  if (storiesQ.isLoading) return <LoadingState stage="Loading user stories" />;
+  if (storiesQ.isLoading || prdQ.isLoading) return <LoadingState stage="Loading user stories" />;
   if (storiesQ.isError) return <ErrorState message={(storiesQ.error as Error)?.message} onRetry={() => storiesQ.refetch()} />;
   const stories = storiesQ.data || [];
   const links = traceQ.data?.links || [];
+  const hasPrd = !!(prdQ.data?.content && Object.keys(prdQ.data.content).length > 0);
 
   return (
     <div>
@@ -29,7 +32,17 @@ export default function Stories() {
       </div>
       {approve.isError && <div className="mb-3"><ErrorState message={(approve.error as Error)?.message} /></div>}
       {stories.length === 0 ? (
-        <EmptyState title="No stories yet" hint="Generate them from the Blueprint pipeline once requirements are approved." />
+        <div>
+          {!hasPrd && (
+            <PrereqBanner text="Stories are written from the Product Spec — generate it first."
+              href={`/projects/${pid}/prd`} action="Go to Product Spec" />
+          )}
+          <StageEmpty title="No stories yet" hint="Generate user stories with acceptance criteria from the PRD."
+            actionLabel="Generate stories" generating={approve.isPending}
+            disabledReason={!hasPrd ? "Waiting on the Product Spec." : undefined}
+            onGenerate={() => approve.mutate({ path: `/projects/${pid}/stories/generate`, init: { method: "POST" } })} />
+          {approve.isError && <div className="mt-3"><ErrorState message={(approve.error as Error)?.message} /></div>}
+        </div>
       ) : (
         <div className="grid gap-3.5 lg:grid-cols-2">
           {stories.map((s: any) => {

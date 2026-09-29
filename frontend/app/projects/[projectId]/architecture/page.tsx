@@ -2,28 +2,33 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Plus, Trash2, Share } from "lucide-react";
-import { useArchitecture, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
+import { useArchitecture, usePrd, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { apiDownload } from "../../../../lib/api/client";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { Dialog } from "../../../../components/ui/overlay";
+import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
+
+const KINDS = ["service", "frontend", "api", "database", "queue", "external", "security", "cloud"];
 
 /** Architecture workspace — styled listing; interactive React Flow canvas in the graph view. */
 export default function Architecture() {
   const { projectId: pid } = useParams() as { projectId: string };
   const archQ = useArchitecture(pid);
+  const prdQ = usePrd(pid);
   const traceQ = useTraceability(pid);
-  const write = useWrite(pid, ["architecture", "activity", "runs"]);
+  const write = useWrite(pid, ["architecture", "activity", "runs", "traceability"]);
   const [form, setForm] = useState({ name: "", kind: "service", description: "", boundary: "" });
   const [sel, setSel] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
-  if (archQ.isLoading) return <LoadingState stage="Loading architecture" />;
+  if (archQ.isLoading || prdQ.isLoading) return <LoadingState stage="Loading architecture" />;
   if (archQ.isError) return <ErrorState message={(archQ.error as Error)?.message} onRetry={() => archQ.refetch()} />;
   const arch = archQ.data || { components: [], relationships: [] };
+  const hasPrd = !!(prdQ.data?.content && Object.keys(prdQ.data.content).length > 0);
   const links = traceQ.data?.links || [];
   const selected = sel ? arch.components.find((c: any) => c.name === sel) : null;
   const selLinks = selected ? touching(links, selected.name) : [];
@@ -54,7 +59,16 @@ export default function Architecture() {
       </div>
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
       {arch.components.length === 0 ? (
-        <EmptyState title="No architecture yet" hint="Generate it from the Blueprint pipeline." />
+        <div>
+          {!hasPrd && (
+            <PrereqBanner text="Architecture is derived from the Product Spec — generate it first."
+              href={`/projects/${pid}/prd`} action="Go to Product Spec" />
+          )}
+          <StageEmpty title="No architecture yet" hint="Generate components and relationships from the PRD."
+            actionLabel="Generate architecture" generating={write.isPending}
+            disabledReason={!hasPrd ? "Waiting on the Product Spec." : undefined}
+            onGenerate={() => write.mutate({ path: `/projects/${pid}/architecture/generate`, init: { method: "POST" } })} />
+        </div>
       ) : (
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="grid content-start gap-2.5">
@@ -101,28 +115,33 @@ export default function Architecture() {
           </div>
         </div>
       )}
-      <Card>
-        <h3 className="mb-2 text-[14px] font-semibold">Add component</h3>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="grid gap-1 text-[12.5px] text-secondary">Name
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Cache (Redis)"
-              className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary" />
-          </label>
-          <label className="grid gap-1 text-[12.5px] text-secondary">Kind
-            <input value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} placeholder="service"
-              className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary" />
-          </label>
-          <label className="grid gap-1 text-[12.5px] text-secondary">Boundary
-            <input value={form.boundary} onChange={(e) => setForm({ ...form, boundary: e.target.value })} placeholder="private"
-              className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary" />
-          </label>
-          <label className="grid gap-1 text-[12.5px] text-secondary">Description
-            <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What it does"
-              className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary" />
-          </label>
-        </div>
-        <div className="mt-2"><Button loading={write.isPending} onClick={add}><Plus size={14} />Add component</Button></div>
-      </Card>
+      <details className="mt-3.5">
+        <summary className="cursor-pointer text-[13px] font-semibold text-accent">Add component manually</summary>
+        <Card className="mt-2">
+          <h3 className="mb-2 text-[14px] font-semibold">Add component</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1 text-[12.5px] text-secondary">Name
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Cache (Redis)"
+                className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary placeholder:text-muted focus:border-accent focus:outline-none" />
+            </label>
+            <label className="grid gap-1 text-[12.5px] text-secondary">Kind
+              <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}
+                className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary focus:border-accent focus:outline-none">
+                {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-[12.5px] text-secondary">Boundary
+              <input value={form.boundary} onChange={(e) => setForm({ ...form, boundary: e.target.value })} placeholder="private"
+                className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary placeholder:text-muted focus:border-accent focus:outline-none" />
+            </label>
+            <label className="grid gap-1 text-[12.5px] text-secondary">Description
+              <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What it does"
+                className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary placeholder:text-muted focus:border-accent focus:outline-none" />
+            </label>
+          </div>
+          <div className="mt-2"><Button loading={write.isPending} onClick={add} disabled={!form.name.trim()}><Plus size={14} />Add component</Button></div>
+        </Card>
+      </details>
       <Dialog open={!!pendingDelete} onClose={() => setPendingDelete(null)} title={`Remove ${pendingDelete?.name}?`}>
         <p className="text-[13.5px] text-secondary">The component and its relationships are deleted. This cannot be undone.</p>
         <div className="mt-4 flex justify-end gap-2">

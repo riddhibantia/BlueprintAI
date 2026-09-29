@@ -1,11 +1,12 @@
 "use client";
 import { useParams } from "next/navigation";
-import { useDatabase, useTraceability } from "../../../../lib/query/useArtifacts";
+import { useDatabase, useArchitecture, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
-import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
+import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 import { Dialog } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
 import { useState } from "react";
 import { Code2 } from "lucide-react";
@@ -28,12 +29,15 @@ export function toSQL(entities: any[]): string {
 export default function Database() {
   const { projectId: pid } = useParams() as { projectId: string };
   const dbQ = useDatabase(pid);
+  const archQ = useArchitecture(pid);
   const traceQ = useTraceability(pid);
+  const write = useWrite(pid, ["database", "activity", "runs", "traceability"]);
   const [sqlOpen, setSqlOpen] = useState(false);
 
-  if (dbQ.isLoading) return <LoadingState stage="Loading data model" />;
+  if (dbQ.isLoading || archQ.isLoading) return <LoadingState stage="Loading data model" />;
   if (dbQ.isError) return <ErrorState message={(dbQ.error as Error)?.message} onRetry={() => dbQ.refetch()} />;
   const data = dbQ.data || { entities: [] };
+  const hasArch = (archQ.data?.components?.length || 0) > 0;
   const links = traceQ.data?.links || [];
 
   return (
@@ -46,7 +50,17 @@ export default function Database() {
         {data.entities.length > 0 && <Button variant="ghost" onClick={() => setSqlOpen(true)}><Code2 size={14} />View SQL</Button>}
       </div>
       {data.entities.length === 0 ? (
-        <EmptyState title="No schema yet" hint="Generate it from the Blueprint pipeline." />
+        <div>
+          {!hasArch && (
+            <PrereqBanner text="The schema is derived from the architecture — generate components first."
+              href={`/projects/${pid}/architecture`} action="Go to Architecture" />
+          )}
+          <StageEmpty title="No schema yet" hint="Generate entities, fields, keys, and references from the architecture."
+            actionLabel="Generate schema" generating={write.isPending}
+            disabledReason={!hasArch ? "Waiting on architecture components." : undefined}
+            onGenerate={() => write.mutate({ path: `/projects/${pid}/database/generate`, init: { method: "POST" } })} />
+          {write.isError && <div className="mt-3"><ErrorState message={(write.error as Error)?.message} /></div>}
+        </div>
       ) : (
         <div className="grid gap-3.5 md:grid-cols-2">
           {data.entities.map((e: any) => {

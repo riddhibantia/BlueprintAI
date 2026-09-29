@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight, BookOpenCheck, GitBranch, Scale, Zap, ShieldCheck,
@@ -33,7 +34,7 @@ export default function Landing() {
     <div className="mx-auto max-w-[1120px] px-5 pb-16">
       <header className="flex items-center justify-between py-5">
         <p className="flex items-center gap-2 text-[13px] font-extrabold tracking-tight">
-          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-accent via-info to-accent2 text-[15px] text-on-accent" aria-hidden>B</span>
+          <Image src="/logo.svg" alt="BlueprintAI logo" width={32} height={32} className="rounded-[10px]" />
           BLUEPRINTAI
         </p>
         <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-[13px] font-semibold text-on-accent hover:brightness-110">
