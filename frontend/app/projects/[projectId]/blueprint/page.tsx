@@ -5,11 +5,11 @@ import {
   useRequirements, usePrd, useStories, useArchitecture, useDatabase, useApis,
   useSecurity, useTasks, useTests, useTraceability, useIssues, useRuns, useWrite,
 } from "../../../../lib/query/useArtifacts";
-import { computeLifecycle, stageUpdated, Bundle } from "../../../../lib/query/lifecycle";
+import { computeLifecycle, continueRoute, stageUpdated, Bundle } from "../../../../lib/query/lifecycle";
 import { timeAgo } from "../../../../lib/utils/time";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
-import { StatusBadge } from "../../../../components/ui/badge";
+import { StatusBadge, Badge } from "../../../../components/ui/badge";
 import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 
 /** Blueprint pipeline (§16): contextual Generate / Review / Approve / Validate per stage. */
@@ -46,6 +46,9 @@ export default function Blueprint() {
   };
   const stages = computeLifecycle(b);
   const runs = runsQ.data || [];
+  // One primary button per page: the next actionable stage's generate action.
+  // Locked (not started / blocked) stages render neutral — red is for failures.
+  const nextKey = stages.find((s) => s.route === continueRoute(stages))?.key;
 
   const post = (path: string, go: string, label: string) => {
     setBusyLabel(label);
@@ -102,20 +105,28 @@ export default function Blueprint() {
       <p className="mb-5 text-[13.5px] text-secondary">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
       <div className="grid gap-2">
-        {stages.map((s, i) => (
+        {stages.map((s, i) => {
+          const locked = s.state === "Blocked" || s.state === "Not Started";
+          return (
           <div key={s.key} id={`stage-${s.key}`} className="scroll-mt-20">
             <Card>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-mono text-[12px] text-muted">{String(i + 1).padStart(2, "0")}</span>
                 <b className="text-[15px]">{s.label}</b>
-                <StatusBadge value={s.state} />
+                {locked ? (
+                  <span title={s.detail}><Badge value="Locked" tone="neutral" /></span>
+                ) : (
+                  <StatusBadge value={s.state} />
+                )}
                 <span className="text-[12.5px] text-secondary">{s.detail}</span>
                 {(() => { const u = stageUpdated(runs, s.key); return u ? <span className="text-[11.5px] text-muted">ran {timeAgo(u)}</span> : null; })()}
                 <span className="ml-auto flex flex-wrap gap-1.5">
                   {(actions[s.key] || []).map((a) => {
                     const busy = busyLabel === a.label;
+                    const isNext = a.primary && s.key === nextKey;
                     return (
-                      <Button key={a.label} variant={a.primary ? "primary" : "ghost"} size="sm"
+                      <Button key={a.label} variant={isNext ? "primary" : "ghost"} size="sm"
+                        title={locked && !isNext ? s.detail : undefined}
                         loading={busy} disabled={busyLabel !== null} onClick={a.run}>
                         {busy ? "Working…" : a.label}
                       </Button>
@@ -125,7 +136,8 @@ export default function Blueprint() {
               </div>
             </Card>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

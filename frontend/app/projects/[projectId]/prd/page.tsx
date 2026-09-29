@@ -81,7 +81,7 @@ export default function Prd() {
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
       <ApprovalBanner status={prd.status || "draft"} onApprove={() => save("approved")} onEdit={() => { setDraft(prd.content); setEditing(true); }} />
 
-      <div className="grid gap-3.5 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
+      <div className="grid gap-3.5 lg:grid-cols-[220px_minmax(0,1fr)] lg:justify-center">
         <Card className="!p-2">
           <p className="px-2 py-1 text-[11px] font-bold uppercase tracking-[0.07em] text-muted">Outline</p>
           {keys.map((k) => (
@@ -91,7 +91,7 @@ export default function Prd() {
             </button>
           ))}
         </Card>
-        <Card>
+        <Card className="mx-auto w-full max-w-[720px]">
           <h3 className="mb-2 text-[17px] font-semibold capitalize">{shown.replace(/_/g, " ")}</h3>
           {editing ? (
             <textarea rows={Math.max(6, (Array.isArray(val) ? val.length : 3) + 2)}
@@ -100,19 +100,20 @@ export default function Prd() {
               className="w-full rounded-xl border border-border bg-canvas p-3 text-[14px] leading-relaxed" />
           ) : Array.isArray(val) ? (
             <ul className="grid gap-1.5">{val.map((v: string, i: number) => <li key={i} className="text-[14px] leading-relaxed">• {v}</li>)}</ul>
-          ) : <p className="text-[14px] leading-relaxed">{String(val ?? "")}</p>}
+          ) : <p className="text-[15px] leading-relaxed">{String(val ?? "")}</p>}
         </Card>
-        <Card>
-          <h3 className="mb-2 text-[14px] font-semibold">Context</h3>
+      </div>
+      <details className="mx-auto mt-3.5 w-full max-w-[720px]">
+        <summary className="cursor-pointer text-[13px] font-medium text-secondary hover:text-primary">About this document</summary>
+        <div className="mt-2 rounded-2xl border border-border bg-surface p-4">
           <p className="text-[12.5px] text-secondary">Sections draw from approved requirements. Edit a section, save, then approve — approved state is authoritative.</p>
-          <p className="mt-3 text-[12px] uppercase tracking-wide text-muted">Actions</p>
-          <div className="mt-1 grid gap-1.5">
+          <div className="mt-2 flex flex-wrap gap-3">
             <Link href={`/projects/${pid}/requirements`} prefetch className="text-[13px] text-accent hover:underline">Source requirements →</Link>
             <Link href={`/projects/${pid}/stories`} prefetch className="text-[13px] text-accent hover:underline">Derived stories →</Link>
             <Link href={`/projects/${pid}/traceability`} prefetch className="text-[13px] text-accent hover:underline">Coverage →</Link>
           </div>
-        </Card>
-      </div>
+        </div>
+      </details>
     </div>
   );
 }

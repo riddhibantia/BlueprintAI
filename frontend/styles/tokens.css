@@ -1,18 +1,41 @@
 @import "tailwindcss";
 
-/* BlueprintAI visual identity v3 — Linear/Geist discipline:
-   monochrome system, color carries meaning only. No decorative
-   gradients, glows, or nested-card shadows. Hierarchy comes from
-   spacing + type weight. :root IS dark; light overrides below. */
+/* BlueprintAI visual system — DESIGN.md (Clay) wins for color/type/radii;
+   the redesign brief wins for layout/density. Light-first, calm,
+   document-first: warm-neutral canvas, hairline borders, ink buttons,
+   one accent (links/focus/selected nav only). Dark tokens dormant. */
 @theme {
+  --color-canvas: #fafaf9;
+  --color-surface: #ffffff;
+  --color-elevated: #f4f4f2;
+  --color-subtle: #f1efeb;
+  --color-border: #e7e5e1;
+  --color-border-strong: #d6d3cd;
+  --color-primary: #1c1b19;
+  /* shadcn/RareUI bridge: foreground maps to the primary text token */
+  --color-foreground: var(--color-primary);
+  --color-background: var(--color-surface);
+  --color-secondary: #57534e;
+  --color-muted: #8a857d;
+  --color-accent: #0e7c6b;
+  --color-accent2: #3b5bdb;
+  --color-success: #2f855a;
+  --color-warning: #b7791f;
+  --color-danger: #c53030;
+  --color-info: #3b5bdb;
+  --color-on-accent: #ffffff;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Dark theme dormant (toggle removed until finished) — values kept for later. */
+[data-theme="dark"] {
   --color-canvas: #09090b;
   --color-surface: #101014;
   --color-elevated: #17171c;
   --color-border: #232329;
+  --color-border-strong: #323238;
   --color-primary: #fafafa;
-  /* shadcn/RareUI bridge: foreground maps to the primary text token */
-  --color-foreground: var(--color-primary);
-  --color-background: var(--color-surface);
   --color-secondary: #a1a1aa;
   --color-muted: #71717a;
   --color-accent: #5eead4;
@@ -22,42 +45,26 @@
   --color-danger: #f87171;
   --color-info: #60a5fa;
   --color-on-accent: #06201d;
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
-}
-
-[data-theme="light"] {
-  --color-canvas: #fafafa;
-  --color-surface: #ffffff;
-  --color-elevated: #f4f4f5;
-  --color-border: #e4e4e7;
-  --color-primary: #09090b;
-  --color-secondary: #52525b;
-  --color-muted: #a1a1aa;
-  --color-accent: #0b7a75;
-  --color-accent2: #7c5cd6;
-  --color-success: #1c7a3d;
-  --color-warning: #b45309;
-  --color-danger: #b91c1c;
-  --color-info: #0369a1;
-  --color-on-accent: #ffffff;
 }
 
 body {
   background: var(--color-canvas);
   color: var(--color-primary);
   font-family: var(--font-sans);
-  font-size: 14.5px;
+  font-size: 14px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Display voice: Space Grotesk, tight. One rule gives the whole
-   product its typographic identity — body text stays Inter. */
-h1, h2, .font-display {
-  font-family: var(--font-display);
+/* Display voice per DESIGN.md: Inter 500–600, tight. Never bolder. */
+h1, h2 {
+  font-family: var(--font-sans);
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
+h1 { line-height: 1.15; }
+h2 { line-height: 1.3; }
 
 /* Restrained motion only (§41): 120–180ms hovers, 180–250ms drawers. */
 @media (prefers-reduced-motion: reduce) {

@@ -43,8 +43,8 @@ export function DataTable({ head, children, label }: { head: ReactNode; children
   return (
     <div className="scroll-thin overflow-x-auto rounded-2xl border border-border bg-surface">
       <table aria-label={label} className="w-full min-w-[640px] border-collapse text-[13px]">
-        <thead><tr className="border-b border-border text-left text-[11.5px] uppercase tracking-[0.05em] text-secondary">{head}</tr></thead>
-        <tbody className="[&_td]:border-b [&_td]:border-border [&_td]:px-4 [&_td]:py-2.5 [&_th]:px-4 [&_th]:py-2 [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-elevated">{children}</tbody>
+        <thead className="sticky top-0 z-10 bg-surface"><tr className="border-b border-border text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">{head}</tr></thead>
+        <tbody className="[&_td]:border-b [&_td]:border-border [&_td]:px-4 [&_td]:py-2 [&_th]:px-4 [&_th]:py-2 [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-elevated">{children}</tbody>
       </table>
     </div>
   );

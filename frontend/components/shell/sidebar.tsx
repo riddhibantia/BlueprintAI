@@ -3,9 +3,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, ListChecks, FileText, MessagesSquare, Network, Database,
+  ListChecks, FileText, MessagesSquare, Network, Database,
   Globe, ShieldCheck, KanbanSquare, FlaskConical, GitBranch, Scale, Zap, BookOpen,
-  Settings as SettingsIcon, User, ChevronsLeft, ChevronsRight, Layers, Inbox as InboxIcon,
+  ChevronsLeft, ChevronsRight, Layers, LayoutDashboard,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
@@ -13,72 +13,96 @@ import { cn } from "../../lib/utils/cn";
 import { useShell } from "./context";
 import { useTraceability, useIssues } from "../../lib/query/useArtifacts";
 
-type Item = { label: string; slug: string; Icon: LucideIcon; match: RegExp; badge?: number };
+type Dot = "ok" | "warn" | "muted" | null;
+type Item = { label: string; slug: string; Icon: LucideIcon; match: RegExp; dotKey?: string };
 
-const TOP: Item[] = [
-  { label: "Inbox", slug: "", Icon: InboxIcon, match: /^\/projects\/[^/]+$/ },
-  { label: "Blueprint", slug: "blueprint", Icon: Layers, match: /\/blueprint$/ },
-];
-
-const SECTIONS: { title: string; items: Item[] }[] = [
-  { title: "Discover", items: [
-    { label: "Requirements", slug: "requirements", Icon: ListChecks, match: /\/requirements/ },
+const SECTIONS: { title: string | null; items: Item[] }[] = [
+  { title: null, items: [
+    { label: "Overview", slug: "", Icon: LayoutDashboard, match: /^\/projects\/[^/]+$/, dotKey: "overview" },
+    { label: "Blueprint", slug: "blueprint", Icon: Layers, match: /\/blueprint$/ },
   ]},
-  { title: "Define", items: [
+  { title: "Plan", items: [
+    { label: "Requirements", slug: "requirements", Icon: ListChecks, match: /\/requirements/, dotKey: "requirements" },
     { label: "Product Spec", slug: "prd", Icon: FileText, match: /\/prd/ },
-    { label: "User Stories", slug: "stories", Icon: MessagesSquare, match: /\/stories/ },
+    { label: "User Stories", slug: "stories", Icon: MessagesSquare, match: /\/stories/, dotKey: "stories" },
   ]},
   { title: "Design", items: [
     { label: "Architecture", slug: "architecture", Icon: Network, match: /\/architecture/ },
     { label: "Data Model", slug: "database", Icon: Database, match: /\/database/ },
-    { label: "APIs", slug: "apis", Icon: Globe, match: /\/apis/ },
+    { label: "APIs", slug: "apis", Icon: Globe, match: /\/apis/, dotKey: "apis" },
     { label: "Security", slug: "security", Icon: ShieldCheck, match: /\/security/ },
   ]},
-  { title: "Build", items: [
+  { title: "Delivery", items: [
     { label: "Tasks", slug: "tasks", Icon: KanbanSquare, match: /\/tasks/ },
+    { label: "Tests", slug: "tests", Icon: FlaskConical, match: /\/tests/, dotKey: "tests" },
   ]},
-  { title: "Verify", items: [
-    { label: "Tests", slug: "tests", Icon: FlaskConical, match: /\/tests/ },
-    { label: "Traceability", slug: "traceability", Icon: GitBranch, match: /\/traceability/ },
-    { label: "Consistency", slug: "consistency", Icon: Scale, match: /\/consistency/ },
+  { title: "Assure", items: [
+    { label: "Traceability", slug: "traceability", Icon: GitBranch, match: /\/traceability/, dotKey: "traceability" },
+    { label: "Consistency", slug: "consistency", Icon: Scale, match: /\/consistency/, dotKey: "issues" },
     { label: "Impact Analysis", slug: "impact", Icon: Zap, match: /\/impact/ },
   ]},
-  { title: "Knowledge", items: [
+  { title: "Reference", items: [
     { label: "Knowledge", slug: "knowledge", Icon: BookOpen, match: /\/knowledge/ },
   ]},
 ];
+
+const DOT_CLS: Record<Exclude<Dot, null>, string> = {
+  ok: "bg-success", warn: "bg-warning", muted: "bg-border-strong",
+};
 
 /** Collapsible project sidebar (§8): lifecycle groups, inbox badge, keyboard accessible. */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const path = usePathname() || "";
   const { pid, project } = useShell();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("dbp-nav") === "collapsed"; } catch { return false; }
+  });
+  const toggle = () => {
+    setCollapsed((c) => {
+      try { localStorage.setItem("dbp-nav", c ? "expanded" : "collapsed"); } catch { /* private mode */ }
+      return !c;
+    });
+  };
   const base = `/projects/${pid}`;
   const { data: trace } = useTraceability(pid);
   const { data: issues } = useIssues(pid);
   const orphans = trace?.coverage?.orphans?.length || 0;
   const openIssues = issues?.filter((i: any) => i.status === "open").length || 0;
-  // Triage = orphaned requirements + open consistency issues. These are distinct
-  // sets (not duplicates): orphans need linking, issues need decisions.
-  const inboxCount = orphans + openIssues;
-  const inboxTitle = `Needs triage: ${orphans} orphaned, ${openIssues} open issues`;
+  const cov = trace?.coverage?.coverage_pct || 0;
+  const totalReqs = trace?.coverage?.total || 0;
+  const m = project?.metrics || {};
+  // Status dots are data presence from already-loaded queries (never invented):
+  // ok = healthy/has data, warn = needs attention, muted = empty, null = no signal.
+  const dots: Record<string, Dot> = {
+    overview: orphans + openIssues > 0 ? "warn" : "ok",
+    requirements: totalReqs === 0 ? "muted" : cov === 100 ? "ok" : "warn",
+    stories: (m.stories || 0) > 0 ? "ok" : "muted",
+    apis: (m.apis || 0) > 0 ? "ok" : "muted",
+    tests: (m.tests || 0) > 0 ? "ok" : "muted",
+    traceability: totalReqs === 0 ? "muted" : cov === 100 ? "ok" : "warn",
+    issues: openIssues > 0 ? "warn" : "ok",
+  };
+  const issuesTitle = `Needs triage: ${orphans} orphaned, ${openIssues} open issues`;
 
   const renderItem = (it: Item) => {
     const active = it.match.test(path);
-    const badge = it.label === "Inbox" ? inboxCount : it.badge;
+    const dot = it.dotKey ? dots[it.dotKey] ?? null : null;
+    const showBadge = it.label === "Overview" && (orphans + openIssues) > 0;
     const Icon = it.Icon;
     return (
       <Link key={it.label} href={it.slug ? `${base}/${it.slug}` : base} onClick={onNavigate}
         aria-current={active ? "page" : undefined} title={collapsed ? it.label : undefined} prefetch
-        className={cn("mt-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-120",
+        className={cn("mt-0.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[14px] transition-colors duration-150",
           collapsed && "justify-center px-0",
-          active ? "bg-elevated text-primary shadow-[inset_2px_0_0_var(--color-accent)]" : "text-secondary hover:bg-elevated hover:text-primary")}>
-        <Icon size={16} className={cn("flex-none", active && "text-accent")} aria-hidden />
-        {!collapsed && it.label}
-        {!collapsed && !!badge && (
-          <span className="ml-auto rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning"
-            title={it.label === "Inbox" ? inboxTitle : undefined}
-            aria-label={it.label === "Inbox" ? inboxTitle : `${badge} items`}>{badge}</span>
+          active ? "bg-elevated font-medium text-primary" : "text-secondary hover:bg-elevated hover:text-primary")}>
+        <Icon size={16} className="flex-none" aria-hidden />
+        {!collapsed && <span className="min-w-0 flex-1 truncate">{it.label}</span>}
+        {!collapsed && dot && (
+          <span className={cn("h-1.5 w-1.5 flex-none rounded-full", DOT_CLS[dot])} aria-hidden />
+        )}
+        {!collapsed && showBadge && (
+          <span className="rounded-full bg-elevated px-2 py-0.5 font-mono text-[11px] font-semibold text-secondary"
+            title={issuesTitle} aria-label={issuesTitle}>{orphans + openIssues}</span>
         )}
       </Link>
     );
@@ -86,31 +110,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <aside aria-label="Project navigation"
-      className={cn("sticky top-0 flex h-screen flex-col border-r border-border bg-surface transition-[width] duration-200", collapsed ? "w-[60px] px-2 py-4" : "w-[240px] px-3 py-4")}>
+      className={cn("sticky top-0 flex h-screen flex-col border-r border-border bg-subtle transition-[width] duration-200", collapsed ? "w-14 px-2 py-4" : "w-60 px-3 py-4")}>
       <div className={cn("mb-2 flex items-center gap-2.5 px-1", collapsed && "justify-center px-0")}>
-        <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-[10px]" aria-hidden />
-        {!collapsed && <span className="leading-tight"><b className="block text-[13.5px] tracking-tight">Blueprint <span className="text-accent">AI</span></b><small className="block text-[11px] text-secondary">Engineering Workspace</small></span>}
+        <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-lg" aria-hidden />
+        {!collapsed && <span className="leading-tight"><b className="block text-[14px] font-semibold">Blueprint <span className="text-accent">AI</span></b></span>}
       </div>
-      {!collapsed && project?.name && <p className="truncate px-2 text-[12px] text-muted" title={project.name}>{project.name}</p>}
       <nav className="scroll-thin mt-1 flex-1 overflow-y-auto" aria-label="Modules">
-        {TOP.map(renderItem)}
         {SECTIONS.map((sec) => (
-          <div key={sec.title} className="mt-3">
-            {!collapsed && <p className="px-2.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-muted">{sec.title}</p>}
+          <div key={sec.title || "top"} className="mt-3 first:mt-0">
+            {!collapsed && sec.title && <p className="px-2.5 text-[11px] font-semibold text-muted">{sec.title}</p>}
             {sec.items.map(renderItem)}
           </div>
         ))}
       </nav>
       <div className={cn("border-t border-border pt-2", collapsed && "flex flex-col items-center")}>
-        <Link href={`${base}/settings`} title="Settings"
-          className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-secondary hover:bg-elevated hover:text-primary", collapsed && "justify-center px-2")}>
-          <SettingsIcon size={16} aria-hidden />{!collapsed && "Settings"}
-        </Link>
-        <Link href={`${base}/profile`} title="Profile"
-          className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-secondary hover:bg-elevated hover:text-primary", collapsed && "justify-center px-2")}>
-          <User size={16} aria-hidden />{!collapsed && "Profile"}
-        </Link>
-        <button onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        <button onClick={toggle} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-expanded={!collapsed}
           className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-muted hover:bg-elevated hover:text-primary">
           {collapsed ? <ChevronsRight size={15} /> : <><ChevronsLeft size={15} /><span className="text-[12px]">Collapse</span></>}

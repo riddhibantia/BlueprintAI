@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Filter, Plus, Search } from "lucide-react";
+import { Filter, Plus, Search, Unlink } from "lucide-react";
 import { useRequirements, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { linkCounts } from "../../../../lib/query/links";
 import { timeAgo } from "../../../../lib/utils/time";
@@ -137,14 +137,14 @@ export default function Requirements() {
       ) : (
         <>
         {checked.size > 0 && (
-          <div className="mb-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-accent/5 px-3 py-2" role="status">
+          <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.08)]" role="status">
             <span className="text-[13px] font-medium">{checked.size} selected</span>
             <Button size="sm" loading={bulkBusy} onClick={approveSelected}>Approve selected</Button>
             <Button variant="ghost" size="sm" onClick={() => setChecked(new Set())}>Clear</Button>
             {write.isError && <span className="text-[12.5px] text-danger">{(write.error as Error)?.message}</span>}
           </div>
         )}
-        <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-4 w-4 accent-teal-500" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th></>}>
+        <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-4 w-4 accent-teal-700" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th></>}>
           {filtered.map((r) => (
             <tr key={r.id} onClick={() => open(r)} className="cursor-pointer" tabIndex={0}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(r); } }}
@@ -152,15 +152,24 @@ export default function Requirements() {
               <td onClick={(e) => e.stopPropagation()}>
                 {r.status !== "approved" && (
                   <input type="checkbox" checked={checked.has(r.id)} onChange={(e) => toggleCheck(r.id, e.target.checked)}
-                    onKeyDown={(e) => e.stopPropagation()} aria-label={`Select ${r.code}`} className="h-4 w-4 accent-teal-500" />
+                    onKeyDown={(e) => e.stopPropagation()} aria-label={`Select ${r.code}`} className="h-4 w-4 accent-teal-700" />
                 )}
               </td>
-              <td className="font-mono text-[12.5px]">{r.code}</td>
-              <td className="max-w-[320px] truncate" title={r.title}>{r.title}</td>
+              <td className="font-mono text-[12.5px] text-secondary">{r.code}</td>
+              <td className="max-w-[320px] truncate font-medium text-primary" title={r.title}>{r.title}</td>
               <td className="text-secondary">{r.priority}</td>
               <td><StatusBadge value={r.status} /></td>
-              <td>{counts[r.code] ? <StatusBadge value="linked" /> : <StatusBadge value="orphan" />}</td>
-              <td className="font-mono text-[12.5px]">{counts[r.code] || 0}</td>
+              <td>{counts[r.code] ? (
+                <span className="text-[12.5px] text-muted">covered</span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full border border-danger/50 px-2 py-0.5 text-[11.5px] font-medium text-danger">
+                  <Unlink size={11} aria-hidden />orphan
+                </span>
+              )}</td>
+              <td><button onClick={(e) => { e.stopPropagation(); open(r); }}
+                className="font-mono text-[12.5px] text-secondary hover:text-accent hover:underline" aria-label={`${counts[r.code] || 0} links for ${r.code}`}>
+                {counts[r.code] || 0}
+              </button></td>
               <td className="text-[12.5px] text-secondary">{timeAgo(r.updated_at)}</td>
             </tr>
           ))}

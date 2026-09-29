@@ -20,11 +20,11 @@ function pick(value: string): string {
   return "info";
 }
 
-/** Plain badge: neutral pill + status dot, never color-only (§40). */
+/** Status tag: cream pill, ink text, status dot (DESIGN.md badge-pill). */
 export function Badge({ value, tone: forced }: { value: string; tone?: keyof typeof dot }) {
   const d = dot[forced || pick(value)];
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border border-border bg-elevated px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap text-secondary")}>
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full bg-elevated px-2.5 py-1 text-[12.5px] font-medium whitespace-nowrap text-primary")}>
       <span className={cn("h-1.5 w-1.5 flex-none rounded-full", d)} aria-hidden />{value}
     </span>
   );

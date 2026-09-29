@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Activity, Cpu, Database, Moon, Sun } from "lucide-react";
+import { Activity, Cpu, Database } from "lucide-react";
 import { me, logout } from "../../../../lib/api/client";
 import { getHealth } from "../../../../lib/api/endpoints";
 import { Card } from "../../../../components/ui/card";
@@ -8,7 +8,7 @@ import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { StatusBadge } from "../../../../components/ui/badge";
 
-/** Settings: theme, session, and system diagnostics (§9: diagnostics live here, not the dashboard). */
+/** Settings: session, system diagnostics, and credits (§9: diagnostics live here, not the dashboard). */
 type SessionUser = { name?: string; email?: string };
 type Health = { status: string; db?: string; llm?: string; env?: string };
 
@@ -16,21 +16,11 @@ export default function Settings() {
   const [health, setHealth] = useState<Health | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [err, setErr] = useState("");
-  const [light, setLight] = useState(false);
 
   useEffect(() => {
-    setLight(document.documentElement.dataset.theme === "light");
     getHealth().then(setHealth).catch((e) => setErr(e.message));
     me().then((u) => setUser((u as SessionUser) || null)).catch(() => {});
   }, []);
-
-  const toggleTheme = () => {
-    const el = document.documentElement;
-    const next = el.dataset.theme === "light" ? "dark" : "light";
-    el.dataset.theme = next;
-    setLight(next === "light");
-    try { localStorage.setItem("dbp-theme", next); } catch { /* private mode */ }
-  };
 
   if (err && !health) return <ErrorState message={err} />;
   if (!health) return <LoadingState stage="Loading system status" />;
@@ -38,15 +28,8 @@ export default function Settings() {
   return (
     <div>
       <h1 className="text-[24px] font-bold tracking-tight">Settings</h1>
-      <p className="mb-5 text-[13.5px] text-secondary">Preferences, session, and backend diagnostics.</p>
+      <p className="mb-5 text-[13.5px] text-secondary">Session, backend diagnostics, and credits.</p>
       <div className="grid gap-3.5 md:grid-cols-2">
-        <Card>
-          <h3 className="mb-2 text-[15px] font-semibold">Appearance</h3>
-          <Button variant="ghost" onClick={toggleTheme}>
-            {light ? <><Moon size={14} /> Use dark theme</> : <><Sun size={14} /> Use light theme</>}
-          </Button>
-          <p className="mt-2 text-[12.5px] text-secondary">Dark-first enterprise workspace; light mode keeps the same hierarchy.</p>
-        </Card>
         <Card>
           <h3 className="mb-2 text-[15px] font-semibold">Session</h3>
           {user ? (
@@ -63,6 +46,12 @@ export default function Settings() {
             <p className="flex items-center justify-between"><span className="flex items-center gap-1.5"><Cpu size={13} />LLM provider</span><code className="font-mono text-[12px]">{health.llm}</code></p>
             <p className="flex items-center justify-between">Environment<code className="font-mono text-[12px]">{health.env}</code></p>
           </div>
+        </Card>
+        <Card>
+          <h3 className="mb-2 text-[15px] font-semibold">About</h3>
+          <p className="text-[13px] text-secondary">BlueprintAI — deterministic engineering blueprints. MIT licensed; see LICENSE for the RareUI component exception.</p>
+          <p className="mt-2 text-[12.5px] text-secondary">Motion components by <a href="https://www.rareui.com" target="_blank" rel="noreferrer" className="text-accent hover:underline">Rare UI</a> (personal/non-commercial license, details in docs/THIRD_PARTY_NOTICES.md).</p>
+          <p className="mt-2 font-mono text-[12px] text-muted">Measured numbers: docs/EVALUATION.md</p>
         </Card>
       </div>
     </div>

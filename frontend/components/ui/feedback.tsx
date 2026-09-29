@@ -1,16 +1,15 @@
 "use client";
 import { ReactNode } from "react";
-import { AlertTriangle, Inbox } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "../../lib/utils/cn";
 import { Button } from "./button";
 
-/** Empty state: invitation to act, never a blank table (§35). */
+/** Empty state: one sentence, action handled by callers (§35). */
 export function EmptyState({ title, hint, action }: { title: string; hint: string; action?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-8 text-center">
-      <Inbox size={22} className="mx-auto mb-2 text-muted" aria-hidden />
+    <div className="rounded-2xl border border-dashed border-border-strong bg-surface px-6 py-8 text-center">
       <h3 className="text-[15px] font-semibold">{title}</h3>
-      <p className="mt-1 text-[13px] text-secondary">{hint}</p>
+      <p className="mx-auto mt-1 max-w-[52ch] text-[13px] text-secondary">{hint}</p>
       {action && <div className="mt-3">{action}</div>}
     </div>
   );

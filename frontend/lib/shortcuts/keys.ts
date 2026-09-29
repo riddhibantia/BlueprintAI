@@ -2,8 +2,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-/** Global shortcuts (§11): ⌘K palette, G-sequences. Never hijacks typing or browser keys. */
-export function useShortcuts(pid: string, onPalette: () => void) {
+/** Global shortcuts (§11): Ctrl/⌘K palette, Ctrl+J copilot, G-sequences. Never hijacks typing or browser keys. */
+export function useShortcuts(pid: string, onPalette: () => void, onCopilot?: () => void) {
   const router = useRouter();
   useEffect(() => {
     let g = false;
@@ -15,6 +15,11 @@ export function useShortcuts(pid: string, onPalette: () => void) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         onPalette();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        onCopilot?.();
         return;
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -29,5 +34,5 @@ export function useShortcuts(pid: string, onPalette: () => void) {
     };
     window.addEventListener("keydown", onKey);
     return () => { window.removeEventListener("keydown", onKey); clearTimeout(timer); };
-  }, [pid, onPalette, router]);
+  }, [pid, onPalette, onCopilot, router]);
 }
