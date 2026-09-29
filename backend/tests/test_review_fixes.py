@@ -39,6 +39,17 @@ def test_regenerate_keeps_codes_unique(client):
     assert len(codes) == len(set(codes)) and len(codes) >= 10
 
 
+def test_regenerate_replace_no_duplicates(client):
+    r = client.post("/auth/register", json={"email": "repl@dev.blue", "password": "pass12345"})
+    h = {"Authorization": f"Bearer {r.json()['token']}"}
+    p = client.post("/projects", json={"name": "Repl", "product_idea": "expense platform"}, headers=h).json()
+    client.post(f"/projects/{p['id']}/requirements/generate", json={"answers": ""}, headers=h)
+    first = client.get(f"/projects/{p['id']}/requirements", headers=h).json()
+    client.post(f"/projects/{p['id']}/requirements/generate", json={"answers": "", "replace": True}, headers=h)
+    second = client.get(f"/projects/{p['id']}/requirements", headers=h).json()
+    assert len(second) == len(first) and len({q["code"] for q in second}) == len(second)
+
+
 def test_exe_upload_rejected(client):
     r = client.post(f"/projects/{PID['id']}/documents", files={"file": ("evil.exe", b"MZ...")}, headers=H["h"])
     assert r.status_code == 400

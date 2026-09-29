@@ -39,6 +39,7 @@ class RequirementUpdate(BaseModel):
 
 class ClarifyIn(BaseModel):
     answers: str = ""
+    replace: bool = False  # True = delete existing requirements first (no duplicate appends)
 
 
 class IdCode(BaseModel):

@@ -44,18 +44,49 @@ def gen_requirements(idea: str, answers: str = "", evidence: str = "") -> list[d
 
 
 def gen_prd(idea: str, reqs: list[dict], evidence: str = "") -> dict:
-    """Assemble the structured PRD sections (§6.4)."""
+    """Assemble the structured PRD sections (§6.4).
+
+    Every functional/non-functional bullet cites its REQ-ID so the document
+    traces back to approved requirements instead of floating as prose.
+    """
     llm = complete(f"PRD outline for {idea} with {len(reqs)} requirements", evidence)
+    approved = [r for r in reqs if r.get("status") == "approved"] or reqs
+    func = [f"[{r['code']}] {r['title']}" for r in approved if r["type"] == "functional"]
+    nonf = [f"[{r['code']}] {r['title']}" for r in approved if r["type"] != "functional"]
+    high = [f"[{r['code']}] {r['title']}" for r in approved if r.get("priority") in ("high", "critical")]
+    short = (idea[:140] + "…") if len(idea) > 140 else idea
     return {
-        "problem": f"Teams building '{idea}' lack connected blueprints.",
-        "goals": ["Traceable requirements", "Consistent architecture/APIs/DB", "Validated delivery"],
-        "users": ["developers", "PMs", "architects"],
-        "functional": [r["title"] for r in reqs if r["type"] == "functional"],
-        "non_functional": [r["title"] for r in reqs if r["type"] != "functional"],
-        "constraints": ["No Docker locally", "Postgres+pgvector", "Human approval required"],
-        "metrics": ["Traceability coverage %", "Consistency issues", "Test coverage %"],
+        "overview": (f"{short} — this PRD defines what gets built, for whom, and how "
+                     f"success is measured. It covers {len(approved)} requirements "
+                     f"({len(func)} functional, {len(nonf)} non-functional)."),
+        "problem": f"Teams building '{short}' lack connected blueprints: requirements drift from "
+                   "architecture, APIs diverge from the data model, and tests can't prove coverage.",
+        "goals": ["Traceable requirements — every artifact links to a REQ-ID",
+                  "Consistent architecture, APIs, and DB derived from the same spec",
+                  "Validated delivery — tests prove each requirement before sign-off"],
+        "non_goals": ["Replacing human approval — every stage needs explicit sign-off",
+                      "Inventing metrics — coverage is computed from stored links, never estimated"],
+        "personas": ["Product manager — defines scope, approves requirements and PRD",
+                     "Architect — owns components, boundaries, and data model",
+                     "Engineer — implements tasks, keeps tests green"],
+        "scope_in": func[:12] or ["No functional requirements approved yet — approve REQs first"],
+        "scope_out": ["Features without an approved requirement are explicitly out of scope for v1"],
+        "non_functional": nonf[:12] or ["No non-functional requirements recorded"],
+        "priority_focus": high[:6] or ["No high-priority requirements flagged"],
+        "user_experience": ["One workspace per project: requirements → spec → design → validation",
+                            "Every generate action is reversible; approvals are explicit and audited"],
+        "success_metrics": ["Traceability coverage 100% (0 orphan requirements)",
+                            "Consistency issues: 0 open at sign-off",
+                            "Test coverage: every approved REQ has a linked, passing test"],
+        "risks": ["Vague requirements generating generic artifacts — mitigate with Clarify answers",
+                  "Scope creep mid-build — mitigate with optimistic locking + change impact review"],
+        "milestones": ["M1 — requirements approved", "M2 — architecture + APIs signed off",
+                       "M3 — all tasks done, tests green, 0 open issues"],
+        "open_questions": ["Which requirements are v1 vs later? (mark priority critical/high)",
+                           "External integrations and auth provider confirmed?"],
+        "constraints": ["Human approval required at every stage", "SQLite locally, Postgres+pgvector in production"],
         "assumptions": [llm["text"][:200]],
-        "acceptance": ["All major REQs have linked tests"],
+        "acceptance": ["All approved REQs have linked tests", "Traceability 100% before release sign-off"],
     }
 
 

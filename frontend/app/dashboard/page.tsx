@@ -188,10 +188,12 @@ export default function Dashboard() {
         <div className="grid gap-3 md:grid-cols-2">
           {projects.map((p) => (
             <Link key={p.id} href={`/projects/${p.id}`} prefetch
-              className="rounded-2xl border border-border bg-surface p-4 transition-colors duration-150 hover:border-accent focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2">
-              <p className="flex items-center justify-between gap-2"><b className="truncate text-[14.5px]">{p.name}</b>{p.status && <StatusBadge value={p.status} />}</p>
-              {p.idea && <p className="mt-1 line-clamp-2 text-[13px] text-secondary">{p.idea}</p>}
-              <p className="mt-2 text-[12.5px] font-semibold text-accent">Open workspace →</p>
+              className="group rounded-2xl border border-border bg-surface p-4 transition-colors duration-150 hover:border-border-strong focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2">
+              <p className="flex items-center justify-between gap-2"><b className="truncate text-[14.5px] font-semibold">{p.name}</b>{p.status && <StatusBadge value={p.status} />}</p>
+              {p.idea && <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-secondary">{p.idea}</p>}
+              <p className="mt-3 flex items-center gap-1 border-t border-border pt-2.5 text-[12.5px] font-medium text-muted transition-colors group-hover:text-primary">
+                Open workspace <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">→</span>
+              </p>
             </Link>
           ))}
         </div>

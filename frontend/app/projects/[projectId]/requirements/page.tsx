@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
-import { Filter, Plus, Search, Unlink } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowRight, Filter, Plus, Search, Unlink } from "lucide-react";
 import { useRequirements, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { linkCounts } from "../../../../lib/query/links";
 import { timeAgo } from "../../../../lib/utils/time";
@@ -10,13 +10,14 @@ import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
 import { DataTable } from "../../../../components/ui/data";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
-import { Drawer } from "../../../../components/ui/overlay";
+import { Drawer, Dialog } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { traceArtifact, clarify as clarifyIdea } from "../../../../lib/api/endpoints";
 
 /** Requirements workspace (§17): table + search/filter + detail drawer, cache-backed. */
 export default function Requirements() {
   const { projectId: pid } = useParams() as { projectId: string };
+  const router = useRouter();
   const reqsQ = useRequirements(pid);
   const traceQ = useTraceability(pid);
   const write = useWrite(pid, ["requirements", "traceability", "activity", "runs"]);
@@ -53,9 +54,27 @@ export default function Requirements() {
         await write.mutateAsync({ path: `/requirements/${r.id}/approve`, init: { method: "POST" } });
       }
       setChecked(new Set());
+      if (reqs.length > 0 && approved + targets.length >= reqs.length) {
+        router.push(`/projects/${pid}/prd`);
+      }
     } finally {
       setBulkBusy(false);
     }
+  };
+  // Auto-advance: approving the final draft completes the stage — take the
+  // user to the Product Spec instead of stranding them on a done table.
+  const maybeAdvance = (newlyApproved: number) => {
+    if (reqs.length > 0 && approved + newlyApproved >= reqs.length) {
+      router.push(`/projects/${pid}/prd`);
+    }
+  };
+  const [confirmRegen, setConfirmRegen] = useState(false);
+  const doGenerate = (replace: boolean) => {
+    setConfirmRegen(false);
+    write.mutate({
+      path: `/projects/${pid}/requirements/generate`,
+      init: { method: "POST", body: JSON.stringify({ answers, replace }) },
+    });
   };
   const checkable = filtered.filter((r) => r.status !== "approved");
   const allChecked = checkable.length > 0 && checkable.every((r) => checked.has(r.id));
@@ -109,13 +128,18 @@ export default function Requirements() {
             </select>
           </label>
           <Button variant="ghost" onClick={clarify} loading={clarifying}>Clarify</Button>
-          <Button loading={write.isPending} onClick={() => write.mutate({
-            path: `/projects/${pid}/requirements/generate`,
-            init: { method: "POST", body: JSON.stringify({ answers }) },
-          })}><Plus size={14} />Generate</Button>
+          <Button loading={write.isPending} onClick={() => (reqs.length > 0 ? setConfirmRegen(true) : doGenerate(false))}>
+            <Plus size={14} />Generate
+          </Button>
         </div>
       </div>
 
+      {reqs.length > 0 && approved === reqs.length && (
+        <div className="mb-3.5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface p-3.5">
+          <p className="min-w-0 flex-1 text-[13.5px]"><b>All {reqs.length} requirements approved.</b> <span className="text-secondary">The next step is the Product Spec.</span></p>
+          <Button onClick={() => router.push(`/projects/${pid}/prd`)}>Continue to Product Spec<ArrowRight size={14} /></Button>
+        </div>
+      )}
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
       {clarifyError && <div className="mb-3"><ErrorState message={clarifyError} /></div>}
       {questions.length > 0 && (
@@ -195,7 +219,7 @@ export default function Requirements() {
               {sel.status !== "approved" && (
                 <Button size="sm" loading={write.isPending} onClick={() => write.mutate(
                   { path: `/requirements/${sel.id}/approve`, init: { method: "POST" } },
-                  { onSuccess: () => setSel(null) })}>Approve</Button>
+                  { onSuccess: () => { setSel(null); maybeAdvance(1); } })}>Approve</Button>
               )}
               <Link href={`/projects/${pid}/impact`} prefetch
                 className="inline-flex items-center rounded-lg border border-border px-2.5 py-1.5 text-[12.5px] font-medium text-secondary hover:border-accent hover:text-primary">
@@ -207,6 +231,16 @@ export default function Requirements() {
         )}
       </Drawer>
       {write.isPending && <div className="mt-3"><LoadingState stage="Working — cache refreshes automatically" /></div>}
+      <Dialog open={confirmRegen} onClose={() => setConfirmRegen(false)} title="Replace requirements?">
+        <p className="text-[13.5px] text-secondary">
+          This deletes the existing {reqs.length} requirement{reqs.length === 1 ? "" : "s"} (and their trace links)
+          and generates a fresh set. Approvals on the old set are lost.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setConfirmRegen(false)}>Cancel</Button>
+          <Button loading={write.isPending} onClick={() => doGenerate(true)}>Replace & generate</Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

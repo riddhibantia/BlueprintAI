@@ -32,9 +32,27 @@ def clarify(pid: str, db: Session = Depends(get_db), user=Depends(current_user))
 
 @router.post("/projects/{pid}/requirements/generate")
 def generate(pid: str, body: ClarifyIn, db: Session = Depends(get_db), user=Depends(current_user)):
-    """Generate stable-ID requirements from the idea + clarifications (§6.3)."""
+    """Generate stable-ID requirements from the idea + clarifications (§6.3).
+
+    Append-only by default. With `replace=true`, existing requirements (plus
+    their trace links and version history) are removed first so re-running
+    never stacks duplicate content under bumped codes.
+    """
+    from app.models.db import TraceabilityLink
     p = project_or_403(pid, db, user)
     t0 = time.time()
+    if body.replace:
+        codes = [r.code for r in db.query(Requirement).filter_by(project_id=pid).all()]
+        if codes:
+            db.query(TraceabilityLink).filter(
+                TraceabilityLink.project_id == pid,
+                ((TraceabilityLink.source_type == "requirement") & (TraceabilityLink.source_id.in_(codes))) |
+                ((TraceabilityLink.target_type == "requirement") & (TraceabilityLink.target_id.in_(codes)))).delete(synchronize_session=False)
+            db.query(ArtifactVersion).filter(
+                ArtifactVersion.project_id == pid, ArtifactVersion.artifact_type == "requirement",
+                ArtifactVersion.artifact_code.in_(codes)).delete(synchronize_session=False)
+            db.query(Requirement).filter_by(project_id=pid).delete(synchronize_session=False)
+            db.flush()
     reqs = gen_requirements(p.product_idea or p.name, body.answers)
     used = _used_codes(db, pid)
     counter = len(used) + 1

@@ -8,6 +8,7 @@ import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { ArchDiagram } from "../../../../components/ui/arch-diagram";
 import { Dialog } from "../../../../components/ui/overlay";
 import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
@@ -70,6 +71,11 @@ export default function Architecture() {
             onGenerate={() => write.mutate({ path: `/projects/${pid}/architecture/generate`, init: { method: "POST" } })} />
         </div>
       ) : (
+        <>
+        <Card className="mb-3.5">
+          <p className="mb-2 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">System diagram</p>
+          <ArchDiagram comps={arch.components} rels={arch.relationships} />
+        </Card>
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="grid content-start gap-2.5">
             {arch.components.map((c: any, i: number) => (
@@ -114,6 +120,7 @@ export default function Architecture() {
             ) : <EmptyState title="No component selected" hint="Click a component to inspect its links." />}
           </div>
         </div>
+        </>
       )}
       <details className="mt-3.5">
         <summary className="cursor-pointer text-[13px] font-semibold text-accent">Add component manually</summary>
