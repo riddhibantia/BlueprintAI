@@ -15,8 +15,13 @@ def _run_stage(db: Session, pid: str, stage: str):
     if stage == "requirements":
         from app.agents.generators import gen_requirements
         p = db.query(Project).filter_by(id=pid).first()
-        reqs = gen_requirements((p.product_idea or p.name) if p else "project")
         n = db.query(Requirement).filter_by(project_id=pid).count()
+        if n > 0:
+            # Never stack duplicates: this legacy demo path stages drafts only
+            # on an empty project. Use /requirements/generate (replace=true)
+            # or /pipeline/run for regeneration.
+            return f"{n} requirements already present — skipped (no duplicates staged)"
+        reqs = gen_requirements((p.product_idea or p.name) if p else "project")
         for i, r in enumerate(reqs, n + 1):
             r["code"] = f"REQ-{i:03d}"
             db.add(Requirement(project_id=pid, **r))
