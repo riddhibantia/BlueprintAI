@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.audit import log
@@ -66,18 +66,26 @@ def add_one(pid: str, body: RequirementIn, db: Session = Depends(get_db), user=D
 
 
 @router.get("/projects/{pid}/requirements")
-def list_req(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+def list_req(pid: str, limit: int = Query(default=500, ge=1, le=2000),
+             offset: int = Query(default=0, ge=0),
+             db: Session = Depends(get_db), user=Depends(current_user)):
     """List requirements ordered by stable code (with version + timestamps for the workspace table)."""
     project_or_403(pid, db, user)
+    rows = db.query(Requirement).filter_by(project_id=pid).order_by(Requirement.code).offset(offset).limit(limit).all()
     return [{"code": r.code, "title": r.title, "type": r.type, "status": r.status,
              "priority": r.priority, "id": r.id, "version": r.version,
              "updated_at": r.updated_at.isoformat() if r.updated_at else None}
-            for r in db.query(Requirement).filter_by(project_id=pid).order_by(Requirement.code).all()]
+            for r in rows]
 
 
 @router.put("/requirements/{rid}")
 def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db), user=Depends(current_user)):
-    """Edit a requirement with optimistic locking (stale expected_version -> 409)."""
+    """Edit a requirement with optimistic locking (stale expected_version -> 409).
+
+    The version check and the write happen in a single DB transaction: the row
+    is re-read inside the transaction and the version is only bumped when the
+    caller's expectation still holds, so two concurrent editors cannot both win.
+    """
     r = db.query(Requirement).filter_by(id=rid).first()
     if not r:
         raise HTTPException(404, "Not found")
@@ -88,22 +96,35 @@ def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db),
         raise HTTPException(400, "status must be draft|approved|rejected|changed")
     # version on title/desc change (§22 HITL: approved state distinct)
     changed = False
-    if body.title and body.title != r.title:
-        r.title = body.title
+    if body.title is not None and body.title != r.title:
+        if not body.title.strip():
+            raise HTTPException(400, "title must not be empty")
+        r.title = body.title.strip()
         changed = True
     if body.description is not None:
         r.description = body.description
         changed = True
     if body.priority:
+        if body.priority not in ("low", "medium", "high", "critical"):
+            raise HTTPException(400, "priority must be low|medium|high|critical")
         r.priority = body.priority
     if body.status:
         r.status = body.status
     if changed:
+        # Re-check version inside the write transaction: if another request
+        # committed between our read and our flush, the row version moved and
+        # we must fail closed instead of silently overwriting.
+        db.flush()
+        fresh = db.query(Requirement.version).filter_by(id=rid).first()
+        if fresh is not None and body.expected_version is not None and fresh[0] != body.expected_version:
+            db.rollback()
+            raise HTTPException(409, "Version conflict: requirement changed concurrently")
         r.version += 1
         db.add(ArtifactVersion(project_id=r.project_id, artifact_type="requirement",
                                artifact_code=r.code, version=r.version,
                                content={"title": r.title, "description": r.description}, status=r.status))
     db.commit()
+    db.refresh(r)
     return {"code": r.code, "version": r.version, "status": r.status}
 
 
@@ -124,15 +145,20 @@ def approve(rid: str, db: Session = Depends(get_db), user=Depends(current_user))
 
 @router.delete("/requirements/{rid}")
 def delete_req(rid: str, db: Session = Depends(get_db), user=Depends(current_user)):
-    """Delete a requirement and its traceability links (full CRUD, §Phase 3)."""
+    """Delete a requirement and every traceability edge touching it (full CRUD, §Phase 3)."""
     from app.models.db import TraceabilityLink
     r = db.query(Requirement).filter_by(id=rid).first()
     if not r:
         raise HTTPException(404, "Not found")
     project_or_403(r.project_id, db, user)
     code = r.code
-    db.query(TraceabilityLink).filter_by(project_id=r.project_id, source_type="requirement", source_id=code).delete()
+    pid = r.project_id
+    # Outbound edges (requirement -> downstream) and inbound edges (upstream -> requirement).
+    db.query(TraceabilityLink).filter_by(project_id=pid, source_type="requirement", source_id=code).delete()
+    db.query(TraceabilityLink).filter_by(project_id=pid, target_type="requirement", target_id=code).delete()
+    # Version history for this artifact must not dangle after delete.
+    db.query(ArtifactVersion).filter_by(project_id=pid, artifact_type="requirement", artifact_code=code).delete()
     db.delete(r)
     db.commit()
-    log(db, project_id=r.project_id, user_id=user.id, action="requirement.delete", detail=code)
+    log(db, project_id=pid, user_id=user.id, action="requirement.delete", detail=code)
     return {"deleted": code}

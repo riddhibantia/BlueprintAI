@@ -2,13 +2,14 @@
 import { createContext, useContext, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProject, useActivity } from "../../lib/query/useArtifacts";
+import type { ProjectDetail } from "../../lib/api/types";
 
-export type Project = { id: string; name: string; description?: string; idea?: string; metrics?: any; created_at?: string; updated_at?: string };
+export type ActivityEvent = { label: string; detail: string; at: string; kind: string };
 
 type Shell = {
   pid: string;
-  project: Project | null;
-  activity: any[];
+  project: ProjectDetail | null;
+  activity: ActivityEvent[];
   selection: string;
   setSelection: (v: string) => void;
   reload: () => Promise<void>;

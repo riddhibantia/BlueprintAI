@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Inbox as InboxIcon, Play } from "lucide-react";
 import { useShell } from "../../../components/shell/context";
 import { useIssues, useTraceability, useWrite } from "../../../lib/query/useArtifacts";
@@ -13,6 +15,7 @@ import { ActivityItem, ArtifactLink } from "../../../components/ui/activity";
 
 /** Inbox home (§V3): health strip + triage queue + activity. Real values only. */
 export default function InboxHome() {
+  const router = useRouter();
   const { pid, project, activity } = useShell();
   const reqsQ = useRequirements(pid);
   const prdQ = usePrd(pid);
@@ -31,7 +34,7 @@ export default function InboxHome() {
   const loading = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ].some((q) => q.isLoading);
   const err = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ].find((q) => q.isError);
 
-  if (err && loading) return <ErrorState message={(err.error as Error)?.message || "Failed to load workspace"} />;
+  if (err) return <ErrorState message={(err.error as Error)?.message || "Failed to load workspace"} />;
   if (loading || !project) return <LoadingState stage="Loading inbox" />;
 
   const reqs = reqsQ.data || [];
@@ -57,12 +60,12 @@ export default function InboxHome() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => (window.location.href = `/projects/${pid}/${continueRoute(stages)}`)}>
+          <Button variant="ghost" onClick={() => router.push(`/projects/${pid}/${continueRoute(stages)}`)}>
             Continue Blueprint<ArrowRight size={14} />
           </Button>
           <Button loading={validate.isPending} onClick={() => validate.mutate(
             { path: `/projects/${pid}/consistency/check`, init: { method: "POST" } },
-            { onSuccess: () => (window.location.href = `/projects/${pid}/consistency`) })}>
+            { onSuccess: () => router.push(`/projects/${pid}/consistency`) })}>
             <Play size={13} />Run Validation
           </Button>
         </div>
@@ -103,7 +106,7 @@ export default function InboxHome() {
                 <StatusBadge value="orphan" />
                 <ArtifactLink code={o} href={`/projects/${pid}/requirements`} />
                 <span className="text-[12.5px] text-secondary">has no downstream links</span>
-                <a href={`/projects/${pid}/traceability`} className="ml-auto text-[12.5px] font-semibold text-accent hover:underline">Link →</a>
+                <Link href={`/projects/${pid}/traceability`} prefetch className="ml-auto text-[12.5px] font-semibold text-accent hover:underline">Link →</Link>
               </div>
             ))}
           </div>
@@ -114,12 +117,12 @@ export default function InboxHome() {
         <Card>
           <h3 className="mb-2 text-[15px] font-semibold">Lifecycle</h3>
           {stages.map((s) => (
-            <a key={s.key} href={`/projects/${pid}/${s.route}`}
+            <Link key={s.key} href={`/projects/${pid}/${s.route}`} prefetch
               className="flex items-center gap-2.5 border-b border-border py-2 last:border-b-0">
               <span className="w-20 flex-none text-[11px] font-bold uppercase tracking-[0.07em] text-muted">{s.label}</span>
               <StatusBadge value={s.state} />
               <span className="truncate text-[12.5px] text-secondary">{s.detail}</span>
-            </a>
+            </Link>
           ))}
           <div className="mt-2">
             <Progress pct={bundle.coverage?.coverage_pct || 0} label="Traceability coverage" />

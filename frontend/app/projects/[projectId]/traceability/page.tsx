@@ -16,19 +16,24 @@ import { ArtifactLink } from "../../../../components/ui/activity";
 import { SlashInput } from "../../../../components/ui/slash";
 
 const ORDER = ["requirement", "story", "api", "db", "security", "task", "test", "component"];
+// Node colors follow the semantic tokens in styles/tokens.css (accent family).
 const COLORS: Record<string, string> = {
-  requirement: "#5eead4", story: "#818cf8", api: "#60a5fa", db: "#fbbf24",
-  security: "#fb7185", task: "#34d399", test: "#c084fc", component: "#8b929e",
+  requirement: "var(--color-accent)", story: "var(--color-accent2)", api: "var(--color-info)", db: "var(--color-warning)",
+  security: "var(--color-danger)", task: "var(--color-success)", test: "#c084fc", component: "var(--color-secondary)",
 };
 
-function TypeNode({ data }: any) {
-  const color = COLORS[data.type] || "#8b929e";
+type TypeNodeData = { type: string; code: string; selected?: boolean };
+
+function TypeNode({ data, selected }: { data: TypeNodeData; selected?: boolean }) {
+  const node = data as TypeNodeData;
+  const color = COLORS[node.type] || "var(--color-secondary)";
+  const isSel = selected ?? node.selected;
   return (
     <div style={{ borderColor: color }}
-      className={`rounded-xl border-2 bg-[#171a1f] px-3 py-1.5 text-center shadow ${data.selected ? "ring-2 ring-white/40" : ""}`}>
+      className={`rounded-xl border-2 bg-elevated px-3 py-1.5 text-center shadow ${isSel ? "ring-2 ring-white/40" : ""}`}>
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <p className="font-mono text-[12px] font-bold" style={{ color }}>{data.code}</p>
-      <p className="text-[10.5px] uppercase tracking-wide text-[#8b929e]">{data.type}</p>
+      <p className="font-mono text-[12px] font-bold" style={{ color }}>{node.code}</p>
+      <p className="text-[10.5px] uppercase tracking-wide text-secondary">{node.type}</p>
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   );
@@ -87,7 +92,7 @@ export default function Traceability() {
       .filter((l: any) => ids.has(l.from) && ids.has(l.to))
       .map((l: any, i: number) => ({
         id: `e${i}`, source: l.from, target: l.to, label: l.rel, animated: false,
-        style: { stroke: "#3a4150" }, labelStyle: { fill: "#8b929e", fontSize: 10 },
+        style: { stroke: "var(--color-border)" }, labelStyle: { fill: "var(--color-secondary)", fontSize: 10 },
       }));
     return { nodes, edges };
   }, [data, sel]);
@@ -112,19 +117,31 @@ export default function Traceability() {
 
   const suggest = async () => {
     setBusy(true);
+    setErr("");
     try { setSuggestions((await suggestLinks(pid)).suggestions || []); }
-    catch (e: any) { setErr(e.message); }
-    setBusy(false);
+    catch (e) { setErr(e instanceof Error ? e.message : "Could not suggest links."); }
+    finally { setBusy(false); }
   };
 
-  const confirm = async (s: any) => {
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const confirm = async (s: { from: string; to: string; rel: string }) => {
+    const key = `${s.from}→${s.to}`;
     const [tt, tid] = s.to.split(":");
-    await api(`/projects/${pid}/traceability/links`, {
-      method: "POST",
-      body: JSON.stringify({ source_type: "requirement", source_id: s.from, target_type: tt, target_id: tid, relationship_type: s.rel }),
-    });
-    setSuggestions(suggestions.filter((x) => x !== s));
-    traceQ.refetch();
+    if (!tt || !tid) { setErr(`Cannot confirm malformed suggestion: ${s.to}`); return; }
+    setConfirming(key);
+    setErr("");
+    try {
+      await api(`/projects/${pid}/traceability/links`, {
+        method: "POST",
+        body: { source_type: "requirement", source_id: s.from, target_type: tt, target_id: tid, relationship_type: s.rel },
+      });
+      setSuggestions((prev) => prev.filter((x) => x !== s));
+      await traceQ.refetch();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not confirm link.");
+    } finally {
+      setConfirming(null);
+    }
   };
 
   useEffect(() => {
@@ -135,7 +152,7 @@ export default function Traceability() {
   if (traceQ.isLoading) return <LoadingState stage="Building traceability graph" />;
   if (traceQ.isError) return <ErrorState message={(traceQ.error as Error)?.message} onRetry={() => traceQ.refetch()} />;
 
-  const cov = data?.coverage || {};
+  const cov = data?.coverage ?? { coverage_pct: 0, orphans: [] as string[] };
   const counts = linkCounts(data?.links || []);
 
   return (
@@ -163,10 +180,10 @@ export default function Traceability() {
       {(data?.links || []).length === 0 ? (
         <EmptyState title="No relationships yet" hint="Approve artifacts to begin building the traceability graph." />
       ) : (
-        <div className="mb-3.5 h-[420px] overflow-hidden rounded-2xl border border-border bg-canvas">
+        <div className="h-[clamp(320px,50vh,520px)] overflow-hidden rounded-2xl border border-border bg-canvas">
           <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={onNodeClick}
             fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.3} maxZoom={1.5} colorMode="dark">
-            <Background gap={22} size={1} color="#242830" />
+            <Background gap={22} size={1} color="var(--color-border)" />
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
@@ -193,13 +210,16 @@ export default function Traceability() {
       {suggestions.length > 0 && (
         <Card className="mb-3.5">
           <h3 className="mb-2 text-[14px] font-semibold">Suggested links ({suggestions.length})</h3>
-          {suggestions.slice(0, 8).map((s, i) => (
-            <p key={i} className="flex flex-wrap items-center gap-2 border-b border-border py-1.5 text-[13px] last:border-b-0">
-              <code className="font-mono text-[12.5px]">{s.from}</code>→<code className="font-mono text-[12.5px]">{s.to}</code>
-              <span className="text-secondary">({s.reason})</span>
-              <Button variant="ghost" size="sm" onClick={() => confirm(s)}>Confirm</Button>
-            </p>
-          ))}
+          {suggestions.slice(0, 8).map((s, i) => {
+            const key = `${s.from}→${s.to}`;
+            return (
+              <p key={i} className="flex flex-wrap items-center gap-2 border-b border-border py-1.5 text-[13px] last:border-b-0">
+                <code className="font-mono text-[12.5px]">{s.from}</code>→<code className="font-mono text-[12.5px]">{s.to}</code>
+                <span className="text-secondary">({s.reason})</span>
+                <Button variant="ghost" size="sm" loading={confirming === key} disabled={confirming !== null} onClick={() => confirm(s)}>Confirm</Button>
+              </p>
+            );
+          })}
         </Card>
       )}
 

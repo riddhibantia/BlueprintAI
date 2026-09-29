@@ -8,6 +8,7 @@ import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { Dialog } from "../../../../components/ui/overlay";
 import { touching } from "../../../../lib/query/links";
 
 /** Architecture workspace — styled listing; interactive React Flow canvas in the graph view. */
@@ -18,6 +19,7 @@ export default function Architecture() {
   const write = useWrite(pid, ["architecture", "activity", "runs"]);
   const [form, setForm] = useState({ name: "", kind: "service", description: "", boundary: "" });
   const [sel, setSel] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   if (archQ.isLoading) return <LoadingState stage="Loading architecture" />;
   if (archQ.isError) return <ErrorState message={(archQ.error as Error)?.message} onRetry={() => archQ.refetch()} />;
@@ -32,10 +34,9 @@ export default function Architecture() {
       { path: `/projects/${pid}/architecture/components`, init: { method: "POST", body: JSON.stringify(form) } },
       { onSuccess: () => setForm({ name: "", kind: "service", description: "", boundary: "" }) });
   };
-  const remove = (id: string, name: string) => {
-    if (!confirm(`Remove ${name}?`)) return;
+  const remove = (id: string) => {
     write.mutate({ path: `/projects/${pid}/architecture/components/${id}`, init: { method: "DELETE" } },
-      { onSuccess: () => setSel(null) });
+      { onSuccess: () => { setSel(null); setPendingDelete(null); } });
   };
 
   return (
@@ -68,10 +69,9 @@ export default function Architecture() {
                     {c.description && <span className="mt-0.5 block text-[13px]">{c.description}</span>}
                   </span>
                   {c.id && (
-                    <span role="button" tabIndex={0} aria-label={`Remove ${c.name}`}
-                      onClick={(e) => { e.stopPropagation(); remove(c.id, c.name); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); remove(c.id, c.name); } }}
-                      className="rounded-lg p-1.5 text-muted hover:bg-canvas hover:text-danger"><Trash2 size={15} /></span>
+                    <button type="button" aria-label={`Remove ${c.name}`}
+                      onClick={(e) => { e.stopPropagation(); setPendingDelete({ id: c.id, name: c.name }); }}
+                      className="rounded-lg p-1.5 text-muted hover:bg-canvas hover:text-danger"><Trash2 size={15} /></button>
                   )}
                 </span>
               </button>
@@ -104,17 +104,32 @@ export default function Architecture() {
       <Card>
         <h3 className="mb-2 text-[14px] font-semibold">Add component</h3>
         <div className="grid gap-2 sm:grid-cols-2">
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Cache (Redis)" aria-label="Component name"
-            className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px]" />
-          <input value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} placeholder="service" aria-label="Kind"
-            className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px]" />
-          <input value={form.boundary} onChange={(e) => setForm({ ...form, boundary: e.target.value })} placeholder="private" aria-label="Boundary"
-            className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px]" />
-          <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What it does" aria-label="Description"
-            className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px]" />
+          <label className="grid gap-1 text-[12.5px] text-secondary">Name
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Cache (Redis)"
+              className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary" />
+          </label>
+          <label className="grid gap-1 text-[12.5px] text-secondary">Kind
+            <input value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} placeholder="service"
+              className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary" />
+          </label>
+          <label className="grid gap-1 text-[12.5px] text-secondary">Boundary
+            <input value={form.boundary} onChange={(e) => setForm({ ...form, boundary: e.target.value })} placeholder="private"
+              className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary" />
+          </label>
+          <label className="grid gap-1 text-[12.5px] text-secondary">Description
+            <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What it does"
+              className="rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] text-primary" />
+          </label>
         </div>
         <div className="mt-2"><Button loading={write.isPending} onClick={add}><Plus size={14} />Add component</Button></div>
       </Card>
+      <Dialog open={!!pendingDelete} onClose={() => setPendingDelete(null)} title={`Remove ${pendingDelete?.name}?`}>
+        <p className="text-[13.5px] text-secondary">The component and its relationships are deleted. This cannot be undone.</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setPendingDelete(null)}>Cancel</Button>
+          <Button loading={write.isPending} onClick={() => pendingDelete && remove(pendingDelete.id)}>Remove</Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

@@ -7,11 +7,13 @@ import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 
 /** Profile: who is signed in (real session data only). */
+type SessionUser = { name?: string; email?: string };
+
 export default function Profile() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [err, setErr] = useState("");
 
-  useEffect(() => { me().then(setUser).catch((e) => setErr(e.message)); }, []);
+  useEffect(() => { me().then((u) => setUser((u as SessionUser) || null)).catch((e) => setErr(e instanceof Error ? e.message : "Could not load profile.")); }, []);
 
   if (err && !user) return <ErrorState message={err} />;
   if (!user) return <LoadingState stage="Loading profile" />;

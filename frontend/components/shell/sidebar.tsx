@@ -1,16 +1,18 @@
 "use client";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ListChecks, FileText, MessagesSquare, Network, Database,
   Globe, ShieldCheck, KanbanSquare, FlaskConical, GitBranch, Scale, Zap, BookOpen,
   Settings as SettingsIcon, User, ChevronsLeft, ChevronsRight, Layers, Inbox as InboxIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../../lib/utils/cn";
 import { useShell } from "./context";
 import { useTraceability, useIssues } from "../../lib/query/useArtifacts";
 
-type Item = { label: string; slug: string; Icon: any; match: RegExp; badge?: number };
+type Item = { label: string; slug: string; Icon: LucideIcon; match: RegExp; badge?: number };
 
 const TOP: Item[] = [
   { label: "Inbox", slug: "", Icon: InboxIcon, match: /^\/projects\/[^/]+$/ },
@@ -58,18 +60,19 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const renderItem = (it: Item) => {
     const active = it.match.test(path);
     const badge = it.label === "Inbox" ? inboxCount : it.badge;
+    const Icon = it.Icon;
     return (
-      <a key={it.label} href={it.slug ? `${base}/${it.slug}` : base} onClick={onNavigate}
-        aria-current={active ? "page" : undefined} title={collapsed ? it.label : undefined}
+      <Link key={it.label} href={it.slug ? `${base}/${it.slug}` : base} onClick={onNavigate}
+        aria-current={active ? "page" : undefined} title={collapsed ? it.label : undefined} prefetch
         className={cn("mt-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-120",
           collapsed && "justify-center px-0",
           active ? "bg-elevated text-primary shadow-[inset_2px_0_0_var(--color-accent)]" : "text-secondary hover:bg-elevated hover:text-primary")}>
-        <it.Icon size={16} className={cn("flex-none", active && "text-accent")} aria-hidden />
+        <Icon size={16} className={cn("flex-none", active && "text-accent")} aria-hidden />
         {!collapsed && it.label}
         {!collapsed && !!badge && (
           <span className="ml-auto rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning" aria-label={`${badge} items need triage`}>{badge}</span>
         )}
-      </a>
+      </Link>
     );
   };
 
@@ -77,8 +80,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <aside aria-label="Project navigation"
       className={cn("sticky top-0 flex h-screen flex-col border-r border-border bg-surface transition-[width] duration-200", collapsed ? "w-[60px] px-2 py-4" : "w-[240px] px-3 py-4")}>
       <div className={cn("mb-2 flex items-center gap-2.5 px-1", collapsed && "justify-center px-0")}>
-        <span className="grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-gradient-to-br from-accent via-info to-accent2 text-[15px] font-extrabold text-white" aria-hidden>D</span>
-        {!collapsed && <span className="leading-tight"><b className="block text-[13.5px] tracking-tight">DEVBLUEPRINT</b><small className="block text-[11px] text-secondary">Engineering Workspace</small></span>}
+        <span className="grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-gradient-to-br from-accent via-info to-accent2 text-[15px] font-extrabold text-on-accent" aria-hidden>B</span>
+        {!collapsed && <span className="leading-tight"><b className="block text-[13.5px] tracking-tight">BLUEPRINTAI</b><small className="block text-[11px] text-secondary">Engineering Workspace</small></span>}
       </div>
       {!collapsed && project?.name && <p className="truncate px-2 text-[12px] text-muted" title={project.name}>{project.name}</p>}
       <nav className="mt-1 flex-1 overflow-y-auto" aria-label="Modules">
@@ -91,14 +94,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
       <div className={cn("border-t border-border pt-2", collapsed && "flex flex-col items-center")}>
-        <a href={`${base}/settings`} title="Settings"
+        <Link href={`${base}/settings`} title="Settings"
           className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-secondary hover:bg-elevated hover:text-primary", collapsed && "justify-center px-2")}>
           <SettingsIcon size={16} aria-hidden />{!collapsed && "Settings"}
-        </a>
-        <a href={`${base}/profile`} title="Profile"
+        </Link>
+        <Link href={`${base}/profile`} title="Profile"
           className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-secondary hover:bg-elevated hover:text-primary", collapsed && "justify-center px-2")}>
           <User size={16} aria-hidden />{!collapsed && "Profile"}
-        </a>
+        </Link>
         <button onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-expanded={!collapsed}
           className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-muted hover:bg-elevated hover:text-primary">

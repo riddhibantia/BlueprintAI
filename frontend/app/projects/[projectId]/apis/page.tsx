@@ -37,7 +37,7 @@ export default function Apis() {
           <DataTable label="API endpoints" head={<><th>ID</th><th>Method</th><th>Path</th><th>Auth</th></>}>
             {apis.map((a: any) => (
               <tr key={a.code} onClick={() => setSel(a.code)} tabIndex={0} style={{ cursor: "pointer" }}
-                onKeyDown={(e) => e.key === "Enter" && setSel(a.code)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(a.code); } }}
                 className={current?.code === a.code ? "[&_td]:bg-elevated" : ""} aria-label={`Inspect ${a.code}`}>
                 <td className="font-mono text-[12.5px]">{a.code}</td>
                 <td><b className="font-mono text-[12.5px] text-accent">{a.method}</b></td>
@@ -49,7 +49,7 @@ export default function Apis() {
           {current && (
             <Card>
               <p className="font-mono text-[13px] font-bold">{current.method} {current.path}</p>
-              <p className="mt-1 flex gap-2"><StatusBadge value={current.auth} /><span className="font-mono text-[12px] text-secondary">{current.code}</span></p>
+              <p className="mt-1 flex gap-2"><StatusBadge value={current.auth || "jwt"} /><span className="font-mono text-[12px] text-secondary">{current.code}</span></p>
               <p className="mt-3 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">Request</p>
               <CodeBlock code={JSON.stringify(current.request_schema || {}, null, 2)} language="json" filename="request.json" showLineNumbers className="mt-1" />
               <p className="mt-3 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">Response · {(current.status_codes || []).join(", ")}</p>

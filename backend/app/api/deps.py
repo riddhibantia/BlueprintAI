@@ -9,9 +9,22 @@ COOKIE = "dbp_token"
 
 
 def _bearer_token(authorization: str) -> str:
-    if authorization.startswith("Bearer "):
-        return authorization[7:]
-    return authorization
+    """Extract a Bearer token; accept a raw JWT for scripts/tests, reject anything else.
+
+    Enterprise posture: an `Authorization` header with a non-Bearer scheme
+    (e.g. `Basic ...`) must not be treated as a session token — that turns
+    attacker-controlled garbage into a JWT decode attempt and muddies logs.
+    Raw-JWT-without-scheme is still accepted for back-compat (tests, curl).
+    """
+    auth = (authorization or "").strip()
+    if not auth:
+        return ""
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    # Back-compat: raw JWT (header.payload.signature) without scheme.
+    if auth.count(".") == 2 and len(auth) > 20 and " " not in auth:
+        return auth
+    return ""
 
 
 def current_user(request: Request, authorization: str = Header(default=""),

@@ -7,7 +7,7 @@ type Variant = "primary" | "ghost" | "danger" | "subtle";
 type Size = "sm" | "md" | "icon";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-accent text-[#06201d] hover:brightness-110 shadow-[0_1px_3px_rgba(94,234,212,0.25)]",
+  primary: "bg-accent text-on-accent hover:brightness-110 shadow-[0_1px_3px_rgba(94,234,212,0.25)]",
   ghost: "bg-transparent text-primary border border-border hover:border-accent hover:bg-elevated",
   danger: "bg-transparent text-danger border border-danger/50 hover:bg-danger/10",
   subtle: "bg-transparent text-secondary hover:text-primary hover:bg-elevated",
@@ -24,7 +24,7 @@ export function Button({ variant = "primary", size = "md", loading, className, c
   ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size; loading?: boolean }) {
   return (
     <button
-      className={cn("inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all duration-150 hover:-translate-y-px disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2", variants[variant], sizes[size], className)}
+      className={cn("inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors duration-150 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2", variants[variant], sizes[size], className)}
       disabled={disabled || loading} {...rest}>
       {loading && <Loader2 size={14} className="animate-spin" aria-hidden />}
       {children}

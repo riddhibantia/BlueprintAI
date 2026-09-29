@@ -43,7 +43,7 @@ def get_project(pid: str, db: Session = Depends(get_db), user=Depends(current_us
     n_api = db.query(ApiEndpoint).filter_by(project_id=pid).count()
     n_test = db.query(TestCase).filter_by(project_id=pid).count()
     n_issue = db.query(ConsistencyIssue).filter_by(project_id=pid, status="open").count()
-    tested = len({t.requirement_code for t in db.query(TestCase).filter_by(project_id=pid).all()})
+    tested = db.query(TestCase.requirement_code).filter_by(project_id=pid).distinct().count()
     # Deterministic metrics only (§30)
     return {"id": p.id, "name": p.name, "description": p.description, "idea": p.product_idea,
             "created_at": p.created_at.isoformat() if p.created_at else None,
@@ -77,14 +77,18 @@ ACTION_LABELS = {
 def activity(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     """Recent activity from audit logs + agent runs (safe operational info only, §V2-12)."""
     project_or_403(pid, db, user)
-    emails = {u.id: u.email for u in db.query(User).all()}
+    audits = db.query(AuditLog).filter_by(project_id=pid).order_by(AuditLog.created_at.desc()).limit(50).all()
+    runs = db.query(AgentRun).filter_by(project_id=pid).order_by(AgentRun.created_at.desc()).limit(50).all()
+    # Resolve actor emails with a scoped query — never load the whole users table.
+    actor_ids = {a.user_id for a in audits if a.user_id}
+    emails = dict(db.query(User.id, User.email).filter(User.id.in_(actor_ids)).all()) if actor_ids else {}
     events = []
-    for a in db.query(AuditLog).filter_by(project_id=pid).order_by(AuditLog.created_at.desc()).limit(50).all():
+    for a in audits:
         events.append({"kind": "audit", "action": a.action,
                        "label": ACTION_LABELS.get(a.action, a.action.replace(".", " ").replace("_", " ")),
                        "detail": a.detail or "", "actor": emails.get(a.user_id, ""),
                        "at": a.created_at.isoformat() if a.created_at else None})
-    for r in db.query(AgentRun).filter_by(project_id=pid).order_by(AgentRun.created_at.desc()).limit(50).all():
+    for r in runs:
         events.append({"kind": "agent", "action": f"agent.{r.agent}", "label": f"{r.agent.title()} agent completed",
                        "detail": r.output_summary or "", "actor": "",
                        "at": r.created_at.isoformat() if r.created_at else None})

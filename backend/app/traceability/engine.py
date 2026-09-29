@@ -83,24 +83,31 @@ def suggest(db: Session, project_id: str) -> list[dict]:
     for s in db.query(UserStory).filter_by(project_id=project_id).all():
         candidates.append((s.requirement_code, "story", s.code))
     out = []
+    # Hoisted out of the per-requirement loop: one query per artifact table,
+    # not one full-table scan per requirement.
+    pools: list[tuple[str, str, set[str]]] = []
+    for a in db.query(ApiEndpoint).filter_by(project_id=project_id).all():
+        pools.append(("api", a.code, _keywords(a.method + " " + a.path)))
+    for t in db.query(ImplementationTask).filter_by(project_id=project_id).all():
+        pools.append(("task", t.code, _keywords(t.title)))
+    for t in db.query(TestCase).filter_by(project_id=project_id).all():
+        pools.append(("test", t.code, _keywords(t.title)))
+    for e in db.query(DatabaseEntity).filter_by(project_id=project_id).all():
+        pools.append(("db", e.code or e.name, _keywords(e.name)))
     for r in reqs:
         kw = _keywords(r.title + " " + (r.description or ""))
         if not kw:
             continue
-        pools = []
-        for a in db.query(ApiEndpoint).filter_by(project_id=project_id).all():
-            pools.append(("api", a.code, _keywords(a.method + " " + a.path)))
-        for t in db.query(ImplementationTask).filter_by(project_id=project_id).all():
-            pools.append(("task", t.code, _keywords(t.title)))
-        for t in db.query(TestCase).filter_by(project_id=project_id).all():
-            pools.append(("test", t.code, _keywords(t.title)))
-        for e in db.query(DatabaseEntity).filter_by(project_id=project_id).all():
-            pools.append(("db", e.code or e.name, _keywords(e.name)))
+        ranked: list[tuple[int, str, str, set[str]]] = []
         for typ, code, akw in pools:
             overlap = kw & akw
-            if len(overlap) >= 1 and (r.code, typ, code) not in existing:
-                out.append({"from": r.code, "to": f"{typ}:{code}", "rel": "implements",
-                            "reason": f"shared terms: {sorted(overlap)[:4]}"})
+            if overlap and (r.code, typ, code) not in existing:
+                ranked.append((len(overlap), typ, code, overlap))
+        # Strongest evidence first so the [:100] cap keeps signal, not noise.
+        ranked.sort(key=lambda x: x[0], reverse=True)
+        for n, typ, code, overlap in ranked:
+            out.append({"from": r.code, "to": f"{typ}:{code}", "rel": "implements",
+                        "reason": f"shared terms: {sorted(overlap)[:4]}"})
     for s_req, typ, code in candidates:
         if s_req and (s_req, typ, code) not in existing:
             out.append({"from": s_req, "to": f"{typ}:{code}", "rel": "implements",

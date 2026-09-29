@@ -4,6 +4,7 @@ import { CheckCircle2 } from "lucide-react";
 import { useStories, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { siblings } from "../../../../lib/query/links";
 import { Card } from "../../../../components/ui/card";
+import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/ui/badge";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
@@ -40,11 +41,10 @@ export default function Stories() {
                   <span className="flex items-center gap-2">
                     <StatusBadge value={s.status} />
                     {s.status !== "approved" && (
-                      <button disabled={approve.isPending}
-                        onClick={() => approve.mutate({ path: `/projects/${pid}/stories/${s.code}/approve`, init: { method: "POST" } })}
-                        className="rounded-full border border-border px-2.5 py-1 text-[12px] font-semibold text-accent hover:border-accent disabled:opacity-50">
+                      <Button variant="ghost" size="sm" loading={approve.isPending}
+                        onClick={() => approve.mutate({ path: `/projects/${pid}/stories/${s.code}/approve`, init: { method: "POST" } })}>
                         Approve
-                      </button>
+                      </Button>
                     )}
                   </span>
                 </div>

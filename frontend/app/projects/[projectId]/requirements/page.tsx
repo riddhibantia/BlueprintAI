@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Filter, Plus, Search } from "lucide-react";
@@ -34,8 +35,18 @@ export default function Requirements() {
     (statusFilter === "all" || r.status === statusFilter) &&
     (r.code + r.title).toLowerCase().includes(q.toLowerCase()));
 
+  const [clarifying, setClarifying] = useState(false);
+  const [clarifyError, setClarifyError] = useState("");
   const clarify = async () => {
-    setQuestions((await clarifyIdea(pid)).questions || []);
+    setClarifying(true);
+    setClarifyError("");
+    try {
+      setQuestions((await clarifyIdea(pid)).questions || []);
+    } catch (e) {
+      setClarifyError(e instanceof Error ? e.message : "Could not load clarification questions.");
+    } finally {
+      setClarifying(false);
+    }
   };
   const open = async (r: any) => {
     setSel(r);
@@ -43,7 +54,11 @@ export default function Requirements() {
     catch { setSelLinks([]); }
   };
 
-  useEffect(() => { if (sel) open(sel); }, [reqs]);
+  // Refresh the open drawer's trace only when the selection (or its version)
+  // changes — never on every requirements refetch.
+  const selId = sel?.id;
+  const selVersion = sel?.version;
+  useEffect(() => { if (sel) open(sel); }, [selId, selVersion]);
 
   if (reqsQ.isLoading) return <LoadingState stage="Loading requirements" />;
   if (reqsQ.isError) return <ErrorState message={(reqsQ.error as Error)?.message} onRetry={() => reqsQ.refetch()} />;
@@ -58,8 +73,8 @@ export default function Requirements() {
         <div className="flex flex-wrap items-center gap-2">
           <label className="relative" aria-label="Search requirements">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search ID or title… — try /approve"
-              className="w-56 rounded-full border border-border bg-surface py-2 pl-9 pr-3 text-[13px]" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search ID or title…"
+              className="w-56 rounded-full border border-border bg-surface py-2 pl-9 pr-3 text-[13px] placeholder:text-muted focus:border-accent focus:outline-none" />
           </label>
           <label className="flex items-center gap-1.5 text-[12.5px] text-secondary">
             <Filter size={13} aria-hidden />
@@ -68,7 +83,7 @@ export default function Requirements() {
               <option value="all">All</option><option value="approved">Approved</option><option value="draft">Draft</option>
             </select>
           </label>
-          <Button variant="ghost" onClick={clarify}>Clarify</Button>
+          <Button variant="ghost" onClick={clarify} loading={clarifying}>Clarify</Button>
           <Button loading={write.isPending} onClick={() => write.mutate({
             path: `/projects/${pid}/requirements/generate`,
             init: { method: "POST", body: JSON.stringify({ answers }) },
@@ -77,6 +92,7 @@ export default function Requirements() {
       </div>
 
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
+      {clarifyError && <div className="mb-3"><ErrorState message={clarifyError} /></div>}
       {questions.length > 0 && (
         <div className="mb-3.5 rounded-2xl border border-border bg-surface p-4">
           <b className="text-[14px]">Clarification questions</b>
@@ -97,9 +113,10 @@ export default function Requirements() {
         <DataTable label="Requirements" head={<><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th></>}>
           {filtered.map((r) => (
             <tr key={r.id} onClick={() => open(r)} className="cursor-pointer" tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && open(r)} aria-label={`Open ${r.code}`}>
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(r); } }}
+              aria-label={`Open ${r.code}`}>
               <td className="font-mono text-[12.5px]">{r.code}</td>
-              <td className="max-w-[320px]">{r.title}</td>
+              <td className="max-w-[320px] truncate" title={r.title}>{r.title}</td>
               <td className="text-secondary">{r.priority}</td>
               <td><StatusBadge value={r.status} /></td>
               <td>{counts[r.code] ? <StatusBadge value="linked" /> : <StatusBadge value="orphan" />}</td>
@@ -130,7 +147,10 @@ export default function Requirements() {
                   { path: `/requirements/${sel.id}/approve`, init: { method: "POST" } },
                   { onSuccess: () => setSel(null) })}>Approve</Button>
               )}
-              <a href={`/projects/${pid}/impact`}><Button variant="ghost" size="sm">View impact</Button></a>
+              <Link href={`/projects/${pid}/impact`} prefetch
+                className="inline-flex items-center rounded-lg border border-border px-2.5 py-1.5 text-[12.5px] font-medium text-secondary hover:border-accent hover:text-primary">
+                View impact
+              </Link>
             </div>
             <p className="text-[12px] text-secondary">Linked artifacts: {selLinks.map((l: any, i: number) => <span key={i} className="mr-1"><ArtifactLink code={l.to} /></span>)}</p>
           </div>

@@ -4,28 +4,28 @@ from pydantic import BaseModel, Field
 
 class RegisterIn(BaseModel):
     """New account request (password length enforced at the boundary)."""
-    email: str
+    email: str = Field(min_length=3, max_length=254, pattern=r"^\S+@\S+\.\S+$")
     password: str = Field(min_length=8, max_length=128)
-    name: str = ""
+    name: str = Field(default="", max_length=120)
 
 
 class LoginIn(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class ProjectIn(BaseModel):
-    name: str
-    description: str = ""
-    product_idea: str = ""
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=4000)
+    product_idea: str = Field(default="", max_length=8000)
 
 
 class RequirementIn(BaseModel):
-    title: str
-    description: str = ""
-    type: str = "functional"
-    priority: str = "medium"
-    acceptance_criteria: str = ""
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=8000)
+    type: str = Field(default="functional", max_length=32)
+    priority: str = Field(default="medium", max_length=16)
+    acceptance_criteria: str = Field(default="", max_length=8000)
 
 
 class RequirementUpdate(BaseModel):
@@ -58,7 +58,7 @@ class StatusPatch(BaseModel):
 
 class ComponentIn(BaseModel):
     """New architecture component (§8: components, boundaries)."""
-    name: str
-    kind: str = "service"
-    description: str = ""
-    boundary: str = ""
+    name: str = Field(min_length=1, max_length=120)
+    kind: str = Field(default="service", min_length=1, max_length=32)
+    description: str = Field(default="", max_length=2000)
+    boundary: str = Field(default="", max_length=120)

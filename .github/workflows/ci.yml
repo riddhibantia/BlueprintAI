@@ -3,12 +3,17 @@ on: [push, pull_request]
 jobs:
   backend:
     runs-on: windows-latest
+    env:
+      PYTHONPATH: backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.10" }
+      - uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: pip-${{ hashFiles('backend/requirements.txt') }}
       - run: pip install -r backend/requirements.txt
-      - run: python scripts/init_db.py
       - run: pytest backend/tests -q
   frontend:
     runs-on: windows-latest
@@ -17,6 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "24", cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
+        working-directory: frontend
+      - run: npm run typecheck
         working-directory: frontend
       - run: npm run build
         working-directory: frontend

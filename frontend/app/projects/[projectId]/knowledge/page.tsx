@@ -9,14 +9,18 @@ import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 
 /** Knowledge workspace (§29): real counts, collections, indexing state, search. */
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+
 export default function Knowledge() {
   const { projectId: pid } = useParams() as { projectId: string };
   const docsQ = useDocuments(pid);
   const [uploading, setUploading] = useState(false);
-  const [q, setQ] = useState("What authentication is required for APIs?");
+  const [q, setQ] = useState("");
   const [hits, setHits] = useState<any[]>([]);
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
+  const [querying, setQuerying] = useState(false);
+  const [fileKey, setFileKey] = useState(0);
 
   if (docsQ.isLoading) return <LoadingState stage="Loading knowledge base" />;
   if (docsQ.isError) return <ErrorState message={(docsQ.error as Error)?.message} onRetry={() => docsQ.refetch()} />;
@@ -24,17 +28,32 @@ export default function Knowledge() {
   const chunks = docs.reduce((a: number, d: any) => a + (d.chunks || 0), 0);
 
   const doUpload = async (f: File) => {
+    if (f.size > MAX_UPLOAD_BYTES) { setErr("File exceeds the 15MB limit."); return; }
     setUploading(true);
-    try { await uploadDocument(pid, f); await docsQ.refetch(); }
-    catch (e: any) { setErr(e.message); }
-    setUploading(false);
+    setErr("");
+    try {
+      await uploadDocument(pid, f);
+      await docsQ.refetch();
+      setFileKey((k) => k + 1); // reset input so the same file can be re-uploaded
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
   };
   const query = async () => {
+    if (!q.trim() || querying) return;
+    setQuerying(true);
+    setErr("");
     try {
-      const r = await queryKnowledge(pid, q, 5);
+      const r = await queryKnowledge(pid, q.trim(), 5);
       setHits(r.hits || []);
       setNote(r.note || "");
-    } catch (e: any) { setErr(e.message); }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Search failed.");
+    } finally {
+      setQuerying(false);
+    }
   };
 
   return (
@@ -48,7 +67,7 @@ export default function Knowledge() {
         <Card>
           <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold"><FileUp size={15} />Collections</h3>
           <label className="block text-[13px]">Upload standard (PDF / TXT / Markdown, ≤15MB)
-            <input type="file" accept=".pdf,.txt,.md" onChange={(e) => e.target.files?.[0] && doUpload(e.target.files[0])}
+            <input key={fileKey} type="file" accept=".pdf,.txt,.md" onChange={(e) => e.target.files?.[0] && doUpload(e.target.files[0])}
               aria-label="Upload document" className="mt-1 text-[13px]" />
           </label>
           {uploading && <div className="mt-2"><LoadingState stage="Parsing, chunking and embedding document" /></div>}
@@ -65,9 +84,11 @@ export default function Knowledge() {
         <Card>
           <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold"><Search size={15} />Search evidence</h3>
           <div className="flex gap-2">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask the knowledge base…"
-              aria-label="Knowledge query" className="min-w-0 flex-1 rounded-xl border border-border bg-canvas px-3 py-2 text-[13px]" />
-            <Button onClick={query}>Search</Button>
+            <input value={q} onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && query()}
+              placeholder="e.g. What authentication is required for APIs?"
+              aria-label="Knowledge query" className="min-w-0 flex-1 rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] placeholder:text-muted focus:border-accent focus:outline-none" />
+            <Button onClick={query} loading={querying} disabled={!q.trim()}>Search</Button>
           </div>
           {note && <p className="mt-2 text-[13px] text-secondary">{note}</p>}
           {hits.map((h, i) => (

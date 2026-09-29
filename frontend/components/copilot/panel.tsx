@@ -35,7 +35,7 @@ export function CopilotPanel() {
     try {
       setAnswer(await api(`/projects/${pid}/copilot/ask`, {
         method: "POST",
-        body: JSON.stringify({ question, page: path.split("/").pop() || "", selection: selection || "" }),
+        body: { question, page: path.split("/").pop() || "", selection: selection || "" },
       }));
     } catch (e: any) { setErr(e.message); }
     setBusy(false);

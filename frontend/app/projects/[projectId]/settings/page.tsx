@@ -9,16 +9,19 @@ import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/
 import { StatusBadge } from "../../../../components/ui/badge";
 
 /** Settings: theme, session, and system diagnostics (§9: diagnostics live here, not the dashboard). */
+type SessionUser = { name?: string; email?: string };
+type Health = { status: string; db?: string; llm?: string; env?: string };
+
 export default function Settings() {
-  const [health, setHealth] = useState<any>(null);
-  const [user, setUser] = useState<any>(null);
+  const [health, setHealth] = useState<Health | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [err, setErr] = useState("");
   const [light, setLight] = useState(false);
 
   useEffect(() => {
     setLight(document.documentElement.dataset.theme === "light");
     getHealth().then(setHealth).catch((e) => setErr(e.message));
-    me().then(setUser).catch(() => {});
+    me().then((u) => setUser((u as SessionUser) || null)).catch(() => {});
   }, []);
 
   const toggleTheme = () => {

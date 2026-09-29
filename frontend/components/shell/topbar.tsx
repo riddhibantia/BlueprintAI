@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Check, Download, Menu, Moon, Play, Search, Sun } from "lucide-react";
 import { useShell } from "./context";
@@ -9,14 +11,23 @@ import { Dropdown } from "../ui/overlay";
 import { apiDownload, me } from "../../lib/api/client";
 import { checkConsistency } from "../../lib/api/endpoints";
 
+type SessionUser = { name?: string; email?: string };
+
 /** Project top bar (§9): name, status, updated time, palette, share, export, validation, avatar. */
 export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: () => void }) {
+  const router = useRouter();
   const { pid, project, activity, reload } = useShell();
   const [copied, setCopied] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [light, setLight] = useState(false);
   useEffect(() => { setLight(document.documentElement.dataset.theme === "light"); }, []);
+  // Load session user once (not on avatar hover) so the avatar initial is stable.
+  useEffect(() => {
+    let cancelled = false;
+    me().then((u) => { if (!cancelled) setUser((u as SessionUser) || null); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const share = async () => {
     await navigator.clipboard.writeText(window.location.href);
@@ -32,7 +43,7 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
 
   const validate = async () => {
     setValidating(true);
-    try { await checkConsistency(pid); await reload(); window.location.href = `/projects/${pid}/consistency`; }
+    try { await checkConsistency(pid); await reload(); router.push(`/projects/${pid}/consistency`); }
     finally { setValidating(false); }
   };
 
@@ -54,37 +65,42 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
           <h1 className="truncate text-[15px] font-semibold tracking-tight">{project?.name || "Loading…"}</h1>
           <p className="flex items-center gap-2 text-[12px] text-secondary">
             {project?.metrics && <StatusBadge value={project.metrics.blueprint_status || "Draft"} />}
-            <span>Updated {timeAgo(activity[0]?.at || project?.updated_at)}</span>
+            {(activity[0]?.at || project?.updated_at) && (
+              <span>Updated {timeAgo(activity[0]?.at || project?.updated_at)}</span>
+            )}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex flex-none items-center gap-1.5">
           <button onClick={onPalette} aria-label="Command palette (Ctrl+K)"
             className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-[12.5px] text-secondary hover:border-accent hover:text-primary">
             <Search size={13} aria-hidden /><span className="hidden sm:inline">Search</span>
-            <kbd className="rounded bg-elevated px-1.5 font-mono text-[11px]">⌘K</kbd>
+            <kbd className="hidden rounded bg-elevated px-1.5 font-mono text-[11px] md:inline">Ctrl K</kbd>
           </button>
-          <IconButton label={copied ? "Link copied" : "Copy project link"} onClick={share}>
-            {copied ? <Check size={16} className="text-success" /> : <span className="text-[12px] font-semibold">Share</span>}
-          </IconButton>
-          <Dropdown label={<span className="flex items-center gap-1.5"><Download size={14} />Export</span>}
-            items={[
-              { label: "Markdown", onSelect: () => download("markdown") },
-              { label: "PDF", onSelect: () => download("pdf") },
-              { label: "OpenAPI JSON", onSelect: () => download("openapi") },
-              { label: "Archify diagram IR", onSelect: () => download("archify") },
-              { label: "Full JSON", onSelect: () => download("json") },
-            ]} />
-          <Button size="sm" loading={validating} onClick={validate}>
-            <Play size={13} aria-hidden />Run Validation
+          <span className="hidden lg:inline">
+            <Button variant="ghost" size="sm" onClick={share}>
+              {copied ? <><Check size={14} className="text-success" />Copied</> : <>Share</>}
+            </Button>
+          </span>
+          <span className="hidden sm:inline">
+            <Dropdown label={<span className="flex items-center gap-1.5"><Download size={14} /><span className="hidden xl:inline">Export</span></span>}
+              items={[
+                { label: "Markdown", onSelect: () => download("markdown") },
+                { label: "PDF", onSelect: () => download("pdf") },
+                { label: "OpenAPI JSON", onSelect: () => download("openapi") },
+                { label: "Archify diagram IR", onSelect: () => download("archify") },
+                { label: "Full JSON", onSelect: () => download("json") },
+              ]} />
+          </span>
+          <Button size="sm" loading={validating} onClick={validate} className="max-md:px-3">
+            <Play size={13} aria-hidden /><span className="hidden md:inline">Run Validation</span><span className="md:hidden">Validate</span>
           </Button>
           <IconButton label={light ? "Switch to dark theme" : "Switch to light theme"} onClick={toggleTheme}>
             {light ? <Moon size={16} /> : <Sun size={16} />}
           </IconButton>
-          <a href={`/projects/${pid}/profile`} aria-label="Profile"
-            onMouseEnter={() => me().then(setUser).catch(() => {})}
+          <Link href={`/projects/${pid}/profile`} aria-label="Profile"
             className="grid h-8 w-8 place-items-center rounded-full bg-elevated text-[12px] font-bold text-accent hover:ring-2 hover:ring-accent">
             {(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}
-          </a>
+          </Link>
         </div>
       </div>
     </header>

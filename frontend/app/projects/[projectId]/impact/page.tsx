@@ -29,10 +29,11 @@ export default function Impact() {
   const [busy, setBusy] = useState(false);
 
   const analyze = async () => {
+    if (busy) return;
     setBusy(true); setErr(""); setResult(null);
     try { setResult(await analyzeImpact(pid, code)); }
-    catch (e: any) { setErr(e.message); }
-    setBusy(false);
+    catch (e) { setErr(e instanceof Error ? e.message : "Impact analysis failed."); }
+    finally { setBusy(false); }
   };
 
   const chain = result ? [...result.affected].sort((a: string, b: string) => rankOf(a) - rankOf(b)) : [];

@@ -1,6 +1,7 @@
 """Export blueprint: Markdown / JSON / OpenAPI (§13 export)."""
 import re
 from datetime import datetime, timezone
+from xml.sax.saxutils import escape as _xml_escape
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
@@ -11,6 +12,11 @@ from app.models.db import (Project, Requirement, UserStory, ApiEndpoint, TestCas
 from app.traceability.engine import coverage
 
 router = APIRouter(tags=["export"])
+
+
+def _para(text: str) -> str:
+    """Escape ReportLab paragraph markup so artifact titles cannot break the PDF."""
+    return _xml_escape(text or "")
 
 
 def _bundle(db: Session, pid: str) -> dict:
@@ -52,9 +58,13 @@ def export_openapi(pid: str, db: Session = Depends(get_db), user=Depends(current
     """Export endpoints as an OpenAPI 3.0 document (§10)."""
     project_or_403(pid, db, user)
     apis = db.query(ApiEndpoint).filter_by(project_id=pid).all()
-    paths = {}
+    paths: dict[str, dict] = {}
     for a in apis:
-        paths.setdefault(a.path, {})[a.method.lower()] = {
+        method = (a.method or "get").lower()
+        path = a.path or "/"
+        # Last write wins on duplicate path+method — stored data is append-only
+        # per generate run, so collisions indicate a generator bug worth surfacing.
+        paths.setdefault(path, {})[method] = {
             "summary": a.code, "security": [{"bearerAuth": []}] if a.auth == "jwt" else [],
             "responses": {"200": {"description": "OK"}}}
     return {"openapi": "3.0.0", "info": {"title": "DevBlueprint API", "version": "1.0.0"}, "paths": paths}
@@ -73,18 +83,18 @@ def export_pdf(pid: str, db: Session = Depends(get_db), user=Depends(current_use
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4)
     styles = getSampleStyleSheet()
-    story = [Paragraph(b["project"]["name"], styles["Title"]),
-             Paragraph(f"Idea: {b['project']['idea']}", styles["Normal"]),
+    story = [Paragraph(_para(b["project"]["name"]), styles["Title"]),
+             Paragraph(f"Idea: {_para(str(b['project']['idea']))}", styles["Normal"]),
              Paragraph(f"Traceability coverage: {b['coverage']['coverage_pct']}%", styles["Normal"]),
              Spacer(1, 12), Paragraph("Requirements", styles["Heading2"])]
     for r in b["requirements"]:
-        story.append(Paragraph(f"<b>{r['code']}</b> {r['title']} ({r['status']})", styles["Normal"]))
+        story.append(Paragraph(f"<b>{_para(r['code'])}</b> {_para(r['title'])} ({_para(r['status'])})", styles["Normal"]))
     story += [Spacer(1, 12), Paragraph("APIs", styles["Heading2"])]
     for a in b["apis"]:
-        story.append(Paragraph(f"{a['method']} {a['path']}", styles["Code"]))
+        story.append(Paragraph(_para(f"{a['method']} {a['path']}"), styles["Code"]))
     story += [Spacer(1, 12), Paragraph("Tests", styles["Heading2"])]
     for t in b["tests"]:
-        story.append(Paragraph(f"<b>{t['code']}</b> {t['title']}", styles["Normal"]))
+        story.append(Paragraph(f"<b>{_para(t['code'])}</b> {_para(t['title'])}", styles["Normal"]))
     doc.build(story)
     return Response(buf.getvalue(), media_type="application/pdf",
                     headers={"Content-Disposition": f"attachment; filename=blueprint-{pid[:8]}.pdf"})

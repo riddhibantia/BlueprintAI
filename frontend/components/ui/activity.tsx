@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, GitBranch, Info } from "lucide-react";
 import { cn } from "../../lib/utils/cn";
@@ -53,14 +54,15 @@ export function ActivityItem({ icon, title, context, time }: { icon: ReactNode; 
   );
 }
 
-/** Linked-artifact chip (§19/§26). */
+/** Linked-artifact chip (§19/§26). Renders nothing for empty codes. */
 export function ArtifactLink({ code, href }: { code: string; href?: string }) {
+  if (!code) return null;
   const inner = (
     <span className="inline-flex items-center gap-1 rounded-full border border-border bg-elevated px-2.5 py-0.5 font-mono text-[12px] hover:border-accent">
       <GitBranch size={11} aria-hidden />{code}
     </span>
   );
-  return href ? <a href={href}>{inner}</a> : inner;
+  return href ? <Link href={href} prefetch>{inner}</Link> : inner;
 }
 
 /** Small helper for muted metadata lines. */

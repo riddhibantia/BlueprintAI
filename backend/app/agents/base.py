@@ -1,6 +1,9 @@
 """Deterministic mock LLM + OpenAI-ready adapter (§43: never invent metrics)."""
+import logging
 import time
 from app.core.config import settings
+
+log = logging.getLogger("devblueprint.llm")
 
 
 def _mock_complete(prompt: str, context: str = "") -> tuple[str, int]:
@@ -25,8 +28,11 @@ def complete(prompt: str, context: str = "", system: str = "") -> dict:
             tok = getattr(r.usage, "total_tokens", len(txt.split())) if getattr(r, "usage", None) else len(txt.split())
             return {"text": txt, "tokens": int(tok), "latency_ms": int((time.time() - t0) * 1000), "provider": "openai"}
         except Exception as e:
+            # Never persist upstream error text into artifacts (info leak + prompt
+            # pollution). Fall back to deterministic mock; details go to server logs.
+            log.warning("openai fallback: %s", type(e).__name__)
             txt, tok = _mock_complete(prompt, context)
-            return {"text": f"[openai-fallback] {txt} (err: {e})", "tokens": tok,
+            return {"text": f"[openai-fallback] {txt}", "tokens": tok,
                     "latency_ms": int((time.time() - t0) * 1000), "provider": "mock"}
     txt, tok = _mock_complete(prompt, context)
     return {"text": txt, "tokens": tok, "latency_ms": int((time.time() - t0) * 1000), "provider": "mock"}

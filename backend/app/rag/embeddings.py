@@ -29,8 +29,11 @@ def embed(text: str) -> list[float]:
 
 
 def cosine(a: list[float], b: list[float]) -> float:
-    """Cosine similarity for same-dimension vectors."""
-    n = min(len(a), len(b))
-    if n == 0:
+    """Cosine similarity for same-provider vectors.
+
+    Vectors from different providers (hash 128-d vs OpenAI 1536-d) are not
+    comparable — truncating would silently rank on a prefix. Fail closed.
+    """
+    if not a or not b or len(a) != len(b):
         return 0.0
-    return sum(a[i] * b[i] for i in range(n))
+    return sum(x * y for x, y in zip(a, b))

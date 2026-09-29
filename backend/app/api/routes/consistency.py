@@ -16,7 +16,7 @@ def check(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     """Run deterministic cross-artifact checks; AI explains, the user decides (§15)."""
     project_or_403(pid, db, user)
     found = run_checks(db, pid)
-    db.query(ConsistencyIssue).filter_by(project_id=pid, status="open").delete()
+    db.query(ConsistencyIssue).filter_by(project_id=pid, status="open").delete(synchronize_session=False)
     for i in found:
         expl = complete(f"Explain: {i['description']}. Suggest fix.")
         db.add(ConsistencyIssue(project_id=pid, check=i["check"], severity=i["severity"],

@@ -32,7 +32,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-canvas text-primary">
-      <span className="hidden lg:block"><Sidebar /></span>
+      <div className="hidden lg:block"><Sidebar /></div>
       <Drawer open={navOpen} onClose={() => setNavOpen(false)} label="Project navigation" title="Navigate">
         <Sidebar onNavigate={() => setNavOpen(false)} />
       </Drawer>

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 
 /** Slash picker (Notion-style): type `/` to filter artifact codes, Enter/click to pick. */
@@ -40,8 +41,8 @@ export function CitedText({ text, base }: { text: string; base: string }) {
     <span>
       {parts.map((p, i) =>
         /^[A-Z]{2,4}-\d{3}$/.test(p)
-          ? <a key={i} href={`${base}/traceability`} title={`Open ${p} in Traceability`}
-              className="mx-0.5 inline-block rounded-full border border-accent/50 bg-accent/10 px-1.5 font-mono text-[11.5px] text-accent hover:underline">{p}</a>
+          ? <Link key={i} href={`${base}/traceability`} prefetch title={`Open ${p} in Traceability`}
+              className="mx-0.5 inline-block rounded-full border border-accent/50 bg-accent/10 px-1.5 font-mono text-[11.5px] text-accent hover:underline">{p}</Link>
           : <span key={i}>{p}</span>
       )}
     </span>

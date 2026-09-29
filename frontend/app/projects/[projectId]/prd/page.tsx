@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { usePrd, useWrite } from "../../../../lib/query/useArtifacts";
@@ -19,12 +20,20 @@ export default function Prd() {
   const [editing, setEditing] = useState(false);
   const [section, setSection] = useState("");
 
+  // Hydrate the editable draft once the PRD loads (never during render).
+  const loaded = prdQ.data;
+  useEffect(() => {
+    if (!editing && loaded?.content && Object.keys(loaded.content).length > 0) {
+      setDraft((d: Record<string, unknown> | null) => d ?? loaded.content);
+      setSection((s: string) => s || Object.keys(loaded.content)[0] || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
   if (prdQ.isLoading) return <LoadingState stage="Loading PRD" />;
   if (prdQ.isError) return <ErrorState message={(prdQ.error as Error)?.message} onRetry={() => prdQ.refetch()} />;
-  const prd = prdQ.data || {};
+  const prd = prdQ.data ?? { content: {}, status: "draft" };
   if (!prd.content || Object.keys(prd.content).length === 0)
     return <EmptyState title="No PRD yet" hint="Generate it from the Blueprint pipeline after approving requirements." />;
-  if (!editing && !draft) { setDraft(prd.content); setSection(Object.keys(prd.content)[0] || ""); }
 
   const save = (status?: string) => write.mutate(
     { path: `/projects/${pid}/prd`, init: { method: "PUT", body: JSON.stringify({ content: draft, ...(status ? { status } : {}) }) } },
@@ -83,9 +92,9 @@ export default function Prd() {
           <p className="text-[12.5px] text-secondary">Sections draw from approved requirements. Edit a section, save, then approve — approved state is authoritative.</p>
           <p className="mt-3 text-[12px] uppercase tracking-wide text-muted">Actions</p>
           <div className="mt-1 grid gap-1.5">
-            <a href={`/projects/${pid}/requirements`} className="text-[13px] text-accent hover:underline">Source requirements →</a>
-            <a href={`/projects/${pid}/stories`} className="text-[13px] text-accent hover:underline">Derived stories →</a>
-            <a href={`/projects/${pid}/traceability`} className="text-[13px] text-accent hover:underline">Coverage →</a>
+            <Link href={`/projects/${pid}/requirements`} prefetch className="text-[13px] text-accent hover:underline">Source requirements →</Link>
+            <Link href={`/projects/${pid}/stories`} prefetch className="text-[13px] text-accent hover:underline">Derived stories →</Link>
+            <Link href={`/projects/${pid}/traceability`} prefetch className="text-[13px] text-accent hover:underline">Coverage →</Link>
           </div>
         </Card>
       </div>

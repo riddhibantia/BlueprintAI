@@ -5,6 +5,7 @@ Senior note: python-jose (unmaintained since 2022) and passlib (dead since
 handles >72-byte passwords the way Dropbox-style deployments do.
 """
 import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -32,13 +33,20 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_token(sub: str) -> str:
     """Short-lived HS256 session token (user id only — no PII inside)."""
-    exp = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return jwt.encode({"sub": sub, "exp": exp}, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return jwt.encode(
+        {"sub": sub, "exp": exp, "iat": now, "jti": str(uuid.uuid4())},
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
 
 
 def decode_token(token: str) -> str | None:
     """Subject or None — expired/forged tokens never raise."""
     try:
-        return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]).get("sub")
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        sub = payload.get("sub")
+        return sub if isinstance(sub, str) and sub else None
     except jwt.PyJWTError:
         return None

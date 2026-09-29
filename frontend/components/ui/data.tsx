@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "../../lib/utils/cn";
@@ -10,7 +11,7 @@ export function Breadcrumb({ trail }: { trail: { label: string; href?: string }[
       {trail.map((t, i) => (
         <span key={t.label} className="flex items-center gap-1">
           {i > 0 && <ChevronRight size={12} className="text-muted" aria-hidden />}
-          {t.href ? <a href={t.href} className="hover:text-primary hover:underline">{t.label}</a> : <span className="text-primary">{t.label}</span>}
+          {t.href ? <Link href={t.href} prefetch className="hover:text-primary hover:underline">{t.label}</Link> : <span className="text-primary">{t.label}</span>}
         </span>
       ))}
     </nav>

@@ -13,12 +13,10 @@ schema shape is targeted, with provenance credited inside the exported file.
 
 ## Rare UI (swamimalode07/rare-ui) — personal/non-commercial use with credit
 
-Six single-file components are vendored under `frontend/components/ui/`
-(`task-list`, `step-player`, `code-block`, `folder-component`,
-`hook-sidebar`, `scroll-progress`), installed via
+Two single-file components are vendored under `frontend/components/ui/`
+(`task-list`, `code-block`), installed via
 `npx shadcn add swamimalode07/rare-ui/<name>` and wired to real app state
-(task checklist, pipeline player/progress, API schemas,
-knowledge collections, PRD outline). No RareUI code is modified beyond
+(task checklist, API schemas). No RareUI code is modified beyond
 theming bridges; the app footer links back to the source as required.
 
 - Source: https://www.rareui.com/components

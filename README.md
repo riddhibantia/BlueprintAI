@@ -62,6 +62,7 @@ python -m venv .venv; .\.venv\Scripts\Activate
 pip install -r backend/requirements.txt
 copy .env.example .env
 python scripts/init_db.py
+python scripts/seed_demo.py   # optional: demo@blueprint.ai / demo12345
 uvicorn app.main:app --reload --app-dir backend --port 8000
 # health: http://localhost:8000/health
 
@@ -107,8 +108,8 @@ cd frontend; npm ci; npm run build; npm run typecheck
 
 ```
 backend/app/      # api/routes (11), models, rag/, agents/, core/
-frontend/         # app/(18 routes), components, lib/api, lib/query
-docs/             # SPEC.md, ARCHITECTURE.md, SECURITY.md, EVALUATION.md
+frontend/         # app/(19 routes), components, lib/api, lib/query
+docs/             # SPEC.md, ARCHITECTURE.md, SECURITY.md, EVALUATION.md, THIRD_PARTY_NOTICES.md
 evaluation/       # benchmark.py (rag_recall + full_pipeline harness)
 scripts/          # init_db.py, install_postgres_windows.ps1
 screenshots/      # add demo captures here

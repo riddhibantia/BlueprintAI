@@ -13,6 +13,7 @@ import { ArtifactLink } from "../../../../components/ui/activity";
 /** Delivery workspace (§24): board, table, or checklist — one shared cache. */
 const COLS = ["todo", "doing", "done"] as const;
 const NEXT: Record<string, string> = { todo: "doing", doing: "done", done: "todo" };
+const ADVANCE_LABEL: Record<string, string> = { todo: "→ doing", doing: "→ done", done: "Reopen" };
 
 export default function Tasks() {
   const { projectId: pid } = useParams() as { projectId: string };
@@ -69,11 +70,11 @@ export default function Tasks() {
               <div className="grid gap-2">
                 {tasks.filter((t: any) => t.status === col).map((t: any) => (
                   <Card key={t.id} className="!p-3">
-                    <p className="font-mono text-[11.5px] text-accent">{t.code} · {t.epic}</p>
+                    <p className="font-mono text-[11.5px] text-accent">{t.code}{t.epic ? ` · ${t.epic}` : ""}</p>
                     <p className="mt-0.5 text-[13px] font-medium">{t.title}</p>
                     <p className="mt-1.5 flex items-center justify-between">
                       <ArtifactLink code={t.req} href={`/projects/${pid}/requirements`} />
-                      <button onClick={() => advance(t)} disabled={write.isPending} className="text-[12px] font-semibold text-accent hover:underline disabled:opacity-50">→ {NEXT[t.status]}</button>
+                      <button onClick={() => advance(t)} disabled={write.isPending} className="text-[12px] font-semibold text-accent hover:underline disabled:opacity-50">{ADVANCE_LABEL[t.status] || "→ todo"}</button>
                     </p>
                   </Card>
                 ))}
@@ -91,7 +92,7 @@ export default function Tasks() {
               <td><ArtifactLink code={t.req} href={`/projects/${pid}/requirements`} /></td>
               <td className="text-secondary">{t.priority}</td>
               <td><StatusBadge value={t.status} /></td>
-              <td><button onClick={() => advance(t)} disabled={write.isPending} className="text-[12.5px] font-semibold text-accent hover:underline disabled:opacity-50">→ {NEXT[t.status] || "todo"}</button></td>
+              <td><button onClick={() => advance(t)} disabled={write.isPending} className="text-[12.5px] font-semibold text-accent hover:underline disabled:opacity-50">{ADVANCE_LABEL[t.status] || "→ todo"}</button></td>
             </tr>
           ))}
         </DataTable>

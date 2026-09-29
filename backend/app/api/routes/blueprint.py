@@ -220,9 +220,11 @@ def apis_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user)
         db.add(ApiEndpoint(project_id=pid, **e))
     # auto traceability: link functional REQs -> APIs round-robin
     reqs = db.query(Requirement).filter_by(project_id=pid).all()
-    for i, r in enumerate([x for x in reqs if x.type == "functional"]):
-        api = eps[i % len(eps)]
-        add_link(db, pid, "requirement", r.code, "api", api["code"])
+    functional = [x for x in reqs if x.type == "functional"]
+    if eps and functional:
+        for i, r in enumerate(functional):
+            api = eps[i % len(eps)]
+            add_link(db, pid, "requirement", r.code, "api", api["code"])
     db.add(AgentRun(project_id=pid, agent="api", output_summary=f"{len(eps)} endpoints"))
     db.commit()
     return {"count": len(eps), "endpoints": eps}

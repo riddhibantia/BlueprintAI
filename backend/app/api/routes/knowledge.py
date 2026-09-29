@@ -1,7 +1,9 @@
 """RAG: upload (PDF/text) -> chunk -> embed -> store; query -> hybrid retrieval (§18)."""
-import hashlib, os
+import hashlib
+import logging
+import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
@@ -14,11 +16,15 @@ from app.rag.retriever import retrieve
 
 router = APIRouter(tags=["knowledge"])
 ALLOWED_EXT = (".pdf", ".txt", ".md")
+MAX_BYTES = 15 * 1024 * 1024
+MAX_CHUNKS_STORED = 300
+
+logger = logging.getLogger("devblueprint.rag")
 
 
 class QueryIn(BaseModel):
-    query: str
-    k: int = 5
+    query: str = Field(min_length=1, max_length=2000)
+    k: int = Field(default=5, ge=1, le=20)
 
 
 def _extract(upload: UploadFile, raw: bytes) -> str:
@@ -28,8 +34,10 @@ def _extract(upload: UploadFile, raw: bytes) -> str:
             import fitz
             doc = fitz.open(stream=raw, filetype="pdf")
             return "\n".join(page.get_text() for page in doc)
-        except Exception as e:
-            return f"[pdf-parse-failed: {e}]"
+        except Exception as exc:
+            # Never persist parser internals as retrievable content.
+            logger.warning("pdf parse failed for %s: %s", upload.filename, type(exc).__name__)
+            return "[pdf-parse-failed: unable to extract text from this file]"
     return raw.decode("utf-8", errors="ignore")
 
 
@@ -42,8 +50,8 @@ async def upload(pid: str, file: UploadFile = File(...),
     if not name.endswith(ALLOWED_EXT):
         raise HTTPException(400, f"Only PDF, TXT, or Markdown files are accepted (got {file.filename})")
     raw = await file.read()
-    if len(raw) > 15 * 1024 * 1024:
-        raise HTTPException(400, "File > 15MB")
+    if len(raw) > MAX_BYTES:
+        raise HTTPException(413, "File exceeds the 15MB limit")
     text = _extract(file, raw)
     checksum = hashlib.sha256(raw).hexdigest()
     if db.query(Document).filter_by(project_id=pid, checksum=checksum).first():
@@ -56,7 +64,7 @@ async def upload(pid: str, file: UploadFile = File(...),
     if settings.STORAGE_MODE == "local":
         with open(os.path.join(settings.UPLOAD_DIR, f"{doc.id}.txt"), "w", encoding="utf-8") as f:
             f.write(text[:200000])
-    for i, c in enumerate(chunks[:300]):
+    for i, c in enumerate(chunks[:MAX_CHUNKS_STORED]):
         db.add(DocumentChunk(document_id=doc.id, page_number=i // 3, section=c["section"][:200],
                              content=c["content"][:4000], meta={"source": doc.name}, embedding=embed(c["content"][:1000])))
     db.add(AgentRun(project_id=pid, agent="rag-ingest", output_summary=f"{len(chunks)} chunks from {doc.name}"))

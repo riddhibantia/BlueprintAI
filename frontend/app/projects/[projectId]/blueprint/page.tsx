@@ -1,11 +1,10 @@
 "use client";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   useRequirements, usePrd, useStories, useArchitecture, useDatabase, useApis,
   useSecurity, useTasks, useTests, useTraceability, useIssues, useRuns, useWrite,
 } from "../../../../lib/query/useArtifacts";
-import { genArchitecture, genDatabase, genApis, analyzeSecurity } from "../../../../lib/api/endpoints";
 import { computeLifecycle, stageUpdated, Bundle } from "../../../../lib/query/lifecycle";
 import { timeAgo } from "../../../../lib/utils/time";
 import { Card } from "../../../../components/ui/card";
@@ -16,6 +15,7 @@ import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 /** Blueprint pipeline (§16): contextual Generate / Review / Approve / Validate per stage. */
 export default function Blueprint() {
   const { projectId: pid } = useParams() as { projectId: string };
+  const router = useRouter();
   const reqsQ = useRequirements(pid);
   const prdQ = usePrd(pid);
   const storiesQ = useStories(pid);
@@ -29,7 +29,7 @@ export default function Blueprint() {
   const issuesQ = useIssues(pid);
   const runsQ = useRuns(pid);
   const write = useWrite(pid, ["project", "requirements", "prd", "stories", "architecture", "database", "apis", "security", "tasks", "tests", "traceability", "issues", "activity", "runs"]);
-  const [designing, setDesigning] = useState(false);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
 
   const queries = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ, runsQ];
   const loading = queries.some((q) => q.isLoading);
@@ -47,45 +47,52 @@ export default function Blueprint() {
   const stages = computeLifecycle(b);
   const runs = runsQ.data || [];
 
-  const post = (path: string, go: string) => write.mutate(
-    { path, init: { method: "POST", body: "{}" } },
-    { onSuccess: () => (window.location.href = `/projects/${pid}/${go}`) });
+  const post = (path: string, go: string, label: string) => {
+    setBusyLabel(label);
+    write.mutate(
+      { path, init: { method: "POST", body: "{}" } },
+      { onSuccess: () => router.push(`/projects/${pid}/${go}`), onSettled: () => setBusyLabel(null) });
+  };
 
+  const runNav = (go: string) => () => router.push(`/projects/${pid}/${go}`);
+
+  // Design stages through the mutation cache (invalidation included) — never raw
+  // fetches plus a full reload, which would wipe the query cache mid-pipeline.
   const genAllDesign = async () => {
-    setDesigning(true);
+    setBusyLabel("Generate all");
     try {
-      await genArchitecture(pid);
-      await genDatabase(pid);
-      await genApis(pid);
-      await analyzeSecurity(pid);
-      window.location.href = `/projects/${pid}/architecture`;
+      for (const path of [`/projects/${pid}/architecture/generate`, `/projects/${pid}/database/generate`,
+                           `/projects/${pid}/apis/generate`, `/projects/${pid}/security/analyze`]) {
+        await write.mutateAsync({ path, init: { method: "POST", body: "{}" } });
+      }
+      router.push(`/projects/${pid}/architecture`);
     } finally {
-      setDesigning(false);
+      setBusyLabel(null);
     }
   };
   const actions: Record<string, { label: string; run: () => void; primary?: boolean }[]> = {
     DISCOVER: [
-      { label: "Clarify idea", run: () => (window.location.href = `/projects/${pid}/requirements`) },
-      { label: "Generate requirements", primary: true, run: () => post(`/projects/${pid}/requirements/generate`, "requirements") },
-      { label: "Review requirements", run: () => (window.location.href = `/projects/${pid}/requirements`) },
+      { label: "Clarify idea", run: runNav("requirements") },
+      { label: "Generate requirements", primary: true, run: () => post(`/projects/${pid}/requirements/generate`, "requirements", "Generate requirements") },
+      { label: "Review requirements", run: runNav("requirements") },
     ],
     DEFINE: [
-      { label: "Generate PRD", primary: true, run: () => post(`/projects/${pid}/prd/generate`, "prd") },
-      { label: "Generate stories", run: () => post(`/projects/${pid}/stories/generate`, "stories") },
-      { label: "Review PRD", run: () => (window.location.href = `/projects/${pid}/prd`) },
+      { label: "Generate PRD", primary: true, run: () => post(`/projects/${pid}/prd/generate`, "prd", "Generate PRD") },
+      { label: "Generate stories", run: () => post(`/projects/${pid}/stories/generate`, "stories", "Generate stories") },
+      { label: "Review PRD", run: runNav("prd") },
     ],
     DESIGN: [
       { label: "Generate all", primary: true, run: genAllDesign },
-      { label: "Review architecture", run: () => (window.location.href = `/projects/${pid}/architecture`) },
+      { label: "Review architecture", run: runNav("architecture") },
     ],
     BUILD: [
-      { label: "Generate tasks", primary: true, run: () => post(`/projects/${pid}/tasks/generate`, "tasks") },
-      { label: "Review tasks", run: () => (window.location.href = `/projects/${pid}/tasks`) },
+      { label: "Generate tasks", primary: true, run: () => post(`/projects/${pid}/tasks/generate`, "tasks", "Generate tasks") },
+      { label: "Review tasks", run: runNav("tasks") },
     ],
     VERIFY: [
-      { label: "Generate tests", primary: true, run: () => post(`/projects/${pid}/tests/generate`, "tests") },
-      { label: "Validate consistency", run: () => post(`/projects/${pid}/consistency/check`, "consistency") },
-      { label: "Analyze impact", run: () => (window.location.href = `/projects/${pid}/impact`) },
+      { label: "Generate tests", primary: true, run: () => post(`/projects/${pid}/tests/generate`, "tests", "Generate tests") },
+      { label: "Validate consistency", run: () => post(`/projects/${pid}/consistency/check`, "consistency", "Validate consistency") },
+      { label: "Analyze impact", run: runNav("impact") },
     ],
   };
 
@@ -105,11 +112,15 @@ export default function Blueprint() {
                 <span className="text-[12.5px] text-secondary">{s.detail}</span>
                 {(() => { const u = stageUpdated(runs, s.key); return u ? <span className="text-[11.5px] text-muted">ran {timeAgo(u)}</span> : null; })()}
                 <span className="ml-auto flex flex-wrap gap-1.5">
-                  {(actions[s.key] || []).map((a) => (
-                    <Button key={a.label} variant={a.primary ? "primary" : "ghost"} size="sm" disabled={write.isPending || designing} onClick={a.run}>
-                      {write.isPending || designing ? "Working…" : a.label}
-                    </Button>
-                  ))}
+                  {(actions[s.key] || []).map((a) => {
+                    const busy = busyLabel === a.label;
+                    return (
+                      <Button key={a.label} variant={a.primary ? "primary" : "ghost"} size="sm"
+                        loading={busy} disabled={busyLabel !== null} onClick={a.run}>
+                        {busy ? "Working…" : a.label}
+                      </Button>
+                    );
+                  })}
                 </span>
               </div>
             </Card>

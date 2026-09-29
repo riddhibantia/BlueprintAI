@@ -1,8 +1,9 @@
 "use client";
 import { AlertTriangle, CheckCircle2, Info, XCircle, MinusCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils/cn";
 
-const tone: Record<string, { cls: string; Icon: any }> = {
+const tone: Record<string, { cls: string; Icon: LucideIcon }> = {
   ok: { cls: "text-success border-success/40 bg-success/10", Icon: CheckCircle2 },
   warn: { cls: "text-warning border-warning/40 bg-warning/10", Icon: AlertTriangle },
   bad: { cls: "text-danger border-danger/40 bg-danger/10", Icon: XCircle },

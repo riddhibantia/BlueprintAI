@@ -13,6 +13,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const base = `/projects/${pid}`;
 
@@ -35,7 +36,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
   const filtered = cmds.filter((c) => (c.label + c.hint).toLowerCase().includes(q.toLowerCase()));
 
   useEffect(() => {
-    if (open) { setQ(""); setIdx(0); setBusy(""); setTimeout(() => inputRef.current?.focus(), 30); }
+    if (open) { setQ(""); setIdx(0); setBusy(""); setErr(""); setTimeout(() => inputRef.current?.focus(), 30); }
   }, [open ]);
 
   useEffect(() => { setIdx(0); }, [q]);
@@ -44,9 +45,16 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
   const run = async (i: number) => {
     const c = filtered[i];
     if (!c) return;
-    onClose();
-    await c.run();
-    setBusy("");
+    setErr("");
+    try {
+      await c.run();
+      onClose();
+    } catch (e) {
+      // Keep the palette open so the failure is visible, not swallowed.
+      setErr(e instanceof Error ? e.message : "Command failed.");
+    } finally {
+      setBusy("");
+    }
   };
 
   return (
@@ -77,6 +85,11 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
           ))}
           {filtered.length === 0 && <li className="px-3 py-4 text-center text-[13px] text-secondary">No matching command.</li>}
         </ul>
+        {(busy || err) && (
+          <p className={`border-t border-border px-4 py-2 text-[12.5px] ${err ? "text-danger" : "text-secondary"}`} role={err ? "alert" : "status"}>
+            {err || busy}
+          </p>
+        )}
       </div>
     </div>
   );

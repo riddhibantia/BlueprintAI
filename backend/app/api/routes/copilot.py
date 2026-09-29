@@ -4,9 +4,10 @@ Mode is explicit in every response: "ai" (LLM answered) or "rule" (deterministic
 The fallback never pretends to be an LLM. Only safe project data enters the prompt —
 counts, codes, issue descriptions, retrieved doc snippets. No secrets, no prompts.
 """
+import logging
 import time
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
@@ -18,11 +19,13 @@ from app.rag.retriever import retrieve
 
 router = APIRouter(tags=["copilot"])
 
+logger = logging.getLogger("devblueprint.copilot")
+
 
 class AskIn(BaseModel):
-    question: str
-    page: str = ""
-    selection: str = ""
+    question: str = Field(min_length=1, max_length=2000)
+    page: str = Field(default="", max_length=200)
+    selection: str = Field(default="", max_length=500)
 
 
 def _snapshot(db: Session, pid: str) -> dict:
@@ -99,9 +102,7 @@ def mode(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     """Which Copilot serves this project: ai (key configured) or rule (deterministic)."""
     project_or_403(pid, db, user)
     if settings.copilot_configured:
-        return {"mode": "ai", "provider": "openai-compatible",
-                "endpoint": settings.LLM_BASE_URL or "https://api.openai.com/v1",
-                "model": settings.copilot_model}
+        return {"mode": "ai", "provider": "openai-compatible", "model": settings.copilot_model}
     return {"mode": "rule", "provider": "deterministic",
             "note": "Set LLM_API_KEY (+ optional LLM_BASE_URL / LLM_MODEL) for AI mode. Free keys: Google AI Studio, Groq."}
 
@@ -121,7 +122,9 @@ def ask(pid: str, body: AskIn, db: Session = Depends(get_db), user=Depends(curre
         out = ai_answer(snap, body.question, evidence)
         return {"mode": "ai", "answer": out["text"], "evidence": evidence,
                 "tokens": out["tokens"], "latency_ms": int((time.time() - t0) * 1000)}
-    except Exception as e:
+    except Exception as exc:
+        # Serve the deterministic answer; provider internals stay server-side.
+        logger.warning("copilot ai_answer failed: %s", type(exc).__name__)
         text, _ = rule_answer(snap, body.page, body.selection)
-        return {"mode": "rule", "answer": text + f"\n(AI unreachable: {str(e)[:160]} — rule-based answer.)",
+        return {"mode": "rule", "answer": text + "\n(AI unavailable — rule-based answer.)",
                 "evidence": evidence, "latency_ms": int((time.time() - t0) * 1000)}

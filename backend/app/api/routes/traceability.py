@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.audit import log
@@ -9,13 +9,16 @@ from app.models.db import TraceabilityLink
 
 router = APIRouter(tags=["traceability"])
 
+NODE_TYPES = ("requirement", "story", "api", "db", "security", "task", "test")
+
 
 class LinkIn(BaseModel):
-    source_type: str
-    source_id: str
-    target_type: str
-    target_id: str
-    relationship_type: str = "implements"
+    source_type: str = Field(min_length=1, max_length=32, pattern="^(requirement|story|api|db|security|task|test)$")
+    source_id: str = Field(min_length=1, max_length=64)
+    target_type: str = Field(min_length=1, max_length=32, pattern="^(requirement|story|api|db|security|task|test)$")
+    target_id: str = Field(min_length=1, max_length=64)
+    relationship_type: str = Field(default="implements", min_length=1, max_length=32,
+                                   pattern="^(implements|protects|validated-by|tests|documents)$")
 
 
 @router.post("/projects/{pid}/traceability/links")
@@ -27,10 +30,12 @@ def add(pid: str, body: LinkIn, db: Session = Depends(get_db), user=Depends(curr
 
 
 @router.get("/projects/{pid}/traceability")
-def get_all(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
-    """Full link set + coverage (forward/backward/orphans)."""
+def get_all(pid: str, limit: int = Query(default=500, ge=1, le=2000),
+            offset: int = Query(default=0, ge=0),
+            db: Session = Depends(get_db), user=Depends(current_user)):
+    """Full link set + coverage (forward/backward/orphans). Paginated via limit/offset."""
     project_or_403(pid, db, user)
-    links = db.query(TraceabilityLink).filter_by(project_id=pid).all()
+    links = db.query(TraceabilityLink).filter_by(project_id=pid).offset(offset).limit(limit).all()
     return {"coverage": coverage(db, pid),
             "links": [{"from": f"{l.source_type}:{l.source_id}", "to": f"{l.target_type}:{l.target_id}", "rel": l.relationship_type} for l in links]}
 
