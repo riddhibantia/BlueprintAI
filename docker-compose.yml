@@ -1,0 +1,55 @@
+# BlueprintAI full stack: API + web + Postgres/pgvector.
+# Local SQLite run needs no Docker (see README quickstart).
+# Full run:  docker compose up --build
+#   API http://localhost:8000  ·  web http://localhost:3000
+# Uses .env for secrets when present (see .env.example). Never commit .env.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-devblueprint}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devblueprint}
+      POSTGRES_DB: ${POSTGRES_DB:-devblueprint}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-devblueprint}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-devblueprint}:${POSTGRES_PASSWORD:-devblueprint}@db:5432/${POSTGRES_DB:-devblueprint}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (32+ chars, see .env.example)}
+      ENV: prod
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API: ${NEXT_PUBLIC_API:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  uploads:

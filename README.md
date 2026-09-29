@@ -81,12 +81,27 @@ From `evaluation/benchmark.py --full --repeats 3` — temp SQLite DB, mock LLM, 
 
 The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all 35 tests still green. See `docs/EVALUATION.md`.
 
+## AI providers: mocked by default, on purpose
+
+Local development runs with **no keys, no GPU, no network calls**:
+
+- **LLM:** `LLM_PROVIDER=mock` (default). Generation is deterministic templates so
+  tests, benchmarks, and the seed demo are reproducible offline. Set
+  `LLM_PROVIDER=openai` + `OPENAI_API_KEY` for real inference (Copilot also
+  accepts any OpenAI-compatible endpoint via `LLM_API_KEY`/`LLM_BASE_URL`).
+- **Embeddings:** `EMBEDDING_PROVIDER=hash` (default) — deterministic local
+  vectors. Set `EMBEDDING_PROVIDER=openai` + `OPENAI_API_KEY` for
+  `text-embedding-3-small`; the benchmark ablation harness
+  (`--embeddings both`) measures both on the same fixture.
+
+Measured quality numbers below are from the mock/hash path unless labeled.
+
 ## Tech stack
 
 | Layer | Tech |
 |---|---|
 | Backend | FastAPI 0.141, Uvicorn, SQLAlchemy 2.0, Pydantic v2, PyJWT + bcrypt, PyMuPDF, ReportLab |
-| AI / RAG | LangGraph, OpenAI SDK (mock by default), hash embeddings with OpenAI path + ablation harness |
+| AI / RAG | LangGraph, OpenAI SDK, hash embeddings with OpenAI path + ablation harness (mock LLM + hash vectors by default — see above) |
 | DB | Postgres + pgvector (prod) / SQLite fallback (local) |
 | Frontend | Next.js 16.3.5, React 19.3, Tailwind 4.3, TanStack Query, @xyflow/react, TypeScript (strict) |
 | Infra | GitHub Actions CI (pytest + typecheck + build), `scripts/init_db.py`, `scripts/seed_demo.py` |
@@ -101,7 +116,17 @@ screenshots/blueprint.png   # PRD → stories → architecture flow
 screenshots/traceability.png# coverage, orphans, consistency issues
 ```
 
-No live demo yet — a 90-sec Loom walkthrough is the highest-ROI next step.
+## Demo (2 minutes, local)
+
+```powershell
+python scripts/seed_demo.py   # demo@blueprint.ai / demo12345
+uvicorn app.main:app --reload --app-dir backend --port 8000
+cd frontend; npm run dev
+```
+
+Open http://localhost:3000/dashboard, log in with the demo account, open the
+seeded project: requirements → traceability graph → consistency issues →
+`export/pdf`. No live public demo is deployed yet.
 
 ## Quickstart (8GB-friendly, no Docker)
 
@@ -123,6 +148,21 @@ cd frontend; npm install; npm run dev
 Default DB is SQLite (`devblueprint.db`) so it runs immediately.
 For full Postgres+pgvector: run `scripts/install_postgres_windows.ps1` as Admin, create DB, set `DATABASE_URL` in `.env`.
 
+## Docker (full stack: API + web + Postgres/pgvector)
+
+```powershell
+copy .env.example .env   # then set JWT_SECRET (32+ chars) in .env
+docker compose up --build
+# API http://localhost:8000  ·  web http://localhost:3000
+```
+
+`JWT_SECRET` is required — compose and the API both refuse to boot without a
+real secret. `OPENAI_API_KEY` is optional (mock path is the default).
+To deploy: build the two images, provide the same env vars
+(`DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGINS`, optional `OPENAI_API_KEY`),
+and point the frontend's `NEXT_PUBLIC_API` build arg at the API URL.
+`ENV=prod` disables API docs and detailed health output.
+
 ## MVP flow
 
 Create Project → Clarify → Generate Requirements → Approve → PRD → Stories → Architecture → DB/APIs/Security → Tasks → Tests → Traceability → Consistency → Impact → Export.
@@ -140,7 +180,7 @@ Create Project → Clarify → Generate Requirements → Approve → PRD → Sto
 | `POST /projects/{id}/impact/analyze` | Affected artifacts for a requirement change (404 on unknown REQ) |
 | `GET /projects/{id}/export/pdf`, `/export/openapi`, `/export/archify` | PDF + OpenAPI + Archify diagram IR export |
 
-## Verify (the bar is "survives review", not "it runs")
+## Verify
 
 ```powershell
 # Backend: unit + E2E + regression (35 green, isolated temp DB per run)
@@ -164,6 +204,7 @@ frontend/         # app/(landing + dashboard + 17 project routes), components, l
 docs/             # SPEC.md, ARCHITECTURE.md, SECURITY.md, EVALUATION.md, THIRD_PARTY_NOTICES.md
 evaluation/       # benchmark.py (43-query retrieval fixture + ablation + pipeline matrix)
 scripts/          # init_db.py, seed_demo.py, install_postgres_windows.ps1
+docker-compose.yml# api + web + pgvector DB (backend/Dockerfile, frontend/Dockerfile)
 screenshots/      # add demo captures here
 ```
 
