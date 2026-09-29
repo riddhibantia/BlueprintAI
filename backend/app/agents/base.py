@@ -13,12 +13,19 @@ def _mock_complete(prompt: str, context: str = "") -> tuple[str, int]:
 
 
 def complete(prompt: str, context: str = "", system: str = "") -> dict:
-    """Returns {text, tokens, latency_ms, provider}. Real OpenAI used only if configured."""
+    """Returns {text, tokens, latency_ms, provider}. Real inference only if configured.
+
+    Any OpenAI-compatible endpoint works via OPENAI_BASE_URL (Gemini, Groq,
+    OpenRouter…) — not just api.openai.com. Failures fall back to the mock.
+    """
     t0 = time.time()
     if settings.use_openai:
         try:
             from openai import OpenAI
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            kwargs: dict = {"api_key": settings.OPENAI_API_KEY, "timeout": 30}
+            if settings.OPENAI_BASE_URL:
+                kwargs["base_url"] = settings.OPENAI_BASE_URL
+            client = OpenAI(**kwargs)
             msgs = []
             if system:
                 msgs.append({"role": "system", "content": system})

@@ -86,13 +86,22 @@ The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token n
 Local development runs with **no keys, no GPU, no network calls**:
 
 - **LLM:** `LLM_PROVIDER=mock` (default). Generation is deterministic templates so
-  tests, benchmarks, and the seed demo are reproducible offline. Set
-  `LLM_PROVIDER=openai` + `OPENAI_API_KEY` for real inference (Copilot also
-  accepts any OpenAI-compatible endpoint via `LLM_API_KEY`/`LLM_BASE_URL`).
+  tests, benchmarks, and the seed demo are reproducible offline.
 - **Embeddings:** `EMBEDDING_PROVIDER=hash` (default) — deterministic local
-  vectors. Set `EMBEDDING_PROVIDER=openai` + `OPENAI_API_KEY` for
-  `text-embedding-3-small`; the benchmark ablation harness
-  (`--embeddings both`) measures both on the same fixture.
+  vectors.
+
+Want real AI prose instead of mock templates? Two free options (no credit card),
+both verified OpenAI-compatible with this codebase:
+
+| | Google AI Studio (Gemini) | Groq (Llama/Qwen) |
+|---|---|---|
+| Get key | `aistudio.google.com/apikey` | `console.groq.com/keys` |
+| Free quota | ~1500 req/day (Flash) | ~14k req/day |
+| `.env` | `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` + `OPENAI_MODEL=gemini-2.5-flash` + `OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` | `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` + `OPENAI_MODEL=llama-3.3-70b-versatile` + `OPENAI_BASE_URL=https://api.groq.com/openai/v1` |
+
+Check current model ids on the provider console — they rotate. Restart uvicorn
+after editing `.env`. Copilot AI mode works with the same key via
+`LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL` (or just `OPENAI_API_KEY`).
 
 Measured quality numbers below are from the mock/hash path unless labeled.
 

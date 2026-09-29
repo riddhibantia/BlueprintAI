@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "mock"  # mock | openai
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_BASE_URL: str = ""  # any OpenAI-compatible endpoint (Gemini, Groq, OpenRouter…)
     LLM_API_KEY: str = ""  # Copilot: any OpenAI-compatible provider (OpenAI, Gemini, Groq…)
     LLM_BASE_URL: str = ""  # e.g. https://generativelanguage.googleapis.com/v1beta/openai/
     LLM_MODEL: str = ""  # defaults to OPENAI_MODEL when empty

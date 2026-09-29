@@ -15,12 +15,15 @@ def _hash_embed(text: str, dim: int = DIM) -> list[float]:
 
 
 def embed(text: str) -> list[float]:
-    """8GB-friendly embeddings: deterministic hash vectors, OpenAI when configured."""
+    """8GB-friendly embeddings: deterministic hash vectors, OpenAI-compatible when configured."""
     from app.core.config import settings
     if settings.EMBEDDING_PROVIDER == "openai" and settings.OPENAI_API_KEY:
         try:
             from openai import OpenAI
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            kwargs: dict = {"api_key": settings.OPENAI_API_KEY}
+            if settings.OPENAI_BASE_URL:
+                kwargs["base_url"] = settings.OPENAI_BASE_URL
+            client = OpenAI(**kwargs)
             r = client.embeddings.create(model=settings.OPENAI_EMBED_MODEL, input=text[:2000])
             return list(r.data[0].embedding)
         except Exception:
