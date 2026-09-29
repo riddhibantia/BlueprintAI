@@ -7,40 +7,89 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-> Idea → PRD → user stories → architecture → DB/APIs/security → tasks → tests, with RAG-grounded generation, traceability, consistency checks, impact analysis, and PDF export. Deterministic metrics only — the LLM never invents coverage.
+> Idea → PRD → user stories → architecture → DB/APIs/security → tasks → tests, with RAG-grounded generation, traceability, consistency checks, impact analysis, and PDF export. **Deterministic metrics only — the LLM never invents coverage.**
 
-Full spec: `docs/SPEC.md`. Security: `docs/SECURITY.md`. Measured numbers: `docs/EVALUATION.md`.
+Full spec: `docs/SPEC.md` · Security: `docs/SECURITY.md` · Measured numbers: `docs/EVALUATION.md` · Contributing: `CONTRIBUTING.md`
+
+## System architecture
+
+```mermaid
+flowchart TB
+    subgraph Client["Next.js 16 · React 19"]
+        UI["19 routes: landing + dashboard\n+ inbox + 13 artifact modules\n+ blueprint, settings, profile"]
+    end
+    subgraph API["FastAPI · 11 routers"]
+        AUTH["auth · projects"]
+        RAG["knowledge · copilot"]
+        GEN["requirements · blueprint\nworkflow"]
+        VER["traceability · consistency\nimpact"]
+        EXP["export"]
+    end
+    subgraph Data["Postgres + pgvector (prod)\nSQLite (local)"]
+        PG[("projects · artifacts\nchunks · links · audit")]
+    end
+    UI -->|"REST + httpOnly cookie<br/>(Bearer fallback)"| API
+    AUTH --> PG
+    RAG --> PG
+    GEN --> PG
+    VER --> PG
+    EXP --> PG
+```
+
+## Artifact pipeline (every handoff is human-approved)
+
+```mermaid
+flowchart LR
+    IDEA(["💡 Product idea"]) --> CLAR["Clarify"]
+    CLAR --> REQ["Requirements\n+ approve"]
+    REQ --> PRD["PRD"]
+    PRD --> STO["User stories"]
+    STO --> ARCH["Architecture\nDB · APIs · Security"]
+    ARCH --> TASK["Tasks"]
+    TASK --> TEST["Tests"]
+    TEST --> TRACE["Traceability\ncoverage %"]
+    TRACE --> CONS["Consistency\ncheck"]
+    CONS --> IMP["Impact\nanalysis"]
+    IMP --> EXPORT[("Export:\nPDF · OpenAPI · Archify")]
+    REQ -.->|"RAG evidence"| KNOW[("Knowledge base\nPDF/TXT/MD")]
+    ARCH -.->|"cites"| KNOW
+    CONS -.->|"orphans/issues"| REQ
+```
 
 ## Features
 
 | Area | What works |
 |---|---|
 | 13 artifact modules | Requirements, PRD, Stories, Architecture, Database, APIs, Security, Tasks, Tests, Traceability, Consistency, Impact, Knowledge — no stubs |
-| RAG-grounded generation | Upload PDF/TXT/MD → chunk → hash/OpenAI embeddings → pgvector; every generation cites evidence |
-| Multi-agent pipeline | LangGraph workflow with sequential fallback (reported in benchmark output) |
-| Collaboration safety | httpOnly `SameSite=Lax` sessions, `project_or_403` isolation, optimistic locking (409), audit logs |
-| Export | Full-blueprint PDF (ReportLab), Archify diagram IR (1:1 topology) |
-| Quality gates | 35 pytest tests green, `evaluation/benchmark.py --full` measures latency/coverage, `npm run build` clean |
+| RAG-grounded generation | Upload PDF/TXT/MD (≤15MB) → structure-aware chunks → hash/OpenAI embeddings → hybrid vector+lexical retrieval; generations cite evidence or say what's missing |
+| Multi-agent pipeline | LangGraph workflow with sequential fallback; the engine that ran is reported, not assumed |
+| Collaboration safety | httpOnly `SameSite=Lax` sessions, `project_or_403` isolation, optimistic locking (409), audit logs, prod fail-closed config |
+| Export | Full-blueprint PDF (ReportLab, markup-escaped), OpenAPI 3.0, Archify diagram IR (1:1 topology) |
+| Quality gates | 35 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean |
+
+## Measured results (not claims)
+
+From `evaluation/benchmark.py --full --repeats 3` — temp SQLite DB, mock LLM, hash embeddings. Re-run to reproduce.
+
+| Benchmark | Measured |
+|---|---|
+| Retrieval Recall@3 (35 keyword queries) | **1.00** |
+| Retrieval Recall@3 (8 adversarial paraphrases) | **0.25** — the honest gap semantic embeddings must close |
+| Pipeline (3 ideas × 3 runs) | **9/9 green, 0 failures** |
+| Traceability per idea | **100%, 0 orphans** |
+| End-to-end latency per idea | **~0.4–0.9 s** mean, per-stage means <100 ms |
+
+The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all 35 tests still green. See `docs/EVALUATION.md`.
 
 ## Tech stack
 
 | Layer | Tech |
 |---|---|
 | Backend | FastAPI 0.141, Uvicorn, SQLAlchemy 2.0, Pydantic v2, PyJWT + bcrypt, PyMuPDF, ReportLab |
-| AI / RAG | langchain-core, LangGraph, OpenAI (mock by default), pgvector + hash-embedding fallback |
+| AI / RAG | LangGraph, OpenAI SDK (mock by default), hash embeddings with OpenAI path + ablation harness |
 | DB | Postgres + pgvector (prod) / SQLite fallback (local) |
-| Frontend | Next.js 16.3.5, React 19.3, Tailwind 4.3, @xyflow/react (diagrams), lucide-react, TypeScript |
-| Infra | GitHub Actions CI (pytest + `npm run build`), `scripts/init_db.py` |
-
-## Architecture
-
-```
-Next.js → FastAPI (11 routers: auth, projects, requirements, blueprint,
-knowledge, traceability, consistency, impact, workflow, export, copilot)
-→ {Project Service, RAG Service, Blueprint Service} → Postgres+pgvector / SQLite
-```
-
-See `docs/ARCHITECTURE.md` for the full request flow.
+| Frontend | Next.js 16.3.5, React 19.3, Tailwind 4.3, TanStack Query, @xyflow/react, TypeScript (strict) |
+| Infra | GitHub Actions CI (pytest + typecheck + build), `scripts/init_db.py`, `scripts/seed_demo.py` |
 
 ## Screenshots
 
@@ -68,7 +117,7 @@ uvicorn app.main:app --reload --app-dir backend --port 8000
 
 # 2. Frontend
 cd frontend; npm install; npm run dev
-# app: http://localhost:3000/dashboard
+# landing: http://localhost:3000/  ·  app: http://localhost:3000/dashboard
 ```
 
 Default DB is SQLite (`devblueprint.db`) so it runs immediately.
@@ -86,10 +135,10 @@ Create Project → Clarify → Generate Requirements → Approve → PRD → Sto
 | `POST/GET /projects`, `GET /projects/{id}` | Project create/list/detail, member guard via `project_or_403` |
 | `POST /projects/{id}/requirements/generate`, `POST /requirements/{id}/approve` | RAG-grounded requirement drafts + approval with locking |
 | `GET /projects/{id}/prd`, `/stories`, `/architecture`, `/database`, `/apis`, `/security`, `/tasks`, `/tests` | Artifact retrieval (POST `…/generate` creates them) |
-| `GET /projects/{id}/traceability` | Coverage %, orphans, stored links |
-| `POST /projects/{id}/consistency/check` | Rule-based issue list |
-| `POST /projects/{id}/impact/analyze` | Affected artifacts for a requirement change |
-| `GET /projects/{id}/export/pdf`, `/export/archify` | PDF + Archify diagram IR export |
+| `GET /projects/{id}/traceability` | Coverage %, orphans, stored links (paginated) |
+| `POST /projects/{id}/consistency/check` | Deterministic cross-artifact checks + AI explanation |
+| `POST /projects/{id}/impact/analyze` | Affected artifacts for a requirement change (404 on unknown REQ) |
+| `GET /projects/{id}/export/pdf`, `/export/openapi`, `/export/archify` | PDF + OpenAPI + Archify diagram IR export |
 
 ## Verify (the bar is "survives review", not "it runs")
 
@@ -97,8 +146,11 @@ Create Project → Clarify → Generate Requirements → Approve → PRD → Sto
 # Backend: unit + E2E + regression (35 green, isolated temp DB per run)
 $env:PYTHONPATH="backend"; python -m pytest backend/tests -q
 
-# Measured benchmark (temp DB, real numbers — see docs/EVALUATION.md)
-$env:PYTHONPATH="backend"; python evaluation/benchmark.py --full
+# Measured benchmark (retrieval fixture + 3-idea pipeline — see docs/EVALUATION.md)
+$env:PYTHONPATH="backend"; python evaluation/benchmark.py --full --repeats 3
+
+# With an OpenAI key: adds the semantic-embedding leg on the same fixture
+$env:OPENAI_API_KEY="<key>"; $env:PYTHONPATH="backend"; python evaluation/benchmark.py --embeddings both
 
 # Frontend production build + typecheck
 cd frontend; npm ci; npm run build; npm run typecheck
@@ -107,11 +159,11 @@ cd frontend; npm ci; npm run build; npm run typecheck
 ## Project structure
 
 ```
-backend/app/      # api/routes (11), models, rag/, agents/, core/
-frontend/         # app/(19 routes), components, lib/api, lib/query
+backend/app/      # api/routes (11), models, rag/, agents/, core/, traceability/, consistency/, impact/
+frontend/         # app/(landing + dashboard + 17 project routes), components, lib/api (+types), lib/query
 docs/             # SPEC.md, ARCHITECTURE.md, SECURITY.md, EVALUATION.md, THIRD_PARTY_NOTICES.md
-evaluation/       # benchmark.py (rag_recall + full_pipeline harness)
-scripts/          # init_db.py, install_postgres_windows.ps1
+evaluation/       # benchmark.py (43-query retrieval fixture + ablation + pipeline matrix)
+scripts/          # init_db.py, seed_demo.py, install_postgres_windows.ps1
 screenshots/      # add demo captures here
 ```
 
@@ -119,4 +171,5 @@ screenshots/      # add demo captures here
 
 - Scoped RAG joins + `project_or_403` for multi-tenant isolation; hash-embedding fallback keeps local dev free.
 - Optimistic locking + audit logs for safe human-in-the-loop approvals.
-- Deterministic evaluation harness beats "it runs" demos in reviews.
+- An evaluation harness that reports split metrics (keyword vs adversarial) beats "it runs" demos — it found a real stemming bug and proved the fix.
+- Fail-closed config and typed API boundaries are what make a demo survive contact with reviewers.
