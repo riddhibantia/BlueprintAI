@@ -92,6 +92,7 @@ def list_req(pid: str, limit: int = Query(default=500, ge=1, le=2000),
     rows = db.query(Requirement).filter_by(project_id=pid).order_by(Requirement.code).offset(offset).limit(limit).all()
     return [{"code": r.code, "title": r.title, "type": r.type, "status": r.status,
              "priority": r.priority, "id": r.id, "version": r.version,
+             "description": r.description or "", "acceptance_criteria": r.acceptance_criteria or "",
              "updated_at": r.updated_at.isoformat() if r.updated_at else None}
             for r in rows]
 

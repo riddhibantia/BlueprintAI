@@ -43,14 +43,18 @@ def get_project(pid: str, db: Session = Depends(get_db), user=Depends(current_us
     n_api = db.query(ApiEndpoint).filter_by(project_id=pid).count()
     n_test = db.query(TestCase).filter_by(project_id=pid).count()
     n_issue = db.query(ConsistencyIssue).filter_by(project_id=pid, status="open").count()
-    tested = db.query(TestCase.requirement_code).filter_by(project_id=pid).distinct().count()
+    live_codes = {r.code for r in db.query(Requirement.code).filter_by(project_id=pid).all()}
+    tested_codes = {c for (c,) in db.query(TestCase.requirement_code).filter_by(project_id=pid).distinct().all()}
+    tested = len(tested_codes & live_codes)  # only currently-existing requirements count
+    test_cov = round(100 * tested / max(1, n_req), 1) if n_req else (100.0 if not tested_codes else 0.0)
+    test_cov = min(100.0, test_cov)  # a ratio, never above 100
     # Deterministic metrics only (§30)
     return {"id": p.id, "name": p.name, "description": p.description, "idea": p.product_idea,
             "created_at": p.created_at.isoformat() if p.created_at else None,
             "updated_at": p.updated_at.isoformat() if p.updated_at else None,
             "metrics": {"requirements": n_req, "traceability_coverage": cov["coverage_pct"],
                         "consistency_open": n_issue, "tests": n_test, "stories": n_story,
-                        "apis": n_api, "test_coverage": round(100 * tested / max(1, n_req), 1),
+                        "apis": n_api, "test_coverage": test_cov,
                         "blueprint_status": p.blueprint_status}}
 
 

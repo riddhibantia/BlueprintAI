@@ -246,6 +246,12 @@ export default function Requirements() {
             <p className="text-[15px] font-semibold">{sel.title}</p>
             <p className="flex gap-2"><StatusBadge value={sel.status} /><StatusBadge value={sel.priority} /><span className="text-secondary">v{sel.version}</span></p>
             {sel.description && <p className="text-secondary">{sel.description}</p>}
+            {sel.acceptance_criteria && (
+              <div>
+                <b className="text-[12px] uppercase tracking-wide text-secondary">Acceptance criteria</b>
+                <p className="mt-1 rounded-xl border border-border bg-canvas p-2.5 text-[13px]">{sel.acceptance_criteria}</p>
+              </div>
+            )}
             <div>
               <b className="text-[12px] uppercase tracking-wide text-secondary">Traceability</b>
               {selLinks.length === 0

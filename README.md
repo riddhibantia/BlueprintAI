@@ -93,11 +93,16 @@ Local development runs with **no keys, no GPU, no network calls**:
 Want real AI prose instead of mock templates? Two free options (no credit card),
 both verified OpenAI-compatible with this codebase:
 
-| | Google AI Studio (Gemini) | Groq (Llama/Qwen) |
-|---|---|---|
-| Get key | `aistudio.google.com/apikey` | `console.groq.com/keys` |
-| Free quota | ~1500 req/day (Flash) | ~14k req/day |
-| `.env` | `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` + `OPENAI_MODEL=gemini-2.5-flash` + `OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` | `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` + `OPENAI_MODEL=llama-3.3-70b-versatile` + `OPENAI_BASE_URL=https://api.groq.com/openai/v1` |
+| | Google AI Studio (Gemini) | Groq (Llama/Qwen) | OpenRouter (Qwen + others) |
+|---|---|---|---|
+| Get key | `aistudio.google.com/apikey` | `console.groq.com/keys` | `openrouter.ai/settings/keys` |
+| Free quota | ~1500 req/day (Flash) | ~14k req/day | 50–1000 req/day (`:free` models) |
+| `.env` | `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` + `OPENAI_MODEL=gemini-2.5-flash` + `OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` | `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` + `OPENAI_MODEL=llama-3.3-70b-versatile` + `OPENAI_BASE_URL=https://api.groq.com/openai/v1` | `LLM_PROVIDER=openai` + `OPENAI_API_KEY=<key>` + `OPENAI_MODEL=qwen/qwen3.8-27b` + `OPENAI_BASE_URL=https://openrouter.ai/api/v1` |
+
+> Qwen note: Alibaba retired its own free OAuth tier, and OpenRouter retires
+> `:free` ids as models rotate — confirm a `:free`-suffixed Qwen id at
+> `openrouter.ai/models` before setting `OPENAI_MODEL`. (`openrouter/free`
+> also works as a never-stale router over whatever is free.)
 
 Check current model ids on the provider console — they rotate. Restart uvicorn
 after editing `.env`. Copilot AI mode works with the same key via

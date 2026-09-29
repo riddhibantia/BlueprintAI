@@ -26,6 +26,7 @@ export type Requirement = {
   code: string;
   title: string;
   description?: string;
+  acceptance_criteria?: string;
   type: string;
   priority: string;
   status: string;
