@@ -58,3 +58,16 @@ def run_workflow(pid: str, db: Session = Depends(get_db), user=Depends(current_u
                    "log": [_run_stage(db, pid, s) for s in STAGES]}
     return {"stages": STAGES, **results,
             "hitl": "Each stage requires Approve/Edit/Reject before next stage (§22)"}
+
+
+@router.post("/projects/{pid}/pipeline/run")
+def run_pipeline(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Auto-pipeline: PRD → stories → architecture → DB → APIs → security →
+    tasks → tests in one server-side pass after requirements are approved.
+
+    Idempotent per stage (regeneration replaces, never duplicates). The user
+    lands on finished artifacts; PDF export stays one click away.
+    """
+    from app.pipeline import run_full_pipeline
+    project_or_403(pid, db, user)
+    return run_full_pipeline(db, pid, user.id)

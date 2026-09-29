@@ -42,7 +42,7 @@ export default function Prd() {
           <PrereqBanner text="PRD generation needs at least one approved requirement — approvals are the gate."
             href={`/projects/${pid}/requirements`} action="Approve requirements" />
         )}
-        <StageEmpty title="No PRD yet" hint="Generate the spec from your approved requirements."
+        <StageEmpty title="No PRD yet" hint="Approving all requirements builds the whole blueprint automatically — or generate just the spec here."
           actionLabel="Generate PRD" generating={write.isPending}
           disabledReason={approved === 0 ? `Waiting on approvals (0 approved) — the button unlocks at 1.` : undefined}
           onGenerate={() => write.mutate({ path: `/projects/${pid}/prd/generate`, init: { method: "POST" } })} />

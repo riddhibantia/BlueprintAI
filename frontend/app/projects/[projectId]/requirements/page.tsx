@@ -12,6 +12,7 @@ import { DataTable } from "../../../../components/ui/data";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { Drawer, Dialog } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
+import { api } from "../../../../lib/api/client";
 import { traceArtifact, clarify as clarifyIdea } from "../../../../lib/api/endpoints";
 
 /** Requirements workspace (§17): table + search/filter + detail drawer, cache-backed. */
@@ -61,14 +62,40 @@ export default function Requirements() {
       setBulkBusy(false);
     }
   };
-  // Auto-advance: approving the final draft completes the stage — take the
-  // user to the Product Spec instead of stranding them on a done table.
+  // Auto-pipeline: when the last approval lands, build everything server-side
+  // (PRD → stories → architecture → data → APIs → security → tasks → tests)
+  // and land on the finished blueprint instead of stranding the user.
+  const [building, setBuilding] = useState(false);
+  const [buildError, setBuildError] = useState("");
+  const runPipeline = async () => {
+    if (building) return;
+    setBuilding(true);
+    setBuildError("");
+    try {
+      await api(`/projects/${pid}/pipeline/run`, { method: "POST" });
+      router.push(`/projects/${pid}/blueprint`);
+    } catch (e) {
+      setBuildError(e instanceof Error ? e.message : "Pipeline failed.");
+      setBuilding(false);
+    }
+  };
   const maybeAdvance = (newlyApproved: number) => {
     if (reqs.length > 0 && approved + newlyApproved >= reqs.length) {
-      router.push(`/projects/${pid}/prd`);
+      runPipeline();
     }
   };
   const [confirmRegen, setConfirmRegen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const [ownTitle, setOwnTitle] = useState("");
+  const [ownDesc, setOwnDesc] = useState("");
+  const [ownPriority, setOwnPriority] = useState("medium");
+  const addOwn = () => {
+    if (!ownTitle.trim()) return;
+    write.mutate(
+      { path: `/projects/${pid}/requirements`,
+        init: { method: "POST", body: JSON.stringify({ title: ownTitle.trim(), description: ownDesc.trim(), priority: ownPriority }) } },
+      { onSuccess: () => { setOwnOpen(false); setOwnTitle(""); setOwnDesc(""); setOwnPriority("medium"); } });
+  };
   const doGenerate = (replace: boolean) => {
     setConfirmRegen(false);
     write.mutate({
@@ -128,28 +155,40 @@ export default function Requirements() {
             </select>
           </label>
           <Button variant="ghost" onClick={clarify} loading={clarifying}>Clarify</Button>
+          <Button variant="ghost" onClick={() => setOwnOpen(true)}>Add your own</Button>
           <Button loading={write.isPending} onClick={() => (reqs.length > 0 ? setConfirmRegen(true) : doGenerate(false))}>
             <Plus size={14} />Generate
           </Button>
         </div>
       </div>
 
-      {reqs.length > 0 && approved === reqs.length && (
+      {reqs.length > 0 && approved === reqs.length && !building && (
         <div className="mb-3.5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface p-3.5">
-          <p className="min-w-0 flex-1 text-[13.5px]"><b>All {reqs.length} requirements approved.</b> <span className="text-secondary">The next step is the Product Spec.</span></p>
-          <Button onClick={() => router.push(`/projects/${pid}/prd`)}>Continue to Product Spec<ArrowRight size={14} /></Button>
+          <p className="min-w-0 flex-1 text-[13.5px]"><b>All {reqs.length} requirements approved.</b> <span className="text-secondary">Build the full blueprint — PRD, stories, architecture, data, APIs, security, tasks, tests.</span></p>
+          <Button onClick={runPipeline}>Build my blueprint<ArrowRight size={14} /></Button>
         </div>
       )}
+      {building && (
+        <div className="mb-3.5 rounded-2xl border border-border bg-surface p-5" role="status" aria-live="polite">
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-border border-t-accent" aria-hidden />
+            <p className="text-[14px] font-semibold">Building your blueprint…</p>
+          </div>
+          <p className="mt-1 text-[13px] text-secondary">Generating PRD → stories → architecture → data model → APIs → security → tasks → tests. This takes a few seconds.</p>
+        </div>
+      )}
+      {buildError && <div className="mb-3"><ErrorState message={buildError} onRetry={runPipeline} /></div>}
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
       {clarifyError && <div className="mb-3"><ErrorState message={clarifyError} /></div>}
       {questions.length > 0 && (
         <div className="mb-3.5 rounded-2xl border border-border bg-surface p-4">
-          <b className="text-[14px]">Clarification questions</b>
-          <ul className="mt-1 list-disc pl-5 text-[13px] text-secondary">{questions.map((x) => <li key={x}>{x}</li>)}</ul>
-          <label className="mt-2 block text-[13px]">Your answers
+          <b className="text-[14px]">Tell us what you want — in your own words</b>
+          <p className="mt-0.5 text-[12.5px] text-secondary">Write plainly, like explaining to a friend. The generator reads this and shapes the requirements around it.</p>
+          <ul className="mt-1.5 list-disc pl-5 text-[13px] text-secondary">{questions.map((x) => <li key={x}>{x}</li>)}</ul>
+          <label className="mt-2 block text-[13px]">Your wishes
             <textarea rows={2} value={answers} onChange={(e) => setAnswers(e.target.value)}
-              placeholder="Managers approve; email+password auth; receipts required… — type / for commands"
-              className="mt-1 w-full rounded-xl border border-border bg-canvas p-2.5" />
+              placeholder="Example: I want customers to book tables online and get an SMS reminder an hour before…"
+              className="mt-1 w-full rounded-xl border border-border bg-canvas p-2.5 placeholder:text-muted focus:border-accent focus:outline-none" />
           </label>
         </div>
       )}
@@ -239,6 +278,32 @@ export default function Requirements() {
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setConfirmRegen(false)}>Cancel</Button>
           <Button loading={write.isPending} onClick={() => doGenerate(true)}>Replace & generate</Button>
+        </div>
+      </Dialog>
+      <Dialog open={ownOpen} onClose={() => setOwnOpen(false)} title="Add your own requirement">
+        <p className="text-[13px] text-secondary">Write it the way you'd say it — plain words are perfect.</p>
+        <label className="mt-3 block text-[13px]">What do you want?
+          <input value={ownTitle} onChange={(e) => setOwnTitle(e.target.value)}
+            placeholder="Example: customers get an SMS reminder an hour before"
+            className="mt-1 w-full rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] placeholder:text-muted focus:border-accent focus:outline-none" />
+        </label>
+        <label className="mt-2 block text-[13px]">Extra detail (optional)
+          <textarea rows={2} value={ownDesc} onChange={(e) => setOwnDesc(e.target.value)}
+            placeholder="Anything that clarifies what 'done' looks like…"
+            className="mt-1 w-full rounded-xl border border-border bg-canvas p-2.5 text-[13px] placeholder:text-muted focus:border-accent focus:outline-none" />
+        </label>
+        <label className="mt-2 block text-[13px]">Priority
+          <select value={ownPriority} onChange={(e) => setOwnPriority(e.target.value)}
+            className="mt-1 rounded-xl border border-border bg-canvas px-3 py-2 text-[13px] focus:border-accent focus:outline-none">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </label>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setOwnOpen(false)}>Cancel</Button>
+          <Button loading={write.isPending} disabled={!ownTitle.trim()} onClick={addOwn}>Add requirement</Button>
         </div>
       </Dialog>
     </div>

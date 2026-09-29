@@ -22,25 +22,113 @@ def clarify_questions(idea: str) -> list[str]:
 
 
 def gen_requirements(idea: str, answers: str = "", evidence: str = "") -> list[dict]:
-    """Draft typed requirements with acceptance criteria (§6.3)."""
-    llm = complete(f"Draft requirements for: {idea}. Clarifications: {answers}", evidence)
+    """Draft typed requirements with acceptance criteria (§6.3).
+
+    Idea-aware mock: significant words from the idea + the user's own
+    description (answers) become the domain entities, so every project gets
+    different requirements. Titles and criteria stay in plain language a
+    non-technical approver can read. Same 8-slot type skeleton every time
+    (2 functional, 3 security, 2 non-functional, 1 business-rule, 1
+    constraint) so counts stay stable; content varies by idea.
+    """
+    complete(f"Draft requirements for: {idea}. Clarifications: {answers}", evidence)
+    ents = _entities(idea, answers)
+    e1, e1p = ents[0], _plural(ents[0])
+    e2, e2p = (ents[1], _plural(ents[1])) if len(ents) > 1 else ("Submission", "Submissions")
     core = [
-        ("User registration and login with JWT", "functional", "high"),
-        ("Role-based access control (admin/manager/user)", "security", "high"),
-        ("CRUD for core domain entities", "functional", "high"),
-        ("Audit logging for sensitive actions", "non-functional", "medium"),
-        ("Input validation on all API endpoints", "security", "high"),
-        ("Response time p95 < 500ms for reads", "non-functional", "medium"),
-        ("Encrypted secrets management", "constraint", "high"),
-        ("Approval workflow with states", "business-rule", "medium"),
+        ("Sign up and log in", "functional", "high",
+         "Anyone can create an account and sign in securely. In plain terms: your users get "
+         "their own login, and passwords are never stored as readable text.",
+         "A new user can register and log in; a wrong password is rejected."),
+        (f"Create and manage {e1p}", "functional", "high",
+         f"Users can add, edit, and remove {e1p} — the core thing this product handles. "
+         f"In plain terms: the {e1} list is fully under the user's control.",
+         f"A user can create an {e1} and see it in their list; deleting removes it everywhere."),
+        ("Roles: the right people see the right things", "security", "high",
+         "Managers, staff, and customers each see only what their role allows. In plain terms: "
+         "no peeking at other people's data.",
+         "A customer cannot open manager-only pages; every denial is logged."),
+        ("Activity log nobody can erase", "non-functional", "medium",
+         "Every important action is written to a tamper-proof history. In plain terms: you can "
+         "always answer 'who changed what, and when?'",
+         "Sensitive actions appear in the log with actor and timestamp."),
+        ("Block harmful input everywhere", "security", "high",
+         "Every form and API rejects malicious or malformed input. In plain terms: typing "
+         "something nasty into a field can never break or trick the app.",
+         "Script payloads in inputs are neutralized; oversized uploads are refused."),
+        ("Fast responses, even when busy", "non-functional", "medium",
+         "Pages answer in under half a second for typical reads. In plain terms: the app "
+         "never keeps users staring at a spinner.",
+         "95% of reads complete in under 500ms under normal load."),
+        ("Secrets locked away from code", "constraint", "high",
+         "Passwords, keys, and tokens live in vaults or environment config — never in code, "
+         "logs, or the repo. In plain terms: a leaked screenshot can't leak access.",
+         "No secret appears in code, logs, or version history."),
+        (f"Review and approve {e2p}", "business-rule", "medium",
+         f"Important {e2p.lower()} go live only after a second pair of eyes. In plain terms: "
+         f"nothing ships by accident — {e2p.lower()} move submitted → approved or rejected.",
+         f"An {e2} cannot go live before approval; rejections record a reason."),
     ]
-    out = []
-    for i, (t, typ, pri) in enumerate(core, 1):
-        out.append({"code": f"REQ-{i:03d}", "title": t, "description": f"{t}. Context: {idea[:120]}",
-                    "type": typ, "priority": pri,
-                    "acceptance_criteria": f"{t} verified by test; {llm['text'][:80]}",
-                    "status": "draft"})
-    return out
+    return [{"code": f"REQ-{i:03d}", "title": t, "description": d, "type": typ,
+             "priority": pri, "acceptance_criteria": ac, "status": "draft"}
+            for i, (t, typ, pri, d, ac) in enumerate(core, 1)]
+
+
+STOPWORDS = set(
+    "a an the to for of and or with my our new your you we they it its this that "
+    "app application platform system software tool service online site website portal "
+    "management tracker tracking marketplace manager build builder create maker studio "
+    "smart easy simple little aesthetic modern best top ultimate pro plus go get use used using "
+    "employee employees user users customer customers manager managers admin admins staff "
+    "teacher teachers student students member members people person team teams "
+    "approve approves approved approve managing manage manages track tracks send sends "
+    "receive receives email emails book books booking create creates delete deletes update updates"
+    .split())
+
+FALLBACK_ENTITIES = ["Record", "Request", "Item"]
+
+
+def _plural(noun: str) -> str:
+    if noun.endswith("ing"):
+        return noun  # activities stay singular: Tutoring, Booking
+    if noun.endswith("y") and noun[-2:-1] not in "aeiou":
+        return noun[:-1] + "ies"
+    if noun.endswith(("s", "x", "ch", "sh")):
+        return noun + "es"
+    return noun + "s"
+
+
+def _singular(w: str) -> str:
+    if w.endswith("ies") and len(w) > 4:
+        return w[:-3] + "y"
+    if w.endswith("s") and not w.endswith(("ss", "us", "is")):
+        return w[:-1]
+    return w
+
+
+def _entities(idea: str, answers: str = "") -> list[str]:
+    """Domain entities from the idea + the user's own words (deterministic)."""
+    words = re.findall(r"[A-Za-z][A-Za-z\-]{2,}", f"{idea} {answers}")
+    seen: set[str] = set()
+    out: list[str] = []
+    for w in words:
+        if w.isupper() and len(w) <= 4:
+            continue  # acronyms (SMS, API, PDF) are tech terms, not entities
+        key = _singular(w.lower()).strip("-")
+        if not key or key in STOPWORDS or key in seen:
+            continue
+        seen.add(key)
+        noun = "-".join(p.capitalize() for p in key.split("-"))
+        if noun not in out:
+            out.append(noun)
+        if len(out) == 3:
+            break
+    for fb in FALLBACK_ENTITIES:
+        if len(out) >= 3:
+            break
+        if fb not in out:
+            out.append(fb)
+    return out[:3]
 
 
 def gen_prd(idea: str, reqs: list[dict], evidence: str = "") -> dict:
