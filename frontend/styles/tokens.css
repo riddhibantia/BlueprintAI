@@ -1,36 +1,40 @@
 @import "tailwindcss";
 
-/* V2 semantic tokens — dark-first (§4). :root IS dark; light overrides below. */
+/* BlueprintAI visual identity v3 — Linear/Geist discipline:
+   monochrome system, color carries meaning only. No decorative
+   gradients, glows, or nested-card shadows. Hierarchy comes from
+   spacing + type weight. :root IS dark; light overrides below. */
 @theme {
-  --color-canvas: #0a0b0d;
-  --color-surface: #111317;
-  --color-elevated: #171a1f;
-  --color-border: #242830;
-  --color-primary: #f4f6f8;
+  --color-canvas: #09090b;
+  --color-surface: #101014;
+  --color-elevated: #17171c;
+  --color-border: #232329;
+  --color-primary: #fafafa;
   /* shadcn/RareUI bridge: foreground maps to the primary text token */
   --color-foreground: var(--color-primary);
   --color-background: var(--color-surface);
-  --color-secondary: #8b929e;
-  --color-muted: #626a75;
+  --color-secondary: #a1a1aa;
+  --color-muted: #71717a;
   --color-accent: #5eead4;
   --color-accent2: #818cf8;
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-danger: #fb7185;
+  --color-success: #4ade80;
+  --color-warning: #f5b942;
+  --color-danger: #f87171;
   --color-info: #60a5fa;
   --color-on-accent: #06201d;
   --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 [data-theme="light"] {
-  --color-canvas: #f3f1ea;
-  --color-surface: #fffdf8;
-  --color-elevated: #ebe7d9;
-  --color-border: #e2dcc9;
-  --color-primary: #211d14;
-  --color-secondary: #6e675a;
-  --color-muted: #a09a8a;
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
+  --color-elevated: #f4f4f5;
+  --color-border: #e4e4e7;
+  --color-primary: #09090b;
+  --color-secondary: #52525b;
+  --color-muted: #a1a1aa;
   --color-accent: #0b7a75;
   --color-accent2: #7c5cd6;
   --color-success: #1c7a3d;
@@ -45,6 +49,14 @@ body {
   color: var(--color-primary);
   font-family: var(--font-sans);
   font-size: 14.5px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display voice: Space Grotesk, tight. One rule gives the whole
+   product its typographic identity — body text stays Inter. */
+h1, h2, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 /* Restrained motion only (§41): 120–180ms hovers, 180–250ms drawers. */

@@ -2,10 +2,10 @@
 import { ReactNode } from "react";
 import { cn } from "../../lib/utils/cn";
 
-/** Surface card (§7). */
+/** Surface card (§7). Hairline border, no shadow — elevation via lightness. */
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn("rounded-2xl border border-border bg-surface p-4 shadow-[0_1px_2px_rgba(0,0,0,0.3)]", className)}>
+    <div className={cn("rounded-xl border border-border bg-surface p-4", className)}>
       {children}
     </div>
   );

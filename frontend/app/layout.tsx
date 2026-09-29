@@ -1,8 +1,9 @@
 import "../styles/tokens.css";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
+const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-display", display: "swap" });
 
 export const metadata = { title: "BlueprintAI — Engineering Blueprint Workspace", description: "Idea → requirements → architecture → APIs → validation. RAG-grounded, traceable, human-approved." };
 
@@ -13,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem("dbp-theme");if(t){document.documentElement.dataset.theme=t;}else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches){document.documentElement.dataset.theme="light";}}catch(e){}})();` }} />
       </head>
-      <body className={`${inter.variable} ${mono.variable} bg-canvas font-sans text-primary`}>
+      <body className={`${inter.variable} ${mono.variable} ${display.variable} bg-canvas font-sans text-primary`}>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-lg focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-on-accent">Skip to content</a>
         <main id="main">{children}</main>
       </body>

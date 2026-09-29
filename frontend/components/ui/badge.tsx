@@ -1,14 +1,15 @@
 "use client";
-import { AlertTriangle, CheckCircle2, Info, XCircle, MinusCircle } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils/cn";
 
-const tone: Record<string, { cls: string; Icon: LucideIcon }> = {
-  ok: { cls: "text-success border-success/40 bg-success/10", Icon: CheckCircle2 },
-  warn: { cls: "text-warning border-warning/40 bg-warning/10", Icon: AlertTriangle },
-  bad: { cls: "text-danger border-danger/40 bg-danger/10", Icon: XCircle },
-  info: { cls: "text-info border-info/40 bg-info/10", Icon: Info },
-  neutral: { cls: "text-secondary border-border bg-elevated", Icon: MinusCircle },
+// Monochrome-first statuses (Geist discipline): the pill is always neutral —
+// ink text on a hairline border. Color survives only as the 6px status dot,
+// so a screen full of badges reads calm and failures still pop.
+const dot: Record<string, string> = {
+  ok: "bg-success",
+  warn: "bg-warning",
+  bad: "bg-danger",
+  info: "bg-info",
+  neutral: "bg-muted",
 };
 
 function pick(value: string): string {
@@ -19,13 +20,12 @@ function pick(value: string): string {
   return "info";
 }
 
-/** Plain badge (icon + label, never color-only §40). */
-export function Badge({ value, tone: forced }: { value: string; tone?: keyof typeof tone }) {
-  const t = tone[forced || pick(value)];
-  const Icon = t.Icon;
+/** Plain badge: neutral pill + status dot, never color-only (§40). */
+export function Badge({ value, tone: forced }: { value: string; tone?: keyof typeof dot }) {
+  const d = dot[forced || pick(value)];
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11.5px] font-semibold whitespace-nowrap", t.cls)}>
-      <Icon size={12} aria-hidden />{value}
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full border border-border bg-elevated px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap text-secondary")}>
+      <span className={cn("h-1.5 w-1.5 flex-none rounded-full", d)} aria-hidden />{value}
     </span>
   );
 }

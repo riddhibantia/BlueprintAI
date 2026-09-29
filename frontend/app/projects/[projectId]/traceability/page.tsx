@@ -180,10 +180,11 @@ export default function Traceability() {
       {(data?.links || []).length === 0 ? (
         <EmptyState title="No relationships yet" hint="Approve artifacts to begin building the traceability graph." />
       ) : (
-        <div className="h-[clamp(320px,50vh,520px)] overflow-hidden rounded-2xl border border-border bg-canvas">
+        <div className="h-[clamp(320px,50vh,520px)] overflow-hidden rounded-xl border border-border bg-surface">
           <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={onNodeClick}
-            fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.3} maxZoom={1.5} colorMode="dark">
-            <Background gap={22} size={1} color="var(--color-border)" />
+            fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.3} maxZoom={1.5}
+            colorMode={typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "light" : "dark"}>
+            <Background gap={24} size={1.5} color="var(--color-border)" />
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
