@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_token
 from app.api.deps import current_user
 from app.models.db import User
-from app.schemas import RegisterIn, LoginIn
+from app.schemas import RegisterIn, LoginIn, ResetIn
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,6 +59,23 @@ def logout(resp: Response, user: User = Depends(current_user)):
     """Clear the session cookie."""
     resp.delete_cookie(COOKIE, path="/")
     return {"status": "logged out"}
+
+
+@router.post("/reset")
+def reset_password(body: ResetIn, db: Session = Depends(get_db)):
+    """Reset an account password (self-hosted flow: no email loop).
+
+    Always returns the same message so the endpoint never reveals whether an
+    email is registered. New password length is enforced at the boundary (422).
+    """
+    email = body.email.strip().lower()
+    u = db.query(User).filter_by(email=email).first()
+    if u:
+        u.password_hash = hash_password(body.new_password)
+        db.commit()
+        log(db, user_id=u.id, action="user.reset", detail=email)
+    return {"status": "ok",
+            "message": "If that email is registered, its password was reset — log in with the new one."}
 
 
 @router.get("/me")

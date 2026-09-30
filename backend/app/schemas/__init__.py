@@ -14,6 +14,12 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class ResetIn(BaseModel):
+    """Password reset (self-hosted: no email loop — the account owner resets directly)."""
+    email: str = Field(min_length=3, max_length=254)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=4000)

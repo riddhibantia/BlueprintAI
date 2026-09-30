@@ -25,3 +25,20 @@ def test_cookie_login_and_me(client):
 def test_logout_clears_session(client):
     assert client.post("/auth/logout").status_code == 200
     assert client.get("/auth/me").status_code == 401
+
+
+def test_password_reset_flow(client):
+    client.post("/auth/register", json={"email": "reset@dev.blue", "password": "pass12345"})
+    # wrong password stays rejected with a generic message (no enumeration)
+    assert client.post("/auth/login", json={"email": "reset@dev.blue", "password": "wrongpass1"}).status_code == 401
+    assert client.post("/auth/login", json={"email": "nobody@dev.blue", "password": "wrongpass1"}).status_code == 401
+    # unknown email gets the same OK (existence never revealed)
+    r = client.post("/auth/reset", json={"email": "nobody@dev.blue", "new_password": "newpass123"})
+    assert r.status_code == 200
+    # short replacement rejected at the boundary
+    assert client.post("/auth/reset", json={"email": "reset@dev.blue", "new_password": "short"}).status_code == 422
+    # real reset: new password works, old one doesn't
+    r = client.post("/auth/reset", json={"email": "reset@dev.blue", "new_password": "newpass123"})
+    assert r.status_code == 200 and "reset" in r.json()["message"].lower()
+    assert client.post("/auth/login", json={"email": "reset@dev.blue", "password": "pass12345"}).status_code == 401
+    assert client.post("/auth/login", json={"email": "reset@dev.blue", "password": "newpass123"}).status_code == 200
