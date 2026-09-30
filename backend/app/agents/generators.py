@@ -35,29 +35,30 @@ def gen_requirements(idea: str, answers: str = "", evidence: str = "") -> list[d
     ents = _entities(idea, answers)
     e1, e1p = ents[0], _plural(ents[0])
     e2, e2p = (ents[1], _plural(ents[1])) if len(ents) > 1 else ("Submission", "Submissions")
+    e1l, e1pl, e2pl = e1.lower(), e1p.lower(), e2p.lower()
     core = [
-        ("Sign up and log in", "functional", "high",
-         "Anyone can create an account and sign in securely. In plain terms: your users get "
-         "their own login, and passwords are never stored as readable text.",
-         "A new user can register and log in; a wrong password is rejected."),
+        (f"Accounts: sign up and log in to manage {e1pl}", "functional", "high",
+         f"Anyone can create an account and sign in securely to manage their {e1pl}. "
+         "In plain terms: your users get their own login, and passwords are never stored as readable text.",
+         f"A new user can register, log in, and reach their {e1pl}; a wrong password is rejected."),
         (f"Create and manage {e1p}", "functional", "high",
          f"Users can add, edit, and remove {e1p} — the core thing this product handles. "
-         f"In plain terms: the {e1} list is fully under the user's control.",
-         f"A user can create an {e1} and see it in their list; deleting removes it everywhere."),
-        ("Roles: the right people see the right things", "security", "high",
-         "Managers, staff, and customers each see only what their role allows. In plain terms: "
+         f"In plain terms: the {e1l} list is fully under the user's control.",
+         f"A user can create an {e1l} and see it in their list; deleting removes it everywhere."),
+        (f"Permissions: who can see and change {e1p}", "security", "high",
+         f"Managers, staff, and customers each see only the {e1pl} their role allows. In plain terms: "
          "no peeking at other people's data.",
-         "A customer cannot open manager-only pages; every denial is logged."),
-        ("Activity log nobody can erase", "non-functional", "medium",
-         "Every important action is written to a tamper-proof history. In plain terms: you can "
+         f"A customer cannot open manager-only {e1pl}; every denial is logged."),
+        (f"{e1} history nobody can erase", "non-functional", "medium",
+         f"Every change to an {e1l} is written to a tamper-proof history. In plain terms: you can "
          "always answer 'who changed what, and when?'",
-         "Sensitive actions appear in the log with actor and timestamp."),
-        ("Block harmful input everywhere", "security", "high",
-         "Every form and API rejects malicious or malformed input. In plain terms: typing "
+         f"Creating or approving an {e1l} appears in the log with actor and timestamp."),
+        (f"Block harmful input in {e1l} forms", "security", "high",
+         f"Every {e1l} form and API rejects malicious or malformed input. In plain terms: typing "
          "something nasty into a field can never break or trick the app.",
-         "Script payloads in inputs are neutralized; oversized uploads are refused."),
-        ("Fast responses, even when busy", "non-functional", "medium",
-         "Pages answer in under half a second for typical reads. In plain terms: the app "
+         f"Script payloads in {e1l} inputs are neutralized; oversized uploads are refused."),
+        (f"Fast {e1pl}, even when busy", "non-functional", "medium",
+         f"Pages answer in under half a second even with thousands of {e1pl}. In plain terms: the app "
          "never keeps users staring at a spinner.",
          "95% of reads complete in under 500ms under normal load."),
         ("Secrets locked away from code", "constraint", "high",
@@ -65,9 +66,9 @@ def gen_requirements(idea: str, answers: str = "", evidence: str = "") -> list[d
          "logs, or the repo. In plain terms: a leaked screenshot can't leak access.",
          "No secret appears in code, logs, or version history."),
         (f"Review and approve {e2p}", "business-rule", "medium",
-         f"Important {e2p.lower()} go live only after a second pair of eyes. In plain terms: "
-         f"nothing ships by accident — {e2p.lower()} move submitted → approved or rejected.",
-         f"An {e2} cannot go live before approval; rejections record a reason."),
+         f"Important {e2pl} go live only after a second pair of eyes. In plain terms: "
+         f"nothing ships by accident — {e2pl} move submitted → approved or rejected.",
+         f"An {e2.lower()} cannot go live before approval; rejections record a reason."),
     ]
     return [{"code": f"REQ-{i:03d}", "title": t, "description": d, "type": typ,
              "priority": pri, "acceptance_criteria": ac, "status": "draft"}

@@ -162,6 +162,12 @@ export default function Requirements() {
         </div>
       </div>
 
+      {reqs.length > 0 && approved < reqs.length && approved > 0 && !building && (
+        <div className="mb-3.5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface p-3.5">
+          <p className="min-w-0 flex-1 text-[13.5px]"><b>{approved} of {reqs.length} approved.</b> <span className="text-secondary">You can build from the approved ones now — or approve the rest first.</span></p>
+          <Button onClick={runPipeline}>Build from {approved} approved<ArrowRight size={14} /></Button>
+        </div>
+      )}
       {reqs.length > 0 && approved === reqs.length && !building && (
         <div className="mb-3.5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface p-3.5">
           <p className="min-w-0 flex-1 text-[13.5px]"><b>All {reqs.length} requirements approved.</b> <span className="text-secondary">Build the full blueprint — PRD, stories, architecture, data, APIs, security, tasks, tests.</span></p>
@@ -207,7 +213,7 @@ export default function Requirements() {
             {write.isError && <span className="text-[12.5px] text-danger">{(write.error as Error)?.message}</span>}
           </div>
         )}
-        <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-4 w-4 accent-teal-700" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th></>}>
+        <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-4 w-4 accent-teal-700" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th><th><span className="sr-only">Approve</span></th></>}>
           {filtered.map((r) => (
             <tr key={r.id} onClick={() => open(r)} className="cursor-pointer" tabIndex={0}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(r); } }}
@@ -234,6 +240,18 @@ export default function Requirements() {
                 {counts[r.code] || 0}
               </button></td>
               <td className="text-[12.5px] text-secondary">{timeAgo(r.updated_at)}</td>
+              <td onClick={(e) => e.stopPropagation()}>
+                {r.status !== "approved" && (
+                  <button
+                    onClick={() => write.mutate(
+                      { path: `/requirements/${r.id}/approve`, init: { method: "POST" } },
+                      { onSuccess: () => maybeAdvance(1) })}
+                    disabled={write.isPending || bulkBusy}
+                    className="rounded-lg border border-border px-2.5 py-1 text-[12px] font-semibold text-accent hover:border-accent disabled:opacity-50">
+                    Approve
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </DataTable>
