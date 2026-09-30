@@ -50,6 +50,14 @@ def export_md(pid: str, db: Session = Depends(get_db), user=Depends(current_user
     lines += [f"- **{r['code']}** {r['title']} ({r['status']})" for r in b["requirements"]]
     lines += ["", "## APIs"] + [f"- `{a['method']} {a['path']}`" for a in b["apis"]]
     lines += ["", "## Tests"] + [f"- **{t['code']}** {t['title']}" for t in b["tests"]]
+    prd = b.get("prd") or {}
+    if prd:
+        lines += ["", "## Product Spec"]
+        for key, val in prd.items():
+            lines.append(f"### {str(key).replace('_', ' ').title()}")
+            items = val if isinstance(val, list) else [val]
+            lines += [f"- {item}" for item in items]
+            lines.append("")
     return PlainTextResponse("\n".join(lines), media_type="text/markdown")
 
 
@@ -95,6 +103,14 @@ def export_pdf(pid: str, db: Session = Depends(get_db), user=Depends(current_use
     story += [Spacer(1, 12), Paragraph("Tests", styles["Heading2"])]
     for t in b["tests"]:
         story.append(Paragraph(f"<b>{_para(t['code'])}</b> {_para(t['title'])}", styles["Normal"]))
+    prd = b.get("prd") or {}
+    if prd:
+        story += [Spacer(1, 12), Paragraph("Product Spec", styles["Heading2"])]
+        for key, val in prd.items():
+            story.append(Paragraph(_para(str(key).replace("_", " ").title()), styles["Heading3"]))
+            items = val if isinstance(val, list) else [val]
+            for item in items:
+                story.append(Paragraph(f"• {_para(str(item))}", styles["Normal"]))
     doc.build(story)
     return Response(buf.getvalue(), media_type="application/pdf",
                     headers={"Content-Disposition": f"attachment; filename=blueprint-{pid[:8]}.pdf"})

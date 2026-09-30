@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = DEV_JWT_DEFAULT
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
+    COOKIE_SAMESITE: str = "lax"  # lax (same-domain) | none (split frontend/API domains; forces Secure)
     LLM_PROVIDER: str = "mock"  # mock | openai
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
@@ -44,6 +45,14 @@ class Settings(BaseSettings):
     def _ttl_sane(cls, v: int) -> int:
         if v < 5 or v > 1440:
             raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be 5..1440")
+        return v
+
+    @field_validator("COOKIE_SAMESITE")
+    @classmethod
+    def _cookie_mode(cls, v: str) -> str:
+        v = v.strip().lower()
+        if v not in ("lax", "strict", "none"):
+            raise ValueError("COOKIE_SAMESITE must be lax|strict|none")
         return v
 
     @model_validator(mode="after")

@@ -4,8 +4,20 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 from .config import settings
 
-connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(settings.DATABASE_URL, connect_args=connect_args, future=True)
+
+def normalize_url(url: str) -> str:
+    """Accept PaaS-issued URLs: bare postgres:// becomes postgresql+psycopg://
+    (psycopg v3 is what's installed — plain postgres:// would resolve psycopg2)."""
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
+DATABASE_URL = normalize_url(settings.DATABASE_URL)
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
 

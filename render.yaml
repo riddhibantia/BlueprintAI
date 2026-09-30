@@ -1,0 +1,45 @@
+# BlueprintAI on Render (free tier path): API + Postgres with pgvector.
+# Frontend -> Vercel (see README "Deploy" section).
+#
+# 1. Push this repo to GitHub.
+# 2. Render dashboard -> New -> Blueprint -> select the repo (uses this file).
+# 3. Set a unique JWT_SECRET when prompted (or accept the generated value).
+# 4. After deploy: Render Postgres -> enable the `vector` extension once
+#    (psql: CREATE EXTENSION IF NOT EXISTS vector;) — the API also attempts
+#    this on boot and degrades gracefully without it.
+# 5. Point Vercel's NEXT_PUBLIC_API at the Render API URL and redeploy web.
+
+databases:
+  - name: blueprint-db
+    plan: free
+    postgresMajorVersion: 16
+
+services:
+  - type: web
+    name: blueprint-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: blueprint-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENV
+        value: prod
+      - key: CORS_ORIGINS
+        value: https://blueprint-ai.vercel.app
+      - key: LLM_PROVIDER
+        value: mock
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: EMBEDDING_PROVIDER
+        value: hash

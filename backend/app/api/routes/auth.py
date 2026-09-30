@@ -14,10 +14,12 @@ COOKIE = "dbp_token"
 
 
 def _set_cookie(resp: Response, token: str) -> None:
+    samesite = settings.COOKIE_SAMESITE
     resp.set_cookie(COOKIE, token,
                     max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-                    httponly=True, samesite="lax", path="/",
-                    secure=(settings.ENV == "prod"))
+                    httponly=True, samesite=samesite, path="/",
+                    # SameSite=None is rejected by browsers without Secure.
+                    secure=(settings.ENV == "prod" or samesite == "none"))
 
 
 def _payload(u: User) -> dict:

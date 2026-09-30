@@ -172,10 +172,21 @@ docker compose up --build
 
 `JWT_SECRET` is required — compose and the API both refuse to boot without a
 real secret. `OPENAI_API_KEY` is optional (mock path is the default).
-To deploy: build the two images, provide the same env vars
-(`DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGINS`, optional `OPENAI_API_KEY`),
-and point the frontend's `NEXT_PUBLIC_API` build arg at the API URL.
 `ENV=prod` disables API docs and detailed health output.
+
+## Deploy (permanent live demo)
+
+- **Backend → Render:** push to GitHub → New → Blueprint (uses `render.yaml`:
+  API + Postgres 16). Set a unique `JWT_SECRET`; enable the `vector`
+  extension once on the database. `DATABASE_URL` accepts Render's
+  `postgres://` scheme (normalized to `postgresql+psycopg://` on boot).
+- **Frontend → Vercel:** import the repo, set `NEXT_PUBLIC_API` to the Render
+  API URL, deploy. No `vercel.json` needed — defaults work.
+- **Split-domain auth:** frontend and API on different hosts need
+  `COOKIE_SAMESITE=none` on the API (forces `Secure`, requires HTTPS);
+  keep `lax` when serving both from one domain.
+- **Free AI:** add a Gemini/Groq/OpenRouter key (see table above) as
+  `OPENAI_API_KEY` (+ `OPENAI_BASE_URL`) on the API service for real prose.
 
 ## MVP flow
 
