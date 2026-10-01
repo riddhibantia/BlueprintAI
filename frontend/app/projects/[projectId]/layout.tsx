@@ -25,9 +25,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       </Drawer>
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onPalette={openPalette} onMenu={() => setNavOpen(true)} />
-        <main id="main" className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-5">
+        <div className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-5">
           {children}
-        </main>
+        </div>
       </div>
       <Drawer open={copilotOpen} onClose={() => setCopilotOpen(false)} label="Blueprint Copilot" title="Blueprint Copilot">
         <CopilotPanel />

@@ -50,7 +50,8 @@ export function CopilotPanel() {
     setBusy(false);
   };
 
-  const page = path.split("/").pop() || "overview";
+  const rawPage = path.split("/").pop() || "";
+  const page = rawPage === pid ? "overview" : rawPage || "overview";
   const quick: [string, () => void][] = [
     ["Find requirement gaps", () => ask("Which requirements are orphaned and what should link them?")],
     ["Explain this view", () => ask(`Explain the current ${page} state${selection ? ` and artifact ${selection}` : ""}.`)],

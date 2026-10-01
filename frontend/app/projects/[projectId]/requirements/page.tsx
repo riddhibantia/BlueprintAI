@@ -7,7 +7,7 @@ import { useRequirements, useTraceability, useWrite } from "../../../../lib/quer
 import { linkCounts } from "../../../../lib/query/links";
 import { timeAgo } from "../../../../lib/utils/time";
 import { Button } from "../../../../components/ui/button";
-import { StatusBadge } from "../../../../components/ui/badge";
+import { StatusBadge, Badge } from "../../../../components/ui/badge";
 import { DataTable } from "../../../../components/ui/data";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { Drawer, Dialog } from "../../../../components/ui/overlay";
@@ -56,7 +56,7 @@ export default function Requirements() {
       }
       setChecked(new Set());
       if (reqs.length > 0 && approved + targets.length >= reqs.length) {
-        router.push(`/projects/${pid}/prd`);
+        runPipeline();
       }
     } finally {
       setBulkBusy(false);
@@ -262,7 +262,7 @@ export default function Requirements() {
         {sel && (
           <div className="grid gap-3 text-[13.5px]">
             <p className="text-[15px] font-semibold">{sel.title}</p>
-            <p className="flex gap-2"><StatusBadge value={sel.status} /><StatusBadge value={sel.priority} /><span className="text-secondary">v{sel.version}</span></p>
+            <p className="flex gap-2"><StatusBadge value={sel.status} /><Badge value={sel.priority} tone="neutral" /><span className="text-secondary">v{sel.version}</span></p>
             {sel.description && <p className="text-secondary">{sel.description}</p>}
             {sel.acceptance_criteria && (
               <div>

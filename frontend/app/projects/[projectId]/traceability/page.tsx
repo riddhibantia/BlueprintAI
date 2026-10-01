@@ -21,6 +21,12 @@ const COLORS: Record<string, string> = {
   requirement: "var(--color-accent)", story: "var(--color-accent2)", api: "var(--color-info)", db: "var(--color-warning)",
   security: "var(--color-danger)", task: "var(--color-success)", test: "#c084fc", component: "var(--color-secondary)",
 };
+// Legend swatches need real colors (CSS vars don't resolve in canvas-free HTML? they do —
+// but keep one static map for the legend so it never depends on token resolution).
+const LEGEND: Record<string, string> = {
+  requirement: "#0e7c6b", story: "#818cf8", api: "#3b5bdb", db: "#b7791f",
+  security: "#c53030", task: "#2f855a", test: "#7c5cd6", component: "#8a857d",
+};
 
 type TypeNodeData = { type: string; code: string; selected?: boolean };
 
@@ -124,6 +130,8 @@ export default function Traceability() {
   };
 
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirmedCount, setConfirmedCount] = useState(0);
+  const [justConfirmed, setJustConfirmed] = useState<string | null>(null);
   const confirm = async (s: { from: string; to: string; rel: string }) => {
     const key = `${s.from}→${s.to}`;
     const [tt, tid] = s.to.split(":");
@@ -136,6 +144,9 @@ export default function Traceability() {
         body: { source_type: "requirement", source_id: s.from, target_type: tt, target_id: tid, relationship_type: s.rel },
       });
       setSuggestions((prev) => prev.filter((x) => x !== s));
+      setConfirmedCount((n) => n + 1);
+      setJustConfirmed(key);
+      setTimeout(() => setJustConfirmed((cur) => (cur === key ? null : cur)), 4000);
       await traceQ.refetch();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not confirm link.");
@@ -180,7 +191,15 @@ export default function Traceability() {
       {(data?.links || []).length === 0 ? (
         <EmptyState title="No relationships yet" hint="Approve artifacts to begin building the traceability graph." />
       ) : (
-        <div className="h-[clamp(320px,50vh,520px)] overflow-hidden rounded-xl border border-border bg-surface">
+        <>
+        <p className="mb-2 flex flex-wrap gap-x-3 gap-y-1" aria-label="Node type legend">
+          {ORDER.filter((t) => t !== "component").map((t) => (
+            <span key={t} className="inline-flex items-center gap-1 font-mono text-[11px] text-muted">
+              <span className="h-2 w-2 rounded-sm" style={{ background: LEGEND[t] }} aria-hidden />{t}
+            </span>
+          ))}
+        </p>
+        <div className="mb-3.5 h-[clamp(320px,50vh,520px)] overflow-hidden rounded-xl border border-border bg-surface">
           <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={onNodeClick}
             fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.3} maxZoom={1.5}
             colorMode={typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "light" : "dark"}>
@@ -188,6 +207,7 @@ export default function Traceability() {
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
+        </>
       )}
 
       <Card className="mb-3.5">
@@ -210,7 +230,15 @@ export default function Traceability() {
 
       {suggestions.length > 0 && (
         <Card className="mb-3.5">
-          <h3 className="mb-2 text-[14px] font-semibold">Suggested links ({suggestions.length})</h3>
+          <h3 className="mb-2 text-[14px] font-semibold">
+            Suggested links ({suggestions.length}{suggestions.length > 8 ? " · showing first 8" : ""})
+            {confirmedCount > 0 && <span className="ml-2 font-normal text-success">· {confirmedCount} confirmed</span>}
+          </h3>
+          {justConfirmed && (
+            <p className="mb-2 rounded-lg border border-success/40 bg-success/10 px-2.5 py-1.5 text-[12.5px] text-success" role="status">
+              Link confirmed: {justConfirmed} — next suggestion shown above.
+            </p>
+          )}
           {suggestions.slice(0, 8).map((s, i) => {
             const key = `${s.from}→${s.to}`;
             return (

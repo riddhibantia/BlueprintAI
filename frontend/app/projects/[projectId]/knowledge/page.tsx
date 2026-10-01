@@ -68,7 +68,8 @@ export default function Knowledge() {
           <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold"><FileUp size={15} />Collections</h3>
           <label className="block text-[13px]">Upload standard (PDF / TXT / Markdown, ≤15MB)
             <input key={fileKey} type="file" accept=".pdf,.txt,.md" onChange={(e) => e.target.files?.[0] && doUpload(e.target.files[0])}
-              aria-label="Upload document" className="mt-1 text-[13px]" />
+              aria-label="Upload document"
+              className="mt-1.5 block w-full text-[13px] text-secondary file:mr-3 file:rounded-lg file:border file:border-border-strong file:bg-surface file:px-3.5 file:py-2 file:text-[13px] file:font-medium file:text-primary hover:file:bg-elevated" />
           </label>
           {uploading && <div className="mt-2"><LoadingState stage="Parsing, chunking and embedding document" /></div>}
           <div className="mt-2 grid gap-1.5">
