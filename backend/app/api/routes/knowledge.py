@@ -79,7 +79,8 @@ def query(pid: str, body: QueryIn, db: Session = Depends(get_db), user=Depends(c
     project_or_403(pid, db, user)
     rows = db.query(DocumentChunk, Document.name).join(Document, Document.id == DocumentChunk.document_id)\
         .filter(Document.project_id == pid).limit(300).all()
-    chunks = [{"content": c.content, "section": c.section, "source": name} for c, name in rows]
+    chunks = [{"content": c.content, "section": c.section, "source": name,
+               "embedding": c.embedding} for c, name in rows]
     if not chunks:
         return {"hits": [], "note": "insufficient evidence — upload engineering docs first (§43.20)"}
     return {"hits": retrieve(chunks, body.query, body.k)}

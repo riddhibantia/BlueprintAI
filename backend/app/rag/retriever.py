@@ -18,14 +18,20 @@ def _stems(words: set[str]) -> set[str]:
 
 
 def retrieve(chunks: list[dict], query: str, k: int = 5) -> list[dict]:
-    """Hybrid score (vector + lexical) with top-k cutoff; empty base says so upstream."""
+    """Hybrid score (vector + lexical) with top-k cutoff; empty base says so upstream.
+
+    Prefers caller-supplied stored embeddings (one vector per chunk, computed
+    at ingest) over re-embedding every chunk per query — identical results
+    under deterministic providers, and N fewer API calls under OpenAI.
+    """
     qv = embed(query)
     qwords = {w for w in _tokens(query) if len(w) > 2}
     qstems = _stems(qwords)
     scored = []
     for c in chunks:
         content = c.get("content", "")
-        lv = embed(content)
+        stored = c.get("embedding")
+        lv = stored if isinstance(stored, list) and stored else embed(content)
         vec = cosine(qv, lv)
         cstems = _stems(_tokens(content))
         lex = len(qstems & cstems) / max(1, len(qstems))

@@ -49,7 +49,8 @@ def _evidence(db: Session, pid: str, question: str) -> list[dict]:
     """Top retrieved chunks (source + section + excerpt) for grounding."""
     rows = db.query(DocumentChunk, Document.name).join(Document, Document.id == DocumentChunk.document_id)\
         .filter(Document.project_id == pid).limit(200).all()
-    chunks = [{"content": c.content, "section": c.section, "source": name} for c, name in rows]
+    chunks = [{"content": c.content, "section": c.section, "source": name,
+               "embedding": c.embedding} for c, name in rows]
     return retrieve(chunks, question, k=3) if chunks else []
 
 

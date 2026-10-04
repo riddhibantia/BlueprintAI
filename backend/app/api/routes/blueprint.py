@@ -20,7 +20,8 @@ router = APIRouter(tags=["blueprint"])
 def _evidence(db: Session, pid: str, query: str) -> str:
     rows = db.query(DocumentChunk).join(Document, Document.id == DocumentChunk.document_id)\
         .filter(Document.project_id == pid).limit(200).all()
-    chunks = [{"content": c.content, "section": c.section, "source": c.document_id} for c in rows]
+    chunks = [{"content": c.content, "section": c.section, "source": c.document_id,
+               "embedding": c.embedding} for c in rows]
     if not chunks:
         return ""
     hits = retrieve(chunks, query)
