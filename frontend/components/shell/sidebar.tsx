@@ -112,13 +112,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <aside aria-label="Project navigation"
       className={cn("sticky top-0 flex h-screen flex-col border-r border-border bg-subtle transition-[width] duration-200", collapsed ? "w-14 px-2 py-4" : "w-60 px-3 py-4")}>
       <div className={cn("mb-2 flex items-center gap-2.5 px-1", collapsed && "justify-center px-0")}>
-        <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-lg" aria-hidden />
-        {!collapsed && <span className="leading-tight"><b className="block text-[14px] font-semibold">Blueprint <span className="text-accent">AI</span></b></span>}
+        <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full" aria-hidden />
+        {!collapsed && <span className="leading-tight"><b className="block text-[15px] font-medium tracking-[-0.18px]">Blueprint <span className="text-muted">AI</span></b></span>}
       </div>
       <nav className="scroll-thin mt-1 flex-1 overflow-y-auto" aria-label="Modules">
         {SECTIONS.map((sec) => (
           <div key={sec.title || "top"} className="mt-3 first:mt-0">
-            {!collapsed && sec.title && <p className="px-2.5 text-[11px] font-semibold text-muted">{sec.title}</p>}
+            {!collapsed && sec.title && <p className="px-2.5 text-[11px] font-semibold uppercase tracking-[0.96px] text-muted">{sec.title}</p>}
             {sec.items.map(renderItem)}
           </div>
         ))}
@@ -126,7 +126,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className={cn("border-t border-border pt-2", collapsed && "flex flex-col items-center")}>
         <button onClick={toggle} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-expanded={!collapsed}
-          className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-muted hover:bg-elevated hover:text-primary">
+          className="mt-1 flex w-full items-center justify-center gap-2 rounded-full px-2 py-1.5 text-muted transition-colors duration-150 hover:bg-elevated hover:text-primary">
           {collapsed ? <ChevronsRight size={15} /> : <><ChevronsLeft size={15} /><span className="text-[12px]">Collapse</span></>}
         </button>
       </div>

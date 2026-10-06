@@ -228,7 +228,7 @@ cd frontend; npm ci; npm run build; npm run typecheck
 
 ```
 backend/app/      # api/routes (11), pipeline.py (auto-build), models, rag/, agents/, core/
-frontend/         # app/(landing + dashboard + 16 project routes), DESIGN.md (Clay), components (+arch-diagram), lib/api (+types), lib/query
+  frontend/         # app/(landing + dashboard + 16 project routes), components (+arch-diagram), lib/api (+types), lib/query
 docs/             # SPEC.md, ARCHITECTURE.md, SECURITY.md, EVALUATION.md, THIRD_PARTY_NOTICES.md
 evaluation/       # benchmark.py (43-query retrieval fixture + ablation + pipeline matrix)
 scripts/          # init_db.py, seed_demo.py, install_postgres_windows.ps1

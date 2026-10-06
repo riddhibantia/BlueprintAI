@@ -1,85 +1,166 @@
 @import "tailwindcss";
 
-/* BlueprintAI visual system — DESIGN.md (Clay) wins for color/type/radii;
-   the redesign brief wins for layout/density. Light-first, calm,
-   document-first: warm-neutral canvas, hairline borders, ink buttons,
-   one accent (links/focus/selected nav only). Dark tokens dormant. */
+/* BlueprintAI visual system — editorial print-magazine voice.
+   Off-white canvas, warm near-black ink, hairline borders, photographic
+   brand voltage. There is no saturated CTA colour: the ink pill is the
+   only action colour, and the pastel orbs are atmosphere, never fill. */
 @theme {
-  --color-canvas: #fafaf9;
-  --color-surface: #ffffff;
-  --color-elevated: #f4f4f2;
-  --color-subtle: #f1efeb;
-  --color-border: #e7e5e1;
-  --color-border-strong: #d6d3cd;
-  --color-primary: #1c1b19;
-  /* shadcn/RareUI bridge: foreground maps to the primary text token */
+  /* Surfaces */
+  --color-canvas: #f5f5f5;          /* page floor */
+  --color-canvas-deep: #0c0a09;     /* the one dark band: cta-band */
+  --color-subtle: #fafafa;          /* alternating band */
+  --color-surface: #ffffff;         /* card */
+  --color-elevated: #f0efed;        /* badge / plate */
+
+  /* Hairlines */
+  --color-border: #e7e5e4;
+  --color-border-strong: #d6d3d1;
+
+  /* Ink + text */
+  --color-primary: #292524;         /* ink pill, display text */
+  --color-primary-active: #0c0a09;  /* press state — deepens */
+  --color-secondary: #4e4e4e;       /* body */
+  --color-muted: #777169;           /* sub-title */
   --color-foreground: var(--color-primary);
   --color-background: var(--color-surface);
-  --color-secondary: #57534e;
-  --color-muted: #8a857d;
-  --color-accent: #0e7c6b;
-  --color-accent2: #3b5bdb;
-  --color-success: #2f855a;
-  --color-warning: #b7791f;
-  --color-danger: #c53030;
-  --color-info: #3b5bdb;
+
+  /* The brand has no chromatic accent — links, focus and selected nav are ink. */
+  --color-accent: #292524;
+  --color-accent2: #4e4e4e;
   --color-on-accent: #ffffff;
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Semantic (reserved for real state, never decoration) */
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+  --color-warning: #b45309;
+  --color-info: #57534e;
+
+  /* Atmospheric gradient stops — signature. Decoration only: never a
+     button fill, never a text colour, never a component background. */
+  --color-gradient-mint: #a7e5d3;
+  --color-gradient-peach: #f4c5a8;
+  --color-gradient-lavender: #c8b8e0;
+  --color-gradient-sky: #a8c8e8;
+  --color-gradient-rose: #e8b8c4;
+
+  /* Shape: pill geometry is the brand button; cards sit at 16–24px. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;   /* form inputs */
+  --radius-lg: 12px;
+  --radius-xl: 16px;  /* feature cards */
+  --radius-2xl: 20px;
+  --radius-3xl: 24px; /* gradient-orb cards */
 }
 
-/* Dark theme dormant (toggle removed until finished) — values kept for later. */
+/* Dormant dark palette, remapped to the ink family so it stays coherent if
+   the toggle is ever finished. The UI ships light. */
 [data-theme="dark"] {
-  --color-canvas: #09090b;
-  --color-surface: #101014;
-  --color-elevated: #17171c;
-  --color-border: #232329;
-  --color-border-strong: #323238;
-  --color-primary: #fafafa;
-  --color-secondary: #a1a1aa;
-  --color-muted: #71717a;
-  --color-accent: #5eead4;
-  --color-accent2: #818cf8;
-  --color-success: #4ade80;
-  --color-warning: #f5b942;
-  --color-danger: #f87171;
-  --color-info: #60a5fa;
-  --color-on-accent: #06201d;
+  --color-canvas: #0c0a09;
+  --color-subtle: #1c1917;
+  --color-surface: #1c1917;
+  --color-elevated: #292524;
+  --color-border: #292524;
+  --color-border-strong: #44403c;
+  --color-primary: #fafaf9;
+  --color-primary-active: #ffffff;
+  --color-secondary: #d6d3d1;
+  --color-muted: #a8a29e;
+  --color-accent: #fafaf9;
+  --color-accent2: #d6d3d1;
+  --color-on-accent: #0c0a09;
+}
+
+/* Font stacks are declared here, not in `@theme`, on purpose.
+   next/font puts --font-inter / --font-ebgaramond on <body>; a Tailwind
+   `@theme` block would emit its own copies to :root where those are still
+   undefined, so `font-family: var(--font-display)` computes to an invalid
+   value and the browser silently falls back to the system stack. Plain CSS
+   against the next/font variables always resolves. These unlayered rules
+   outrank Tailwind's layered utilities, so they win cleanly. */
+body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+.font-mono, code, pre, kbd, samp {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
 }
 
 body {
   background: var(--color-canvas);
   color: var(--color-primary);
-  font-family: var(--font-sans);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
+  letter-spacing: 0.16px; /* the editorial dialect — slightly looser than Inter default */
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
 }
 
-/* Display voice per DESIGN.md: Inter 500–600, tight. Never bolder. */
-h1, h2 {
-  font-family: var(--font-sans);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+/* Display voice: EB Garamond at weight 300, never bold. */
+h1, h2, h3 {
+  font-family: var(--font-ebgaramond), "Times New Roman", serif;
+  font-weight: 300;
+  letter-spacing: -0.32px;
 }
-h1 { line-height: 1.15; }
-h2 { line-height: 1.3; }
+h1 { line-height: 1.17; }
+h2 { line-height: 1.2; }
+h3 { line-height: 1.28; }
 
-/* Restrained motion only (§41): 120–180ms hovers, 180–250ms drawers. */
+/* ---------------------------------------------------------------------------
+   Atmospheric gradient orbs — the brand's strongest pattern. Soft radial
+   blooms that drift behind copy. Pure atmosphere: they hold no content.
+   --------------------------------------------------------------------------- */
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(64px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform;
+}
+.orb-mint     { background: var(--color-gradient-mint); }
+.orb-peach    { background: var(--color-gradient-peach); }
+.orb-lavender { background: var(--color-gradient-lavender); }
+.orb-sky      { background: var(--color-gradient-sky); }
+.orb-rose     { background: var(--color-gradient-rose); }
+
+/* Slow, offset drift so orbs never move in lockstep. */
+@keyframes orb-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(3%, -4%, 0) scale(1.06); }
+  100% { transform: translate3d(-3%, 3%, 0) scale(0.96); }
+}
+.orb-drift { animation: orb-drift 22s ease-in-out infinite; }
+.orb-drift-slow { animation: orb-drift 34s ease-in-out infinite reverse; }
+
+/* Entrance: copy rises once and settles. Used on hero and section heads. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.rise-in { animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.rise-in-1 { animation-delay: 80ms; }
+.rise-in-2 { animation-delay: 160ms; }
+.rise-in-3 { animation-delay: 240ms; }
+
+/* The single shadow tier. Cards float on hairline + one soft drop. */
+.soft-drop { box-shadow: 0 4px 16px rgb(0 0 0 / 0.04); }
+.soft-drop-hover { transition: box-shadow 180ms ease, transform 180ms ease; }
+.soft-drop-hover:hover { box-shadow: 0 4px 16px rgb(0 0 0 / 0.04); transform: translateY(-2px); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-/* Thin dark scrollbars — native white scrollbars break the theme. */
+/* Thin scrollbars — native white ones break the canvas. */
 .scroll-thin { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
 .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 .scroll-thin::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
 .scroll-thin::-webkit-scrollbar-track { background: transparent; }
 
-/* Browser autofill must not flash light-blue boxes in the dark theme. */
 input:-webkit-autofill {
-  -webkit-box-shadow: 0 0 0 1000px var(--color-elevated) inset;
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
   -webkit-text-fill-color: var(--color-primary);
   caret-color: var(--color-primary);
 }

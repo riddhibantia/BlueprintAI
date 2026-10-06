@@ -68,9 +68,9 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
         </nav>
         <div className="mx-auto hidden md:block">
           <button onClick={onPalette} aria-label="Command palette (Ctrl+K)"
-            className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px] text-secondary hover:text-primary">
+            className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-1.5 text-[13px] text-secondary transition-colors duration-150 hover:border-border-strong hover:text-primary">
             <Search size={13} aria-hidden /><span className="text-muted">Search or run a command…</span>
-            <kbd className="rounded bg-elevated px-1.5 font-mono text-[11px]">Ctrl K</kbd>
+            <kbd className="rounded-full bg-elevated px-2 py-0.5 font-mono text-[11px] text-muted">Ctrl K</kbd>
           </button>
         </div>
         <div className="ml-auto flex flex-none items-center gap-1.5 md:ml-0">

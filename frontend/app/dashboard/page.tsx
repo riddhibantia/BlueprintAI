@@ -130,16 +130,18 @@ export default function Dashboard() {
   if (!authed)
     return (
       <div className="mx-auto grid max-w-[960px] items-stretch gap-6 px-5 py-10 md:grid-cols-2 md:py-16">
-        <div className="flex flex-col justify-between rounded-2xl bg-[#1a3a3a] p-8 text-[#faf5e8]">
-          <div>
+        <div className="relative isolate flex flex-col justify-between overflow-hidden rounded-2xl bg-canvas-deep p-8 text-white">
+          <div className="orb orb-lavender orb-drift -right-14 -top-10 h-52 w-52 opacity-40" aria-hidden />
+          <div className="orb orb-sky orb-drift-slow -bottom-12 -left-10 h-44 w-44 opacity-35" aria-hidden />
+          <div className="relative z-10">
             <p className="flex items-center gap-2.5">
-              <Image src="/logo.svg" alt="BlueprintAI logo" width={36} height={36} className="rounded-xl" />
-              <b className="text-[16px] font-semibold">Blueprint AI</b>
+              <Image src="/logo.svg" alt="BlueprintAI logo" width={36} height={36} className="rounded-full" />
+              <b className="text-[16px] font-medium tracking-[-0.18px]">Blueprint AI</b>
             </p>
-            <h1 className="mt-8 text-[32px] font-medium leading-[1.1] md:text-[40px]">Engineering blueprints, kept honest.</h1>
-            <p className="mt-3 max-w-[38ch] text-[14.5px] leading-relaxed text-[#faf5e8]/80">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
+            <h1 className="mt-8 text-[32px] font-light leading-[1.13] tracking-[-0.32px] md:text-[40px]">Engineering blueprints, kept honest.</h1>
+            <p className="mt-3 max-w-[38ch] text-[14.5px] leading-[1.5] text-white/75">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
           </div>
-          <ul className="mt-8 grid gap-2.5 text-[13.5px] text-[#faf5e8]/90">
+          <ul className="relative z-10 mt-8 grid gap-2.5 text-[13.5px] text-white/85">
             <li className="flex items-start gap-2.5"><FolderKanban size={16} className="mt-0.5 flex-none" aria-hidden />RAG-grounded drafts that cite your standards docs.</li>
             <li className="flex items-start gap-2.5"><GitBranch size={16} className="mt-0.5 flex-none" aria-hidden />100% traceability — every link stored, none invented.</li>
             <li className="flex items-start gap-2.5"><Scale size={16} className="mt-0.5 flex-none" aria-hidden />Consistency checks with human approve / reject.</li>
@@ -156,18 +158,18 @@ export default function Dashboard() {
             {mode === "register" && (
               <label className="block text-[13px]">Name
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada" autoComplete="name"
-                  className="mt-1 h-11 w-full rounded-xl border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" /></label>
+                  className="mt-1 h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" /></label>
             )}
             <label className={`${mode === "register" ? "mt-2 " : ""}block text-[13px]`}>Email
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" autoComplete="email"
                 aria-invalid={!!fieldError} aria-describedby={fieldError ? "auth-field-error" : undefined}
-                className="mt-1 h-11 w-full rounded-xl border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" /></label>
+                className="mt-1 h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" /></label>
             <label className="mt-2 block text-[13px]">Password
               <span className="relative mt-1 block">
                 <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="•••••••• (min 8)"
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                   aria-invalid={!!fieldError} aria-describedby={fieldError ? "auth-field-error" : undefined}
-                  className="h-11 w-full rounded-xl border border-border bg-canvas px-3.5 py-2 pr-10 placeholder:text-muted focus:border-primary focus:outline-none" />
+                  className="h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 pr-10 placeholder:text-muted focus:border-primary focus:outline-none" />
                 <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? "Hide password" : "Show password"}
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-secondary hover:text-primary">
                   {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -191,7 +193,7 @@ export default function Dashboard() {
                   <input type="password" value={resetPw} onChange={(e) => setResetPw(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") doReset(); }}
                     placeholder="•••••••• (min 8)" autoComplete="new-password"
-                    className="mt-1 h-11 w-full rounded-xl border border-border bg-surface px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" />
+                    className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" />
                 </label>
                 <div className="mt-2"><Button size="sm" loading={resetBusy} onClick={doReset}>Set new password</Button></div>
                 {resetMsg && <p className="mt-2 text-[13px] text-secondary" role="status">{resetMsg}</p>}
