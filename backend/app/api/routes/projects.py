@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -5,22 +7,35 @@ from app.core.audit import log
 from app.api.deps import current_user, project_or_403
 from app.models.db import (Project, ProjectMember, Requirement, UserStory, ApiEndpoint, TestCase,
                            ConsistencyIssue, AuditLog, AgentRun, User)
+from app.rag.standards_pack import seed_default_standards
 from app.schemas import ProjectIn
 from app.traceability.engine import coverage
 
 router = APIRouter(tags=["projects"])
+logger = logging.getLogger("blueprintai.projects")
 
 
 @router.post("/projects")
 def create_project(body: ProjectIn, db: Session = Depends(get_db), user=Depends(current_user)):
-    """Create a project; the creator becomes owner (§6.1)."""
+    """Create a project; the creator becomes owner (§6.1).
+
+    The built-in standards pack is ingested immediately so RAG grounding works
+    on the first page a user opens. Seeding is best-effort: a failure must not
+    lose the project, and `POST /projects/{id}/documents/seed` retries it.
+    """
     p = Project(name=body.name, description=body.description, product_idea=body.product_idea, owner_id=user.id)
     db.add(p)
     db.commit()
     db.add(ProjectMember(project_id=p.id, user_id=user.id, role="owner"))
     db.commit()
     log(db, project_id=p.id, user_id=user.id, action="project.create", detail=p.name)
-    return {"id": p.id, "name": p.name, "status": p.status}
+    standards = 0
+    try:
+        standards = len(seed_default_standards(db, p.id)["seeded"])
+    except Exception as exc:  # retrieval must never block project creation
+        db.rollback()
+        logger.warning("default standards seed failed for %s: %s", p.id, exc)
+    return {"id": p.id, "name": p.name, "status": p.status, "standards": standards}
 
 
 @router.get("/projects")

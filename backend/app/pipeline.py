@@ -13,21 +13,11 @@ from app.models.db import (Requirement, Prd, UserStory, AcceptanceCriteria,
                            ArchitectureComponent, ArchitectureRelationship,
                            DatabaseEntity, DatabaseField, ApiEndpoint,
                            SecurityRequirement, ImplementationTask, TestCase,
-                           AgentRun, Document, DocumentChunk)
+                           AgentRun)
 from app.agents.generators import (gen_prd, gen_stories, gen_architecture, gen_db,
                                    gen_apis, gen_security, gen_tasks, gen_tests)
 from app.traceability.engine import add_link, clear_links
-from app.rag.retriever import retrieve
-
-
-def _evidence(db: Session, pid: str, query: str) -> str:
-    rows = db.query(DocumentChunk).join(Document, Document.id == DocumentChunk.document_id)\
-        .filter(Document.project_id == pid).limit(200).all()
-    chunks = [{"content": c.content, "section": c.section, "source": c.document_id,
-               "embedding": c.embedding} for c in rows]
-    if not chunks:
-        return ""
-    return "\n".join(h.get("content", "")[:500] for h in retrieve(chunks, query))
+from app.rag.context import evidence as rag_evidence
 
 
 def _timed(stages: dict, name: str, fn):
@@ -51,7 +41,7 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
     def s_prd():
         reqs = [{"title": r.title, "type": r.type, "code": r.code, "status": r.status}
                 for r in db.query(Requirement).filter_by(project_id=pid).all()]
-        content = gen_prd(idea, reqs, _evidence(db, pid, idea))
+        content = gen_prd(idea, reqs, rag_evidence(db, pid, idea))
         existing = db.query(Prd).filter_by(project_id=pid).first()
         if existing:
             existing.content = content
@@ -82,7 +72,7 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
     def s_arch():
         rd = [{"title": r.title, "type": r.type, "code": r.code}
               for r in db.query(Requirement).filter_by(project_id=pid).all()]
-        arch = gen_architecture(idea, rd, _evidence(db, pid, "architecture deployment auth boundaries"))
+        arch = gen_architecture(idea, rd, rag_evidence(db, pid, "architecture deployment auth boundaries"))
         db.query(ArchitectureRelationship).filter_by(project_id=pid).delete()
         db.query(ArchitectureComponent).filter_by(project_id=pid).delete()
         for c in arch["components"]:

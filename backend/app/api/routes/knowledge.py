@@ -9,15 +9,15 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.audit import log
 from app.api.deps import current_user, project_or_403
-from app.models.db import Document, DocumentChunk, AgentRun
-from app.rag.chunking import chunk_text
-from app.rag.embeddings import embed
+from app.models.db import Document, DocumentChunk
+from app.rag.ingest import ingest_text
+from app.rag.context import project_chunks
 from app.rag.retriever import retrieve
+from app.rag.standards_pack import seed_default_standards
 
 router = APIRouter(tags=["knowledge"])
 ALLOWED_EXT = (".pdf", ".txt", ".md")
 MAX_BYTES = 15 * 1024 * 1024
-MAX_CHUNKS_STORED = 300
 
 logger = logging.getLogger("blueprintai.rag")
 
@@ -54,35 +54,42 @@ async def upload(pid: str, file: UploadFile = File(...),
         raise HTTPException(413, "File exceeds the 15MB limit")
     text = _extract(file, raw)
     checksum = hashlib.sha256(raw).hexdigest()
-    if db.query(Document).filter_by(project_id=pid, checksum=checksum).first():
+    result = ingest_text(db, pid, name=file.filename or "upload", text=text,
+                         checksum=checksum)
+    if result["status"] == "duplicate":
         return {"status": "duplicate", "checksum": checksum}
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    doc = Document(project_id=pid, name=file.filename or "upload", checksum=checksum)
-    db.add(doc)
-    db.flush()
-    chunks = chunk_text(text)
     if settings.STORAGE_MODE == "local":
-        with open(os.path.join(settings.UPLOAD_DIR, f"{doc.id}.txt"), "w", encoding="utf-8") as f:
+        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+        with open(os.path.join(settings.UPLOAD_DIR, f"{result['document_id']}.txt"),
+                  "w", encoding="utf-8") as f:
             f.write(text[:200000])
-    for i, c in enumerate(chunks[:MAX_CHUNKS_STORED]):
-        db.add(DocumentChunk(document_id=doc.id, page_number=i // 3, section=c["section"][:200],
-                             content=c["content"][:4000], meta={"source": doc.name}, embedding=embed(c["content"][:1000])))
-    db.add(AgentRun(project_id=pid, agent="rag-ingest", output_summary=f"{len(chunks)} chunks from {doc.name}"))
     db.commit()
-    log(db, project_id=pid, user_id=user.id, action="knowledge.upload", detail=f"{doc.name} ({len(chunks)} chunks)")
-    return {"document_id": doc.id, "chunks": len(chunks), "checksum": checksum}
+    log(db, project_id=pid, user_id=user.id, action="knowledge.upload",
+        detail=f"{file.filename or 'upload'} ({result['chunks']} chunks)")
+    return {"document_id": result["document_id"], "chunks": result["chunks"],
+            "checksum": checksum}
+
+
+@router.post("/projects/{pid}/documents/seed")
+def seed_standards(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Install the built-in standards pack; idempotent, safe to retry (§18)."""
+    project_or_403(pid, db, user)
+    result = seed_default_standards(db, pid)
+    log(db, project_id=pid, user_id=user.id, action="knowledge.seed",
+        detail=f"{len(result['seeded'])} seeded, {len(result['skipped'])} skipped")
+    return {"seeded": len(result["seeded"]), "skipped": len(result["skipped"]),
+            "documents": result["seeded"] + result["skipped"]}
 
 
 @router.post("/projects/{pid}/knowledge/query")
 def query(pid: str, body: QueryIn, db: Session = Depends(get_db), user=Depends(current_user)):
     """Hybrid retrieval over project-scoped chunks; says so when evidence is missing."""
     project_or_403(pid, db, user)
-    rows = db.query(DocumentChunk, Document.name).join(Document, Document.id == DocumentChunk.document_id)\
-        .filter(Document.project_id == pid).limit(300).all()
-    chunks = [{"content": c.content, "section": c.section, "source": name,
-               "embedding": c.embedding} for c, name in rows]
+    chunks = project_chunks(db, pid)
     if not chunks:
-        return {"hits": [], "note": "insufficient evidence — upload engineering docs first (§43.20)"}
+        return {"hits": [], "note": "No standards indexed for this project yet. "
+                f"POST /projects/{pid}/documents/seed installs the built-in pack, "
+                "or upload your own PDF/TXT/Markdown (§43.20)"}
     return {"hits": retrieve(chunks, body.query, body.k)}
 
 
@@ -94,5 +101,6 @@ def list_docs(pid: str, db: Session = Depends(get_db), user=Depends(current_user
     out = []
     for d in docs:
         n = db.query(DocumentChunk).filter_by(document_id=d.id).count()
-        out.append({"id": d.id, "name": d.name, "chunks": n, "checksum": d.checksum[:10]})
+        out.append({"id": d.id, "name": d.name, "chunks": n,
+                    "checksum": d.checksum[:10], "source": d.source})
     return out

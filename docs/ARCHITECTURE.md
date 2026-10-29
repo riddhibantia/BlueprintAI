@@ -30,5 +30,6 @@ Postgres + pgvector (prod) / SQLite (local dev, blueprintai.db)
 ## RAG + LangGraph
 
 - `backend/app/rag/{chunking,embeddings,retriever}.py` — chunking, hash fallback + OpenAI embeddings.
+- `backend/app/rag/{ingest,standards_pack}.py` + `rag/standards/*.md` — one ingestion path for uploads and the built-in standards pack; the pack is seeded on project creation so retrieval is grounded before the user uploads anything, and `POST /projects/{id}/documents/seed` re-installs it idempotently.
 - `backend/app/agents/{base,generators}.py` — LangGraph workflow; falls back to sequential pipeline and reports which path ran in `evaluation/benchmark.py`.
 - Full spec: `docs/SPEC.md`. Security boundaries: `docs/SECURITY.md`. Measured numbers: `docs/EVALUATION.md`.

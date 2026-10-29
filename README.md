@@ -61,12 +61,12 @@ flowchart LR
 | 13 artifact modules | Requirements, PRD, Stories, Architecture, Database, APIs, Security, Tasks, Tests, Traceability, Consistency, Impact, Knowledge — no stubs |
 | Idea-aware requirements | Keywords from your idea + your own words become the domain entities ("Tables", "Reminders" — never the same list twice); plain-language titles a non-technical approver can read; add-your-own dialog |
 | Auto-pipeline | Approving the final requirement builds PRD → stories → architecture → DB → APIs → security → tasks → tests server-side (`POST /pipeline/run`, idempotent) and lands you on the result |
-| RAG-grounded generation | Upload PDF/TXT/MD (≤15MB) → structure-aware chunks → hash/OpenAI embeddings → hybrid vector+lexical retrieval; generations cite evidence or say what's missing |
+| RAG-grounded generation | Ships a default standards pack (API, security, testing, data) ingested on project creation, so grounding works on first load; upload your own PDF/TXT/MD (≤15MB) → structure-aware chunks → hash/OpenAI embeddings → hybrid vector+lexical retrieval; generations cite evidence or say what's missing |
 | Multi-agent pipeline | LangGraph workflow with sequential fallback; the engine that ran is reported, not assumed |
 | Architecture diagram | Mermaid flowchart rendered from stored components (boundary subgraphs, kind shapes) + full Archify IR export |
 | Collaboration safety | httpOnly `SameSite=Lax` sessions, `project_or_403` isolation, optimistic locking (409), audit logs, prod fail-closed config |
 | Export | Full-blueprint PDF (ReportLab, markup-escaped), OpenAPI 3.0, Archify diagram IR (1:1 topology) |
-| Quality gates | 37 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, Playwright browser QA (zero console errors) |
+| Quality gates | 47 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, Playwright browser QA (zero console errors) |
 
 ## Measured results (not claims)
 
@@ -206,13 +206,18 @@ Regenerating requirements asks first and replaces (never stacks duplicates).
 | `GET /projects/{id}/traceability` | Coverage %, orphans, stored links (paginated) |
 | `POST /projects/{id}/consistency/check` | Deterministic cross-artifact checks + AI explanation |
 | `POST /projects/{id}/impact/analyze` | Affected artifacts for a requirement change (404 on unknown REQ) |
+| `POST /projects/{id}/documents`, `POST /projects/{id}/documents/seed` | Upload a standard (PDF/TXT/MD) or install the built-in standards pack; both idempotent |
+| `POST /projects/{id}/knowledge/query` | Hybrid retrieval with source + section citations, or an explicit "nothing indexed" note |
 | `GET /projects/{id}/export/pdf`, `/export/openapi`, `/export/archify` | PDF + OpenAPI + Archify diagram IR export |
 
 ## Verify
 
 ```powershell
-# Backend: unit + E2E + regression (37 green, isolated temp DB per run)
+# Backend: unit + E2E + regression (47 green, isolated temp DB per run)
 $env:PYTHONPATH="backend"; python -m pytest backend/tests -q
+
+# Prove RAG grounding end to end: new project -> seeded pack -> cited PRD
+$env:PYTHONPATH="backend"; python scripts/check_grounding.py
 
 # Measured benchmark (retrieval fixture + 3-idea pipeline — see docs/EVALUATION.md)
 $env:PYTHONPATH="backend"; python evaluation/benchmark.py --full --repeats 3

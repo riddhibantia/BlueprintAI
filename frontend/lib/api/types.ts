@@ -80,5 +80,5 @@ export type Issue = {
   affected?: string[]; suggestion?: string; status: string;
 };
 
-export type DocEntry = { id: string; name: string; chunks: number; checksum: string };
+export type DocEntry = { id: string; name: string; chunks: number; checksum: string; source?: string };
 export type AgentRun = { agent: string; output_summary?: string; created_at?: string };

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { FileUp, Search } from "lucide-react";
 import { useDocuments } from "../../../../lib/query/useArtifacts";
-import { queryKnowledge, uploadDocument } from "../../../../lib/api/endpoints";
+import { queryKnowledge, uploadDocument, seedStandards } from "../../../../lib/api/endpoints";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
@@ -15,6 +15,7 @@ export default function Knowledge() {
   const { projectId: pid } = useParams() as { projectId: string };
   const docsQ = useDocuments(pid);
   const [uploading, setUploading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<any[]>([]);
   const [note, setNote] = useState("");
@@ -39,6 +40,18 @@ export default function Knowledge() {
       setErr(e instanceof Error ? e.message : "Upload failed.");
     } finally {
       setUploading(false);
+    }
+  };
+  const seedDefaults = async () => {
+    setSeeding(true);
+    setErr("");
+    try {
+      await seedStandards(pid);
+      await docsQ.refetch();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not install the default standards.");
+    } finally {
+      setSeeding(false);
     }
   };
   const query = async () => {
@@ -73,10 +86,19 @@ export default function Knowledge() {
           </label>
           {uploading && <div className="mt-2"><LoadingState stage="Parsing, chunking and embedding document" /></div>}
           <div className="mt-2 grid gap-1.5">
-            {docs.length === 0 && !uploading && <EmptyState title="No documents yet" hint="Upload architecture, API, security or testing standards." />}
+            {docs.length === 0 && !uploading && (
+              <EmptyState
+                title="No documents yet"
+                hint="Install the built-in API, security, testing and data standards, or upload your own."
+                action={<Button size="sm" onClick={seedDefaults} loading={seeding}>Load default standards</Button>}
+              />
+            )}
             {docs.map((d: any) => (
               <p key={d.id} className="flex items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3 py-2 text-[13px]">
-                <span className="truncate"><b>{d.name}</b> <span className="text-secondary">· {d.chunks} chunks</span></span>
+                <span className="truncate">
+                  <b>{d.name}</b> <span className="text-secondary">· {d.chunks} chunks</span>
+                  {d.source === "default-pack" && <span className="ml-2 rounded-md border border-border px-1.5 py-0.5 text-[10.5px] uppercase tracking-wide text-muted">built-in</span>}
+                </span>
                 <span className="font-mono text-[11px] text-muted">#{d.checksum}</span>
               </p>
             ))}

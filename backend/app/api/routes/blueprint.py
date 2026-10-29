@@ -7,25 +7,14 @@ from app.api.deps import current_user, project_or_403
 from app.models.db import (Requirement, Prd, UserStory, AcceptanceCriteria, ArchitectureComponent,
                            ArchitectureRelationship, DatabaseEntity, DatabaseField, ApiEndpoint,
                            SecurityRequirement, ImplementationTask, TestCase, AgentRun,
-                           Document, DocumentChunk, TraceabilityLink)
+                           TraceabilityLink)
 from app.schemas import PrdUpdate, StatusPatch, ComponentIn
 from app.agents.generators import (gen_prd, gen_stories, gen_architecture, gen_db, gen_apis,
                                    gen_security, gen_tasks, gen_tests)
 from app.traceability.engine import add_link, clear_links
-from app.rag.retriever import retrieve
+from app.rag.context import evidence as rag_evidence
 
 router = APIRouter(tags=["blueprint"])
-
-
-def _evidence(db: Session, pid: str, query: str) -> str:
-    rows = db.query(DocumentChunk).join(Document, Document.id == DocumentChunk.document_id)\
-        .filter(Document.project_id == pid).limit(200).all()
-    chunks = [{"content": c.content, "section": c.section, "source": c.document_id,
-               "embedding": c.embedding} for c in rows]
-    if not chunks:
-        return ""
-    hits = retrieve(chunks, query)
-    return "\n".join(h.get("content", "")[:500] for h in hits)
 
 
 @router.post("/projects/{pid}/prd/generate")
@@ -34,7 +23,7 @@ def prd_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user))
     p = project_or_403(pid, db, user)
     reqs = [{"title": r.title, "type": r.type, "code": r.code}
             for r in db.query(Requirement).filter_by(project_id=pid).all()]
-    ev = _evidence(db, pid, p.product_idea or "architecture standards")
+    ev = rag_evidence(db, pid, p.product_idea or "architecture standards")
     content = gen_prd(p.product_idea or p.name, reqs, ev)
     existing = db.query(Prd).filter_by(project_id=pid).first()
     if existing:
@@ -125,7 +114,7 @@ def arch_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user)
     """Generate the system architecture from requirements + RAG evidence (§8)."""
     p = project_or_403(pid, db, user)
     reqs = [{"title": r.title, "type": r.type, "code": r.code} for r in db.query(Requirement).filter_by(project_id=pid).all()]
-    ev = _evidence(db, pid, "architecture deployment auth boundaries")
+    ev = rag_evidence(db, pid, "architecture deployment auth boundaries")
     arch = gen_architecture(p.product_idea or p.name, reqs, ev)
     db.query(ArchitectureRelationship).filter_by(project_id=pid).delete()
     db.query(ArchitectureComponent).filter_by(project_id=pid).delete()

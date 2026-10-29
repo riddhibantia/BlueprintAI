@@ -1,9 +1,10 @@
 """Seed a fully populated demo workspace (mock LLM, no keys needed).
 
 Builds, through the real API stack: user + project + idea-aware requirements
-(approved) + full auto-pipeline + a knowledge doc + a consistency check — so a
-fresh clone opens a workspace that already shows 100% traceability, issues to
-triage, and a downloadable PDF.
+(approved) + full auto-pipeline + the default standards pack + a domain-specific
+standards doc + a consistency check — so a fresh clone opens a workspace that
+already shows 100% traceability, grounded generation, issues to triage, and a
+downloadable PDF.
 
 Usage (from repo root):
     python scripts/seed_demo.py                       # sqlite default
