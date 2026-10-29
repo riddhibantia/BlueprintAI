@@ -75,7 +75,7 @@ def export_openapi(pid: str, db: Session = Depends(get_db), user=Depends(current
         paths.setdefault(path, {})[method] = {
             "summary": a.code, "security": [{"bearerAuth": []}] if a.auth == "jwt" else [],
             "responses": {"200": {"description": "OK"}}}
-    return {"openapi": "3.0.0", "info": {"title": "DevBlueprint API", "version": "1.0.0"}, "paths": paths}
+    return {"openapi": "3.0.0", "info": {"title": "BlueprintAI API", "version": "1.0.0"}, "paths": paths}
 
 
 @router.get("/projects/{pid}/export/pdf")
@@ -176,7 +176,7 @@ def export_archify(pid: str, db: Session = Depends(get_db), user=Depends(current
         "layout": {"mode": "grid", "cols": 3},
         "components": nodes, "connections": edges, "boundaries": boundaries,
         "cards": [
-            {"dot": "cyan", "title": "DevBlueprint provenance",
+            {"dot": "cyan", "title": "BlueprintAI provenance",
              "items": [f"Exported {now}", f"{len(nodes)} components, {len(edges)} connections",
                        "Edges mirror stored relationships 1:1 — dangling ones dropped, none invented"]},
             {"dot": "violet", "title": "Traceability evidence",

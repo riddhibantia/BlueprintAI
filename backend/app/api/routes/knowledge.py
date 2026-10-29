@@ -19,7 +19,7 @@ ALLOWED_EXT = (".pdf", ".txt", ".md")
 MAX_BYTES = 15 * 1024 * 1024
 MAX_CHUNKS_STORED = 300
 
-logger = logging.getLogger("devblueprint.rag")
+logger = logging.getLogger("blueprintai.rag")
 
 
 class QueryIn(BaseModel):

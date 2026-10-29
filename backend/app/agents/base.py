@@ -3,7 +3,7 @@ import logging
 import time
 from app.core.config import settings
 
-log = logging.getLogger("devblueprint.llm")
+log = logging.getLogger("blueprintai.llm")
 
 
 def _mock_complete(prompt: str, context: str = "") -> tuple[str, int]:

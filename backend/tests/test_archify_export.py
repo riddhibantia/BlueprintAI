@@ -43,7 +43,7 @@ def test_archify_mirrors_stored_topology(client):
     ids = {c["id"] for c in ir["components"]}
     assert all(e["from"] in ids and e["to"] in ids for e in ir["connections"])
     assert len(ir["connections"]) <= len(stored["relationships"])
-    assert any(c["title"] == "DevBlueprint provenance" for c in ir["cards"])
+    assert any(c["title"] == "BlueprintAI provenance" for c in ir["cards"])
 
 
 def test_archify_requires_auth():

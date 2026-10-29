@@ -1,4 +1,4 @@
-"""DevBlueprint FastAPI entrypoint (§24)."""
+"""BlueprintAI FastAPI entrypoint (§24)."""
 import logging
 import time
 import uuid
@@ -10,7 +10,7 @@ from app.core.database import init_db
 from app.api.routes import auth, projects, requirements, blueprint, knowledge, traceability, consistency, impact, workflow, export, copilot
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-log = logging.getLogger("devblueprint")
+log = logging.getLogger("blueprintai")
 
 
 @asynccontextmanager
@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="DevBlueprint API", version="1.0.0", lifespan=lifespan,
+app = FastAPI(title="BlueprintAI API", version="1.0.0", lifespan=lifespan,
               docs_url="/docs" if settings.ENV != "prod" else None,
               redoc_url=None if settings.ENV == "prod" else "/redoc")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list,

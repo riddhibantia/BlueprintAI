@@ -16,7 +16,7 @@ FastAPI (backend/app/main.py, 11 routers)
   │                       rule checks, affected-artifact analysis (deterministic, §30)
   └── Export — PRD / architecture PDF via ReportLab, Archify diagram IR
   ▼
-Postgres + pgvector (prod) / SQLite (local dev, devblueprint.db)
+Postgres + pgvector (prod) / SQLite (local dev, blueprintai.db)
 ```
 
 ## Request flow

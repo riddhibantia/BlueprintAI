@@ -5,7 +5,7 @@ import sys
 from sqlalchemy.orm import Session
 from app.models.db import AuditLog
 
-_logger = logging.getLogger("devblueprint.audit")
+_logger = logging.getLogger("blueprintai.audit")
 
 
 def _redact(detail: str) -> str:

@@ -159,7 +159,7 @@ cd frontend; npm install; npm run dev
 # landing: http://localhost:3000/  ·  app: http://localhost:3000/dashboard
 ```
 
-Default DB is SQLite (`devblueprint.db`) so it runs immediately.
+Default DB is SQLite (`blueprintai.db`) so it runs immediately.
 For full Postgres+pgvector: run `scripts/install_postgres_windows.ps1` as Admin, create DB, set `DATABASE_URL` in `.env`.
 
 ## Docker (full stack: API + web + Postgres/pgvector)

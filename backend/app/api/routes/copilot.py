@@ -19,7 +19,7 @@ from app.rag.retriever import retrieve
 
 router = APIRouter(tags=["copilot"])
 
-logger = logging.getLogger("devblueprint.copilot")
+logger = logging.getLogger("blueprintai.copilot")
 
 
 class AskIn(BaseModel):
