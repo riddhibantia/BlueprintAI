@@ -27,18 +27,32 @@ def test_logout_clears_session(client):
     assert client.get("/auth/me").status_code == 401
 
 
-def test_password_reset_flow(client):
+def test_password_change_requires_current_password(client):
     client.post("/auth/register", json={"email": "reset@dev.blue", "password": "pass12345"})
-    # wrong password stays rejected with a generic message (no enumeration)
-    assert client.post("/auth/login", json={"email": "reset@dev.blue", "password": "wrongpass1"}).status_code == 401
-    assert client.post("/auth/login", json={"email": "nobody@dev.blue", "password": "wrongpass1"}).status_code == 401
-    # unknown email gets the same OK (existence never revealed)
-    r = client.post("/auth/reset", json={"email": "nobody@dev.blue", "new_password": "newpass123"})
-    assert r.status_code == 200
-    # short replacement rejected at the boundary
-    assert client.post("/auth/reset", json={"email": "reset@dev.blue", "new_password": "short"}).status_code == 422
-    # real reset: new password works, old one doesn't
-    r = client.post("/auth/reset", json={"email": "reset@dev.blue", "new_password": "newpass123"})
-    assert r.status_code == 200 and "reset" in r.json()["message"].lower()
-    assert client.post("/auth/login", json={"email": "reset@dev.blue", "password": "pass12345"}).status_code == 401
-    assert client.post("/auth/login", json={"email": "reset@dev.blue", "password": "newpass123"}).status_code == 200
+    # The old unauthenticated "reset by email" endpoint must stay gone:
+    # it let anyone take over any account.
+    assert client.post("/auth/reset", json={"email": "reset@dev.blue",
+                                            "new_password": "newpass123"}).status_code == 404
+
+    with TestClient(app) as anon:
+        r = anon.post("/auth/password", json={"current_password": "pass12345",
+                                              "new_password": "newpass123"})
+    assert r.status_code == 401
+
+    # Wrong current password and short replacement are both rejected.
+    r = client.post("/auth/password", json={"current_password": "wrongpass1",
+                                            "new_password": "newpass123"})
+    assert r.status_code == 401
+    r = client.post("/auth/password", json={"current_password": "pass12345",
+                                            "new_password": "short"})
+    assert r.status_code == 422
+
+    # Real change: old password stops working, new one works.
+    r = client.post("/auth/password", json={"current_password": "pass12345",
+                                            "new_password": "newpass123"})
+    assert r.status_code == 200 and "updated" in r.json()["message"].lower()
+    client.post("/auth/logout")
+    assert client.post("/auth/login", json={"email": "reset@dev.blue",
+                                            "password": "pass12345"}).status_code == 401
+    assert client.post("/auth/login", json={"email": "reset@dev.blue",
+                                            "password": "newpass123"}).status_code == 200

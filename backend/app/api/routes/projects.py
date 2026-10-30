@@ -83,12 +83,15 @@ ACTION_LABELS = {
     "architecture.add": "Architecture updated",
     "architecture.delete": "Architecture updated",
     "knowledge.upload": "Document indexed",
+    "knowledge.seed": "Standards pack installed",
+    "pipeline.run": "Blueprint built",
     "consistency.check": "Validation completed",
     "consistency.decide": "Issue decision recorded",
     "impact.analyze": "Impact analyzed",
     "traceability.suggest": "Links suggested",
     "user.register": "Member joined",
     "user.login": "Signed in",
+    "user.password_change": "Password changed",
 }
 
 

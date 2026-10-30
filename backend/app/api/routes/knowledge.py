@@ -35,9 +35,11 @@ def _extract(upload: UploadFile, raw: bytes) -> str:
             doc = fitz.open(stream=raw, filetype="pdf")
             return "\n".join(page.get_text() for page in doc)
         except Exception as exc:
-            # Never persist parser internals as retrievable content.
+            # Never index a placeholder as if it were real standards content.
             logger.warning("pdf parse failed for %s: %s", upload.filename, type(exc).__name__)
-            return "[pdf-parse-failed: unable to extract text from this file]"
+            raise HTTPException(
+                400, "Could not read that PDF. If it is a scan, run OCR and upload the text."
+            ) from exc
     return raw.decode("utf-8", errors="ignore")
 
 
@@ -53,6 +55,8 @@ async def upload(pid: str, file: UploadFile = File(...),
     if len(raw) > MAX_BYTES:
         raise HTTPException(413, "File exceeds the 15MB limit")
     text = _extract(file, raw)
+    if not text.strip():
+        raise HTTPException(400, "No extractable text in that file (is it a scanned image?).")
     checksum = hashlib.sha256(raw).hexdigest()
     result = ingest_text(db, pid, name=file.filename or "upload", text=text,
                          checksum=checksum)

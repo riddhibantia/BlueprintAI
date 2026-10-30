@@ -26,10 +26,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""  # alias: accepted as copilot key when LLM_API_KEY is empty
     EMBEDDING_PROVIDER: str = "hash"  # hash | openai
     OPENAI_EMBED_MODEL: str = "text-embedding-3-small"
-    STORAGE_MODE: str = "local"
+    STORAGE_MODE: str = "local"  # local = keep a text copy of uploads in UPLOAD_DIR
     UPLOAD_DIR: str = "./uploads"
-    S3_BUCKET: str = ""
-    AWS_REGION: str = ""
     ENV: str = "dev"
     CORS_ORIGINS: str = "http://localhost:3000"
 

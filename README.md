@@ -16,7 +16,7 @@ Full spec: `docs/SPEC.md` · Security: `docs/SECURITY.md` · Measured numbers: `
 ```mermaid
 flowchart TB
     subgraph Client["Next.js 16 · React 19"]
-        UI["19 routes: landing + dashboard\n+ inbox + 13 artifact modules\n+ blueprint, settings, profile"]
+        UI["18 routes: landing + dashboard\n+ 16 project pages\n(blueprint, settings, 13 artifacts)"]
     end
     subgraph API["FastAPI · 11 routers"]
         AUTH["auth · projects"]
@@ -66,7 +66,7 @@ flowchart LR
 | Architecture diagram | Mermaid flowchart rendered from stored components (boundary subgraphs, kind shapes) + full Archify IR export |
 | Collaboration safety | httpOnly `SameSite=Lax` sessions, `project_or_403` isolation, optimistic locking (409), audit logs, prod fail-closed config |
 | Export | Full-blueprint PDF (ReportLab, markup-escaped), OpenAPI 3.0, Archify diagram IR (1:1 topology) |
-| Quality gates | 47 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, Playwright browser QA (zero console errors) |
+| Quality gates | 49 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, seeded demo captures for every project route |
 
 ## Measured results (not claims)
 
@@ -80,7 +80,7 @@ From `evaluation/benchmark.py --full --repeats 3` — temp SQLite DB, mock LLM, 
 | Traceability per idea | **100%, 0 orphans** |
 | End-to-end latency per idea | **~0.4–0.9 s** mean, per-stage means <100 ms |
 
-The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all tests still green. Browser QA (Playwright, real login, every route) runs zero console errors. See `docs/EVALUATION.md`.
+The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all tests still green. See `docs/EVALUATION.md`.
 
 ## AI providers: mocked by default, on purpose
 
@@ -128,7 +128,7 @@ Measured quality numbers below are from the mock/hash path unless labeled.
 ![Traceability — coverage, links, orphans](screenshots/traceability.png)
 ![Requirements — approve flow with auto-build banner](screenshots/requirements.png)
 
-More in `screenshots/` (every route captured by the Playwright QA run).
+More in `screenshots/` (captured from the seeded demo workspace).
 
 ## Demo (2 minutes, local)
 
@@ -177,9 +177,10 @@ real secret. `OPENAI_API_KEY` is optional (mock path is the default).
 ## Deploy (permanent live demo)
 
 - **Backend → Render:** push to GitHub → New → Blueprint (uses `render.yaml`:
-  API + Postgres 16). Set a unique `JWT_SECRET`; enable the `vector`
-  extension once on the database. `DATABASE_URL` accepts Render's
-  `postgres://` scheme (normalized to `postgresql+psycopg://` on boot).
+  API + Postgres 16). Set a unique `JWT_SECRET`, `CORS_ORIGINS` (your Vercel
+  URL), and enable the `vector` extension once on the database. `DATABASE_URL`
+  accepts Render's `postgres://` scheme (normalized to `postgresql+psycopg://`
+  on boot).
 - **Frontend → Vercel:** import the repo, set `NEXT_PUBLIC_API` to the Render
   API URL, deploy. No `vercel.json` needed — defaults work.
 - **Split-domain auth:** frontend and API on different hosts need
@@ -198,7 +199,7 @@ Regenerating requirements asks first and replaces (never stacks duplicates).
 
 | Method + path | Description |
 |---|---|
-| `POST /auth/register`, `/login`, `/logout`, `GET /me` | Email + bcrypt auth, httpOnly cookie session |
+| `POST /auth/register`, `/login`, `/logout`, `/password`, `GET /me` | Email + bcrypt auth, httpOnly cookie session; password change requires the current password |
 | `POST/GET /projects`, `GET /projects/{id}` | Project create/list/detail, member guard via `project_or_403` |
 | `POST /projects/{id}/requirements/generate`, `POST /requirements/{id}/approve` | Idea-aware plain-language drafts + approval with locking (`replace=true` regenerates without duplicates) |
 | `POST /projects/{id}/pipeline/run` | Full auto-pipeline: PRD → stories → architecture → DB → APIs → security → tasks → tests, idempotent |
@@ -213,7 +214,7 @@ Regenerating requirements asks first and replaces (never stacks duplicates).
 ## Verify
 
 ```powershell
-# Backend: unit + E2E + regression (47 green, isolated temp DB per run)
+# Backend: unit + E2E + regression (49 green, isolated temp DB per run)
 $env:PYTHONPATH="backend"; python -m pytest backend/tests -q
 
 # Prove RAG grounding end to end: new project -> seeded pack -> cited PRD
@@ -238,7 +239,7 @@ docs/             # SPEC.md, ARCHITECTURE.md, SECURITY.md, EVALUATION.md, THIRD_
 evaluation/       # benchmark.py (43-query retrieval fixture + ablation + pipeline matrix)
 scripts/          # init_db.py, seed_demo.py, install_postgres_windows.ps1
 docker-compose.yml# api + web + pgvector DB (backend/Dockerfile, frontend/Dockerfile)
-screenshots/      # add demo captures here
+screenshots/      # demo captures from the seeded workspace
 ```
 
 ## What I learned

@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_token
 from app.api.deps import current_user
 from app.models.db import User
-from app.schemas import RegisterIn, LoginIn, ResetIn
+from app.schemas import RegisterIn, LoginIn, PasswordChangeIn
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -61,21 +61,21 @@ def logout(resp: Response, user: User = Depends(current_user)):
     return {"status": "logged out"}
 
 
-@router.post("/reset")
-def reset_password(body: ResetIn, db: Session = Depends(get_db)):
-    """Reset an account password (self-hosted flow: no email loop).
+@router.post("/password")
+def change_password(body: PasswordChangeIn, db: Session = Depends(get_db),
+                    user: User = Depends(current_user)):
+    """Change the signed-in user's password.
 
-    Always returns the same message so the endpoint never reveals whether an
-    email is registered. New password length is enforced at the boundary (422).
+    Requires the current password: an unauthenticated "reset by email" endpoint
+    would let anyone take over any account, so there isn't one. A real reset
+    needs an out-of-band token (email) and is deliberately not faked here.
     """
-    email = body.email.strip().lower()
-    u = db.query(User).filter_by(email=email).first()
-    if u:
-        u.password_hash = hash_password(body.new_password)
-        db.commit()
-        log(db, user_id=u.id, action="user.reset", detail=email)
-    return {"status": "ok",
-            "message": "If that email is registered, its password was reset — log in with the new one."}
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(401, "Current password is incorrect")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    log(db, user_id=user.id, action="user.password_change")
+    return {"status": "ok", "message": "Password updated. Use it the next time you log in."}
 
 
 @router.get("/me")

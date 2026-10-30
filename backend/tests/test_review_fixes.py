@@ -88,3 +88,25 @@ def test_audit_trail_written():
     finally:
         db.close()
     assert {"user.register", "project.create", "requirements.generate"} <= actions
+
+def test_story_regeneration_refreshes_text_and_reopens_approval(client):
+    r = client.post("/auth/register", json={"email": "stale@dev.blue", "password": "pass12345"})
+    h = {"Authorization": f"Bearer {r.json()['token']}"}
+    p = client.post("/projects", json={"name": "Stale", "product_idea": "tutoring marketplace"}, headers=h).json()
+    client.post(f"/projects/{p['id']}/requirements/generate", json={"answers": ""}, headers=h)
+    client.post(f"/projects/{p['id']}/stories/generate", headers=h)
+    stories = client.get(f"/projects/{p['id']}/stories", headers=h).json()
+    target = stories[0]
+    assert client.post(f"/projects/{p['id']}/stories/{target['code']}/approve", headers=h).status_code == 200
+
+    req = next(q for q in client.get(f"/projects/{p['id']}/requirements", headers=h).json()
+               if q["code"] == target["req"])
+    r = client.put(f"/requirements/{req['id']}", headers=h,
+                   json={"title": "Renamed capability", "expected_version": req["version"]})
+    assert r.status_code == 200, r.text
+
+    client.post(f"/projects/{p['id']}/stories/generate", headers=h)
+    refreshed = {s["code"]: s for s in client.get(f"/projects/{p['id']}/stories", headers=h).json()}
+    assert refreshed[target["code"]]["title"] == "Renamed capability"
+    assert refreshed[target["code"]]["status"] == "draft"  # approval covered the old text
+    assert len(refreshed) == len(stories)

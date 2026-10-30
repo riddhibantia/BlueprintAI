@@ -68,9 +68,16 @@ export function computeLifecycle(b: Bundle): Stage[] {
   return stages;
 }
 
-/** First incomplete stage route for "Continue Blueprint". */
+/** First incomplete stage route for "Continue Blueprint".
+ *
+ *  Order matters: work that is already underway wins, then work that can
+ *  start now, and only then a blocked stage. Scanning in stage order used to
+ *  send a fresh project to `prd` (the first Blocked stage) instead of
+ *  requirements, and an all-complete project to a route that does not exist.
+ */
 export function continueRoute(stages: Stage[]): string {
-  const next = stages.find((s) => s.state === "In Progress" || s.state === "Needs Review" || s.state === "Blocked")
-    || stages.find((s) => s.state === "Not Started");
-  return next ? next.route : "traceability";
+  const next = stages.find((s) => s.state === "In Progress" || s.state === "Needs Review")
+    || stages.find((s) => s.state === "Not Started")
+    || stages.find((s) => s.state === "Blocked");
+  return next ? next.route : stages[stages.length - 1].route;
 }

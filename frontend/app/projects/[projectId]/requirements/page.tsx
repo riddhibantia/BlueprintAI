@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Filter, Plus, Search, Unlink } from "lucide-react";
 import { useRequirements, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { linkCounts } from "../../../../lib/query/links";
@@ -19,6 +20,7 @@ import { traceArtifact, clarify as clarifyIdea } from "../../../../lib/api/endpo
 export default function Requirements() {
   const { projectId: pid } = useParams() as { projectId: string };
   const router = useRouter();
+  const qc = useQueryClient();
   const reqsQ = useRequirements(pid);
   const traceQ = useTraceability(pid);
   const write = useWrite(pid, ["requirements", "traceability", "activity", "runs"]);
@@ -73,6 +75,9 @@ export default function Requirements() {
     setBuildError("");
     try {
       await api(`/projects/${pid}/pipeline/run`, { method: "POST" });
+      // The inbox cached every artifact before this run; drop that cache so the
+      // blueprint page opens on the new artifacts instead of the old empty ones.
+      await qc.invalidateQueries({ queryKey: ["p", pid] });
       router.push(`/projects/${pid}/blueprint`);
     } catch (e) {
       setBuildError(e instanceof Error ? e.message : "Pipeline failed.");
@@ -101,7 +106,7 @@ export default function Requirements() {
     write.mutate({
       path: `/projects/${pid}/requirements/generate`,
       init: { method: "POST", body: JSON.stringify({ answers, replace }) },
-    });
+    }, { onSuccess: () => setChecked(new Set()) });
   };
   const checkable = filtered.filter((r) => r.status !== "approved");
   const allChecked = checkable.length > 0 && checkable.every((r) => checked.has(r.id));

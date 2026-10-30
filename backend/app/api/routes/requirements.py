@@ -109,39 +109,46 @@ def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db),
     if not r:
         raise HTTPException(404, "Not found")
     project_or_403(r.project_id, db, user)
-    if body.expected_version is not None and body.expected_version != r.version:
-        raise HTTPException(409, f"Version conflict: current v{r.version}, you sent v{body.expected_version}")
-    if body.status and body.status not in ("draft", "approved", "rejected", "changed"):
-        raise HTTPException(400, "status must be draft|approved|rejected|changed")
-    # version on title/desc change (§22 HITL: approved state distinct)
-    changed = False
+
+    values: dict = {}
     if body.title is not None and body.title != r.title:
         if not body.title.strip():
             raise HTTPException(400, "title must not be empty")
-        r.title = body.title.strip()
-        changed = True
-    if body.description is not None:
-        r.description = body.description
-        changed = True
+        values["title"] = body.title.strip()
+    if body.description is not None and body.description != r.description:
+        values["description"] = body.description
     if body.priority:
         if body.priority not in ("low", "medium", "high", "critical"):
             raise HTTPException(400, "priority must be low|medium|high|critical")
-        r.priority = body.priority
+        values["priority"] = body.priority
     if body.status:
-        r.status = body.status
-    if changed:
-        # Re-check version inside the write transaction: if another request
-        # committed between our read and our flush, the row version moved and
-        # we must fail closed instead of silently overwriting.
-        db.flush()
-        fresh = db.query(Requirement.version).filter_by(id=rid).first()
-        if fresh is not None and body.expected_version is not None and fresh[0] != body.expected_version:
+        if body.status not in ("draft", "approved", "rejected", "changed"):
+            raise HTTPException(400, "status must be draft|approved|rejected|changed")
+        values["status"] = body.status
+
+    content_changed = "title" in values or "description" in values
+    if content_changed:
+        # One conditional UPDATE is the lock: two editors cannot both match the
+        # same version, so the loser gets 409 instead of silently overwriting.
+        values["version"] = Requirement.version + 1
+        q = db.query(Requirement).filter(Requirement.id == rid)
+        if body.expected_version is not None:
+            q = q.filter(Requirement.version == body.expected_version)
+        if q.update(values, synchronize_session=False) == 0:
             db.rollback()
-            raise HTTPException(409, "Version conflict: requirement changed concurrently")
-        r.version += 1
+            raise HTTPException(
+                409, f"Version conflict: current v{r.version}, you sent v{body.expected_version}")
+        db.flush()
+        new_version = db.query(Requirement.version).filter_by(id=rid).scalar()
         db.add(ArtifactVersion(project_id=r.project_id, artifact_type="requirement",
-                               artifact_code=r.code, version=r.version,
-                               content={"title": r.title, "description": r.description}, status=r.status))
+                               artifact_code=r.code, version=new_version,
+                               content={"title": values.get("title", r.title),
+                                        "description": values.get("description", r.description)},
+                               status=values.get("status", r.status)))
+    else:
+        for key, value in values.items():
+            setattr(r, key, value)
+
     db.commit()
     db.refresh(r)
     return {"code": r.code, "version": r.version, "status": r.status}

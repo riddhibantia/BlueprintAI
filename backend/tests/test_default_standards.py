@@ -85,3 +85,12 @@ def test_upload_still_works_and_dedupes(client, project):
     again = client.post(f"/projects/{project['id']}/documents",
                         files={"file": ("team.md", text)}, headers=project["h"])
     assert again.status_code == 200 and again.json()["status"] == "duplicate"
+
+
+def test_empty_upload_is_rejected_not_indexed(client, project):
+    before = client.get(f"/projects/{project['id']}/documents", headers=project["h"]).json()
+    r = client.post(f"/projects/{project['id']}/documents",
+                    files={"file": ("empty.txt", b"   \n\n")}, headers=project["h"])
+    assert r.status_code == 400
+    after = client.get(f"/projects/{project['id']}/documents", headers=project["h"]).json()
+    assert len(after) == len(before)

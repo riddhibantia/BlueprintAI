@@ -40,28 +40,6 @@ export default function Dashboard() {
   const [authError, setAuthError] = useState("");
   const [createError, setCreateError] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [resetOpen, setResetOpen] = useState(false);
-  const [resetPw, setResetPw] = useState("");
-  const [resetMsg, setResetMsg] = useState("");
-  const [resetBusy, setResetBusy] = useState(false);
-  const doReset = async () => {
-    if (resetBusy) return;
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setResetMsg("Enter your account email above first."); return; }
-    if (resetPw.length < 8) { setResetMsg("New password must be at least 8 characters."); return; }
-    setResetBusy(true);
-    setResetMsg("");
-    try {
-      const r = await api<{ message?: string }>("/auth/reset", {
-        method: "POST", body: { email: email.trim(), new_password: resetPw },
-      });
-      setResetMsg(r.message || "Password reset — log in with the new one.");
-      setResetPw("");
-    } catch (err) {
-      setResetMsg(err instanceof Error ? err.message : "Reset failed.");
-    } finally {
-      setResetBusy(false);
-    }
-  };
   const pwStrength = password.length === 0 ? "" : password.length < 8 ? "Too short (min 8)" : password.length < 12 ? "OK" : "Strong";
 
   useEffect(() => {
@@ -103,7 +81,7 @@ export default function Dashboard() {
     } catch (err) {
       const status = (err as { status?: number }).status;
       setAuthError(status === 401 && mode === "login"
-        ? "Wrong email or password. Try again — or reset it with Forgot password below."
+        ? "Wrong email or password. Try again."
         : err instanceof Error ? err.message : "Authentication failed.");
       setState("idle");
     }
@@ -136,7 +114,7 @@ export default function Dashboard() {
           <div className="relative z-10">
             <p className="flex items-center gap-2.5">
               <Image src="/logo.svg" alt="BlueprintAI logo" width={36} height={36} className="rounded-full" />
-              <b className="text-[16px] font-medium tracking-[-0.18px]">Blueprint AI</b>
+              <b className="text-[16px] font-medium tracking-[-0.18px]">BlueprintAI</b>
             </p>
             <h1 className="mt-8 text-[32px] font-light leading-[1.13] tracking-[-0.32px] md:text-[40px]">Engineering blueprints, kept honest.</h1>
             <p className="mt-3 max-w-[38ch] text-[14.5px] leading-[1.5] text-white/75">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
@@ -179,26 +157,9 @@ export default function Dashboard() {
             {mode === "register" && pwStrength && (
               <p className="mt-1 text-[12px] text-secondary" role="status">Strength: {pwStrength}</p>
             )}
-            <div className="mt-3 flex items-center justify-between gap-2">
+            <div className="mt-3">
               <Button type="submit" loading={state === "busy"}>{mode === "login" ? "Log in" : "Create account"}</Button>
-              {mode === "login" && (
-                <button type="button" onClick={() => { setResetOpen(!resetOpen); setResetMsg(""); }}
-                  className="text-[12.5px] text-secondary hover:text-primary hover:underline">Forgot password?</button>
-              )}
             </div>
-            {mode === "login" && resetOpen && (
-              <div className="mt-3 rounded-xl border border-border bg-canvas p-3">
-                <p className="text-[13px] font-medium">Reset password for <b>{email.trim() || "your account"}</b></p>
-                <label className="mt-2 block text-[13px]">New password
-                  <input type="password" value={resetPw} onChange={(e) => setResetPw(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") doReset(); }}
-                    placeholder="•••••••• (min 8)" autoComplete="new-password"
-                    className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" />
-                </label>
-                <div className="mt-2"><Button size="sm" loading={resetBusy} onClick={doReset}>Set new password</Button></div>
-                {resetMsg && <p className="mt-2 text-[13px] text-secondary" role="status">{resetMsg}</p>}
-              </div>
-            )}
             {fieldError && <p id="auth-field-error" className="mt-2 text-[13px] text-danger" role="alert">{fieldError}</p>}
             {authError && <p className="mt-2 text-[13px] text-danger" role="alert">{authError}</p>}
           </form>

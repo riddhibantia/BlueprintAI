@@ -226,6 +226,20 @@ def gen_db(idea: str) -> dict:
     return {"entities": [{"name": k, "fields": v} for k, v in ents.items()]}
 
 
+def parse_db_field(raw: str) -> dict:
+    """Split a field annotation like `employee_id(fk→User)` into column data.
+
+    The generator's compact notation is for humans; storage keeps the target
+    table on its own so the UI and generated DDL do not print the annotation
+    twice (`REFERENCES employee_id(fk→User)` is not valid SQL).
+    """
+    is_pk, is_fk = "(pk)" in raw, "(fk" in raw
+    name = raw.split("(")[0].strip()
+    target = raw.split("→", 1)[1].rstrip(")").strip() if is_fk and "→" in raw else ""
+    return {"name": name, "dtype": "uuid" if is_pk else "text",
+            "is_pk": is_pk, "is_fk": is_fk, "references": target}
+
+
 def gen_apis(idea: str) -> list[dict]:
     """Propose endpoints with auth and schemas (§10)."""
     low = idea.lower()

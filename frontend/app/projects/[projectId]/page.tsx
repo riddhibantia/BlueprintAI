@@ -34,6 +34,7 @@ export default function InboxHome() {
   const traceQ = useTraceability(pid);
   const issuesQ = useIssues(pid);
   const decide = useWrite(pid, ["issues"]);
+  const decideError = decide.isError ? (decide.error as Error)?.message : "";
 
   const loading = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ].some((q) => q.isLoading);
   const err = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ].find((q) => q.isError);
@@ -99,6 +100,7 @@ export default function InboxHome() {
       <div className="grid gap-3.5 lg:grid-cols-2">
         <Card className="min-w-0">
           <h3 className="mb-2 text-[15px] font-semibold">Needs attention ({triageCount})</h3>
+          {decideError && <div className="mb-2"><ErrorState message={decideError} /></div>}
           {triageCount === 0 ? (
             <EmptyState title="All clear" hint="No open issues and no orphaned requirements." />
           ) : (

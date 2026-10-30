@@ -1,5 +1,4 @@
 """Deterministic engine tests (no LLM needed)."""
-from app.consistency.rules import run_checks
 from app.rag.chunking import chunk_text
 from app.rag.embeddings import embed, cosine
 from app.rag.retriever import retrieve

@@ -70,8 +70,10 @@ export function useRuns(pid: string) {
 export function useWrite(pid: string, names: string[]) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ path, init }: { path: string; init?: { method?: string; body?: string } }) =>
-      api(path, { method: init?.method, body: init?.body ? JSON.parse(init.body) : undefined }),
+    // `api()` accepts an object or an already-stringified body, so pass it
+    // through untouched: a JSON.parse here would crash on a non-JSON string.
+    mutationFn: async ({ path, init }: { path: string; init?: { method?: string; body?: unknown } }) =>
+      api(path, { method: init?.method, body: init?.body }),
     onSuccess: () => {
       for (const n of names) qc.invalidateQueries({ queryKey: K(pid, n) });
       qc.invalidateQueries({ queryKey: K(pid, "activity") });

@@ -47,7 +47,7 @@ export default function Security() {
     <div>
       <div className="mb-4">
         <h1 className="text-[24px] font-bold tracking-tight">Security</h1>
-        <p className="text-[13px] text-secondary">{controls.length} controls · {issues.length} open issues</p>
+        <p className="text-[13px] text-secondary">{controls.length} controls · {issues.length} open issues across all checks</p>
       </div>
       {controls.length === 0 ? (
         <div>

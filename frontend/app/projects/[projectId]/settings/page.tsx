@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Activity, Cpu, Database } from "lucide-react";
 import { me, logout } from "../../../../lib/api/client";
-import { getHealth } from "../../../../lib/api/endpoints";
+import { getHealth, changePassword } from "../../../../lib/api/endpoints";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
@@ -16,11 +16,32 @@ export default function Settings() {
   const [health, setHealth] = useState<Health | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [err, setErr] = useState("");
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwMsg, setPwMsg] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
 
   useEffect(() => {
     getHealth().then(setHealth).catch((e) => setErr(e.message));
     me().then((u) => setUser((u as SessionUser) || null)).catch(() => {});
   }, []);
+
+  const savePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (pwNew.length < 8) { setPwMsg("New password must be at least 8 characters."); return; }
+    setPwBusy(true);
+    setPwMsg("");
+    try {
+      const r = await changePassword(pwCurrent, pwNew);
+      setPwMsg(r.message || "Password updated.");
+      setPwCurrent("");
+      setPwNew("");
+    } catch (error) {
+      setPwMsg(error instanceof Error ? error.message : "Could not update password.");
+    } finally {
+      setPwBusy(false);
+    }
+  };
 
   if (err && !health) return <ErrorState message={err} />;
   if (!health) return <LoadingState stage="Loading system status" />;
@@ -28,7 +49,7 @@ export default function Settings() {
   return (
     <div>
       <h1 className="text-[24px] font-bold tracking-tight">Settings</h1>
-      <p className="mb-5 text-[13.5px] text-secondary">Session, backend diagnostics, and credits.</p>
+      <p className="mb-5 text-[13.5px] text-secondary">Session, password, backend diagnostics, and licence.</p>
       <div className="grid gap-3.5 md:grid-cols-2">
         <Card>
           <h3 className="mb-2 text-[15px] font-semibold">Session</h3>
@@ -37,6 +58,26 @@ export default function Settings() {
             <p className="font-mono text-[12px] text-secondary">{user.email}</p></>
           ) : <EmptyState title="No session" hint="Log in from the dashboard." />}
           <div className="mt-3"><Button variant="ghost" onClick={logout}>Log out</Button></div>
+        </Card>
+        <Card>
+          <h3 className="mb-2 text-[15px] font-semibold">Change password</h3>
+          {user ? (
+            <form onSubmit={savePassword} className="grid gap-2">
+              <label className="block text-[13px]">Current password
+                <input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)}
+                  autoComplete="current-password" required
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-canvas px-3 text-[13px] focus:border-primary focus:outline-none" />
+              </label>
+              <label className="block text-[13px]">New password
+                <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)}
+                  autoComplete="new-password" minLength={8} required
+                  placeholder="At least 8 characters"
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-canvas px-3 text-[13px] placeholder:text-muted focus:border-primary focus:outline-none" />
+              </label>
+              <div><Button type="submit" size="sm" loading={pwBusy}>Update password</Button></div>
+              {pwMsg && <p className="text-[12.5px] text-secondary" role="status">{pwMsg}</p>}
+            </form>
+          ) : <EmptyState title="No session" hint="Log in from the dashboard to change your password." />}
         </Card>
         <Card>
           <h3 className="mb-3 flex items-center gap-2 text-[15px] font-semibold"><Activity size={15} />System status</h3>

@@ -35,10 +35,10 @@ export default function Knowledge() {
     try {
       await uploadDocument(pid, f);
       await docsQ.refetch();
-      setFileKey((k) => k + 1); // reset input so the same file can be re-uploaded
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Upload failed.");
     } finally {
+      setFileKey((k) => k + 1); // reset input so the same file can be retried
       setUploading(false);
     }
   };

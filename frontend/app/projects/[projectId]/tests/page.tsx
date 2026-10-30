@@ -37,7 +37,7 @@ export default function Tests() {
             <PrereqBanner text="Test cases validate requirements — generate them first."
               href={`/projects/${pid}/requirements`} action="Go to Requirements" />
           )}
-          <StageEmpty title="No tests yet" hint="Generate acceptance, API, and security cases linked to requirements."
+          <StageEmpty title="No tests yet" hint="Generate acceptance and security cases linked to requirements."
             actionLabel="Generate tests" generating={write.isPending}
             disabledReason={!hasReqs ? "Waiting on requirements." : undefined}
             onGenerate={() => write.mutate({ path: `/projects/${pid}/tests/generate`, init: { method: "POST" } })} />

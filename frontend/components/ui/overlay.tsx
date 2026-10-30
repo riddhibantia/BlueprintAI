@@ -63,7 +63,7 @@ export function Tooltip({ tip, children }: { tip: string; children: ReactNode })
 }
 
 /** Simple dropdown menu (button + Escape/outside handling). */
-export function Dropdown({ label, items }: { label: ReactNode; items: { label: string; onSelect: () => void }[] }) {
+export function Dropdown({ label, items, ariaLabel }: { label: ReactNode; items: { label: string; onSelect: () => void }[]; ariaLabel?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -79,7 +79,7 @@ export function Dropdown({ label, items }: { label: ReactNode; items: { label: s
   }, [open ]);
   return (
     <div ref={ref} className="relative inline-block">
-      <button onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
+      <button onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel}
         className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-[13px] font-medium hover:border-accent">
         {label}
       </button>

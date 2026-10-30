@@ -6,6 +6,7 @@ Applies to the MVP as built. Anything here marked "planned" is not claimed as do
 
 - **Authentication**: email + bcrypt (SHA-256 pre-stretch, cost 12). Min length 8 enforced at the schema boundary.
 - **Sessions**: httpOnly `SameSite=Lax` cookie (`Secure` in prod). JS never sees the token. Explicit `Authorization` header still accepted for scripts/API clients.
+- **Password change**: authenticated `POST /auth/password` requires the current password. There is deliberately no unauthenticated "reset by email" endpoint — that would be account takeover without an out-of-band token.
 - **Project-level authorization**: every project route goes through `project_or_403` (owner or member). Cross-user access returns 403 — covered by `test_isolation_between_users`.
 - **Document isolation**: chunks are always queried through a project-scoped join; user B gets 403 before any content is touched.
 - **Upload validation**: PDF/TXT/MD allowlist, 15MB cap, checksum dedupe. Filenames never touch the filesystem (stored as `{uuid}.txt`).

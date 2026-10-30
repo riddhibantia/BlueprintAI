@@ -12,8 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
 from app.api.deps import current_user, project_or_403
-from app.models.db import (Project, Requirement, UserStory, ApiEndpoint, ConsistencyIssue,
-                           AgentRun)
+from app.models.db import (Project, Requirement, UserStory, ApiEndpoint, ConsistencyIssue)
 from app.traceability.engine import coverage
 from app.rag.context import project_chunks
 from app.rag.retriever import retrieve

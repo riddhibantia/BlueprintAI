@@ -25,6 +25,7 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
   const { pid, project, reload, setCopilotOpen } = useShell();
   const [copied, setCopied] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [actionError, setActionError] = useState("");
   const [user, setUser] = useState<SessionUser | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -36,9 +37,13 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
   const here = seg === pid ? "Overview" : NAMES[seg] || "Overview";
 
   const share = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setActionError("Could not copy the link — copy it from the address bar.");
+    }
   };
 
   const download = (kind: "markdown" | "pdf" | "openapi" | "json" | "archify") => {
@@ -49,8 +54,16 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
 
   const validate = async () => {
     setValidating(true);
-    try { await checkConsistency(pid); await reload(); router.push(`/projects/${pid}/consistency`); }
-    finally { setValidating(false); }
+    setActionError("");
+    try {
+      await checkConsistency(pid);
+      await reload();
+      router.push(`/projects/${pid}/consistency`);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Validation failed — try again.");
+    } finally {
+      setValidating(false);
+    }
   };
 
   return (
@@ -80,7 +93,7 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
           <Button variant="ghost" size="sm" onClick={share}>
             {copied ? <><Check size={14} className="text-success" />Copied</> : <>Share</>}
           </Button>
-          <Dropdown label={<MoreHorizontal size={16} />} items={[
+          <Dropdown ariaLabel="More actions" label={<MoreHorizontal size={16} />} items={[
             { label: validating ? "Validating…" : "Run validation", onSelect: validate },
             { label: "Export Markdown", onSelect: () => download("markdown") },
             { label: "Export PDF", onSelect: () => download("pdf") },
@@ -88,7 +101,7 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
             { label: "Export Archify IR", onSelect: () => download("archify") },
             { label: "Settings", onSelect: () => router.push(`/projects/${pid}/settings`) },
           ]} />
-          <Dropdown label={
+          <Dropdown ariaLabel="Account menu" label={
             <span aria-label="Account" className="grid h-8 w-8 place-items-center rounded-full bg-elevated text-[12px] font-semibold text-secondary">
               {(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}
             </span>
@@ -98,6 +111,7 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
           ]} />
         </div>
       </div>
+      {actionError && <p role="alert" className="border-t border-danger/40 bg-danger/5 px-5 py-1.5 text-[12.5px] text-danger">{actionError}</p>}
     </header>
   );
 }
