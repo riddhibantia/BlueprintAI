@@ -29,9 +29,9 @@ const ORBS = [
 ];
 
 const METRICS = [
-  { value: "0.86", label: "Recall@3 · 43 queries" },
+  { value: "0.91", label: "Recall@3 · 43 queries" },
   { value: "100%", label: "Traceability coverage" },
-  { value: "49/49", label: "Tests green" },
+  { value: "52/52", label: "Tests green" },
   { value: "0", label: "Failures over 9 runs" },
 ];
 

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.db import AgentRun, Document, DocumentChunk
 from app.rag.chunking import chunk_text
-from app.rag.embeddings import embed
+from app.rag.embeddings import embed_chunk
 
 MAX_CHUNKS_STORED = 300
 
@@ -51,7 +51,7 @@ def ingest_text(db: Session, project_id: str, *, name: str, text: str,
             section=c["section"][:200],
             content=c["content"][:4000],
             meta={"source": name},
-            embedding=embed(c["content"][:1000]),
+            embedding=embed_chunk(c["section"], c["content"][:1000]),
         ))
     if len(chunks) > MAX_CHUNKS_STORED:
         logger.warning("document %s truncated to %d of %d chunks",

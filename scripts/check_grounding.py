@@ -56,8 +56,14 @@ def main() -> None:
             c.post(f"/projects/{pid}/prd/generate", headers=h, json={})
             prd = c.get(f"/projects/{pid}/prd", headers=h).json()["content"]
             assumption = prd["assumptions"][0]
-            assert "default pack" in assumption or "standards" in assumption.lower(), \
-                f"PRD did not cite retrieved standards: {assumption[:120]}"
+
+            # The PRD asks RAG for evidence on the project idea. Re-run that
+            # exact query and prove the assumption text really came from a
+            # retrieved chunk (not just that some chunk mentions "standards").
+            idea_hits = c.post(f"/projects/{pid}/knowledge/query", headers=h, json={
+                "query": "Build an employee expense platform.", "k": 5}).json()["hits"]
+            assert any(assumption[:60] in hit["content"] for hit in idea_hits), \
+                f"PRD assumption is not from retrieved evidence: {assumption[:120]}"
             print("\nPRD assumption grounded in retrieved evidence:")
             print("  " + assumption[:200].replace("\n", " "))
             print("\nOK: RAG is grounded on first load, no upload required.")

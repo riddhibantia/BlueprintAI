@@ -61,12 +61,12 @@ flowchart LR
 | 13 artifact modules | Requirements, PRD, Stories, Architecture, Database, APIs, Security, Tasks, Tests, Traceability, Consistency, Impact, Knowledge — no stubs |
 | Idea-aware requirements | Keywords from your idea + your own words become the domain entities ("Tables", "Reminders" — never the same list twice); plain-language titles a non-technical approver can read; add-your-own dialog |
 | Auto-pipeline | Approving the final requirement builds PRD → stories → architecture → DB → APIs → security → tasks → tests server-side (`POST /pipeline/run`, idempotent) and lands you on the result |
-| RAG-grounded generation | Ships a default standards pack (API, security, testing, data) ingested on project creation, so grounding works on first load; upload your own PDF/TXT/MD (≤15MB) → structure-aware chunks → hash/OpenAI embeddings → hybrid vector+lexical retrieval; generations cite evidence or say what's missing |
+| RAG-grounded generation | Ships a default standards pack (API, security, testing, data) ingested on project creation, so grounding works on first load; upload your own PDF/TXT/MD (≤15MB) → structure-aware chunks → hash/OpenAI embeddings → BM25 + hashed-vector hybrid retrieval; generations cite evidence or say what's missing |
 | Multi-agent pipeline | LangGraph workflow with sequential fallback; the engine that ran is reported, not assumed |
 | Architecture diagram | Mermaid flowchart rendered from stored components (boundary subgraphs, kind shapes) + full Archify IR export |
 | Collaboration safety | httpOnly `SameSite=Lax` sessions, `project_or_403` isolation, optimistic locking (409), audit logs, prod fail-closed config |
 | Export | Full-blueprint PDF (ReportLab, markup-escaped), OpenAPI 3.0, Archify diagram IR (1:1 topology) |
-| Quality gates | 49 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, seeded demo captures for every project route |
+| Quality gates | 52 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, seeded demo captures for every project route |
 
 ## Measured results (not claims)
 
@@ -75,12 +75,12 @@ From `evaluation/benchmark.py --full --repeats 3` — temp SQLite DB, mock LLM, 
 | Benchmark | Measured |
 |---|---|
 | Retrieval Recall@3 (35 keyword queries) | **1.00** |
-| Retrieval Recall@3 (8 adversarial paraphrases) | **0.25** — the honest gap semantic embeddings must close |
+| Retrieval Recall@3 (8 adversarial paraphrases) | **0.50** — doubled by BM25; the rest is the honest gap semantic embeddings must close |
 | Pipeline (3 ideas × 3 runs) | **9/9 green, 0 failures** |
 | Traceability per idea | **100%, 0 orphans** |
 | End-to-end latency per idea | **~0.4–0.9 s** mean, per-stage means <100 ms |
 
-The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all tests still green. See `docs/EVALUATION.md`.
+The fixture caught a real stemming bug (`writes`≠`write`). BM25 over shared stems, heading-aware chunks and IDF weighting moved overall Recall@3 0.860 → 0.907 and adversarial recall 0.25 → 0.50 with no model dependency. See `docs/EVALUATION.md`.
 
 ## AI providers: mocked by default, on purpose
 
@@ -214,7 +214,7 @@ Regenerating requirements asks first and replaces (never stacks duplicates).
 ## Verify
 
 ```powershell
-# Backend: unit + E2E + regression (49 green, isolated temp DB per run)
+# Backend: unit + E2E + regression (52 green, isolated temp DB per run)
 $env:PYTHONPATH="backend"; python -m pytest backend/tests -q
 
 # Prove RAG grounding end to end: new project -> seeded pack -> cited PRD
