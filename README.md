@@ -66,7 +66,7 @@ flowchart LR
 | Architecture diagram | Mermaid flowchart rendered from stored components (boundary subgraphs, kind shapes) + full Archify IR export |
 | Collaboration safety | httpOnly `SameSite=Lax` sessions, `project_or_403` isolation, optimistic locking (409), audit logs, prod fail-closed config |
 | Export | Full-blueprint PDF (ReportLab, markup-escaped), OpenAPI 3.0, Archify diagram IR (1:1 topology) |
-| Quality gates | 37 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, Playwright browser QA (zero console errors) |
+| Quality gates | 55 pytest green, retrieval + pipeline benchmark, `tsc` + `next build` clean, browser QA pass over every route (zero console errors) |
 
 ## Measured results (not claims)
 
@@ -80,7 +80,7 @@ From `evaluation/benchmark.py --full --repeats 3` — temp SQLite DB, mock LLM, 
 | Traceability per idea | **100%, 0 orphans** |
 | End-to-end latency per idea | **~0.4–0.9 s** mean, per-stage means <100 ms |
 
-The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all tests still green. Browser QA (Playwright, real login, every route) runs zero console errors. See `docs/EVALUATION.md`.
+The fixture once caught a real stemming bug (`writes`≠`write`): prefix-token normalization moved Recall@3 0.80 → 0.90 with all tests still green. A browser QA pass over every route (real login) shows zero console errors, captured in `screenshots/`. See `docs/EVALUATION.md`.
 
 ## AI providers: mocked by default, on purpose
 
@@ -211,7 +211,7 @@ Regenerating requirements asks first and replaces (never stacks duplicates).
 ## Verify
 
 ```powershell
-# Backend: unit + E2E + regression (37 green, isolated temp DB per run)
+# Backend: unit + E2E + regression (55 green, isolated temp DB per run)
 $env:PYTHONPATH="backend"; python -m pytest backend/tests -q
 
 # Measured benchmark (retrieval fixture + 3-idea pipeline — see docs/EVALUATION.md)
