@@ -1,11 +1,12 @@
 "use client";
 import { useParams } from "next/navigation";
 import { LayoutGrid, Table2, ListChecks } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { Search } from "lucide-react";
 import { useTasks, useRequirements, useWrite } from "../../../../lib/query/useArtifacts";
 import { Card } from "../../../../components/ui/card";
 import { StatusBadge } from "../../../../components/ui/badge";
-import { DataTable } from "../../../../components/ui/data";
+import { DataTable, Pagination } from "../../../../components/ui/data";
 import { TaskList, type Task } from "../../../../components/ui/task-list";
 import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
@@ -22,10 +23,35 @@ export default function Tasks() {
   const reqsQ = useRequirements(pid);
   const write = useWrite(pid, ["tasks", "activity", "runs", "traceability"]);
   const [view, setView] = useState<"table" | "board" | "checklist">("board");
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+
+  // Hooks run before the loading guard — see note in stories/page.tsx.
+  const tasks = tasksQ.data || [];
+
+  const filtered = useMemo(() => {
+    if (!q.trim()) return tasks;
+    const lower = q.toLowerCase();
+    return tasks.filter((t: any) =>
+      (t.code || "").toLowerCase().includes(lower) ||
+      (t.title || "").toLowerCase().includes(lower) ||
+      (t.epic || "").toLowerCase().includes(lower)
+    );
+  }, [tasks, q]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q]);
 
   if (tasksQ.isLoading || reqsQ.isLoading) return <LoadingState stage="Loading implementation plan" />;
   if (tasksQ.isError) return <ErrorState message={(tasksQ.error as Error)?.message} onRetry={() => tasksQ.refetch()} />;
-  const tasks = tasksQ.data || [];
   const hasReqs = (reqsQ.data || []).length > 0;
   const done = tasks.filter((t: any) => t.status === "done").length;
 
@@ -50,12 +76,20 @@ export default function Tasks() {
           <h1 className="text-[24px] font-bold tracking-tight">Tasks</h1>
           <p className="text-[13px] text-secondary">{tasks.length} tasks · {done} done · epics group the work</p>
         </div>
-        <div className="flex gap-1 rounded-full border border-border bg-surface p-1" role="tablist" aria-label="View">
-          {([["board", LayoutGrid], ["table", Table2], ["checklist", ListChecks]] as const).map(([v, Icon]) => (
-            <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium capitalize ${view === v ? "bg-elevated text-primary" : "text-secondary"}`}>
-              <Icon size={13} />{v}</button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <label htmlFor="task-search" className="sr-only">Search tasks or epics</label>
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+            <input id="task-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks or epics…"
+              className="w-56 rounded-full border border-border bg-surface py-2 pl-9 pr-3 text-[13px] placeholder:text-muted focus:border-accent focus:outline-none" />
+          </div>
+          <div className="flex gap-1 rounded-full border border-border bg-surface p-1" role="tablist" aria-label="View">
+            {([["board", LayoutGrid], ["table", Table2], ["checklist", ListChecks]] as const).map(([v, Icon]) => (
+              <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium capitalize ${view === v ? "bg-elevated text-primary" : "text-secondary"}`}>
+                <Icon size={13} />{v}</button>
+            ))}
+          </div>
         </div>
       </div>
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
@@ -65,7 +99,7 @@ export default function Tasks() {
             <PrereqBanner text="Tasks are cut from requirements — generate them first."
               href={`/projects/${pid}/requirements`} action="Go to Requirements" />
           )}
-          <StageEmpty title="No tasks yet" hint="Generate the implementation plan with requirement links."
+          <StageEmpty pageTitle="Tasks" title="No tasks yet" hint="Generate the implementation plan with requirement links."
             actionLabel="Generate tasks" generating={write.isPending}
             disabledReason={!hasReqs ? "Waiting on requirements." : undefined}
             onGenerate={() => write.mutate({ path: `/projects/${pid}/tasks/generate`, init: { method: "POST" } })} />
@@ -79,9 +113,9 @@ export default function Tasks() {
         <div className="grid gap-3 md:grid-cols-3">
           {COLS.map((col) => (
             <div key={col} className="rounded-2xl border border-border bg-canvas/50 p-2.5">
-              <p className="px-1.5 py-1 text-[12px] font-bold uppercase tracking-[0.07em] text-secondary">{col} ({tasks.filter((t: any) => t.status === col).length})</p>
+              <p className="px-1.5 py-1 text-[12px] font-bold uppercase tracking-[0.07em] text-secondary">{col} ({filtered.filter((t: any) => t.status === col).length})</p>
               <div className="grid gap-2">
-                {tasks.filter((t: any) => t.status === col).map((t: any) => (
+                {filtered.filter((t: any) => t.status === col).map((t: any) => (
                   <Card key={t.id} className="!p-3">
                     <p className="font-mono text-[11.5px] text-accent">{t.code}{t.epic ? ` · ${t.epic}` : ""}</p>
                     <p className="mt-0.5 text-[13px] font-medium">{t.title}</p>
@@ -96,8 +130,9 @@ export default function Tasks() {
           ))}
         </div>
       ) : (
+        <>
         <DataTable label="Tasks" head={<><th>ID</th><th>Title</th><th>Epic</th><th>Req</th><th>Priority</th><th>Status</th><th></th></>}>
-          {tasks.map((t: any) => (
+          {paginated.map((t: any) => (
             <tr key={t.id}>
               <td className="font-mono text-[12.5px]">{t.code}</td>
               <td>{t.title}</td>
@@ -109,6 +144,14 @@ export default function Tasks() {
             </tr>
           ))}
         </DataTable>
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={filtered.length}
+          pageSize={pageSize}
+        />
+        </>
       )}
     </div>
   );

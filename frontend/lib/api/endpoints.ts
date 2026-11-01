@@ -3,6 +3,9 @@ import { api, apiForm } from "./client";
 
 export const getProject = (pid: string) => api(`/projects/${pid}`);
 export const listProjects = () => api(`/projects`);
+export const updateProject = (pid: string, body: { name?: string; description?: string }) =>
+  api(`/projects/${pid}`, { method: "PATCH", body });
+export const deleteProject = (pid: string) => api(`/projects/${pid}`, { method: "DELETE" });
 export const getHealth = () => api(`/health`);
 
 export const clarify = (pid: string) => api(`/projects/${pid}/clarify`, { method: "POST" });
@@ -39,6 +42,7 @@ export const analyzeImpact = (pid: string, requirement_code: string) =>
   api(`/projects/${pid}/impact/analyze`, { method: "POST", body: { requirement_code } });
 
 export const listDocuments = (pid: string) => api(`/projects/${pid}/documents`);
+export const getKnowledgeStats = (pid: string) => api(`/projects/${pid}/knowledge/stats`);
 export const queryKnowledge = (pid: string, query: string, k = 5) =>
   api(`/projects/${pid}/knowledge/query`, { method: "POST", body: { query, k } });
 export const uploadDocument = (pid: string, file: File) => {
@@ -46,6 +50,11 @@ export const uploadDocument = (pid: string, file: File) => {
   form.append("file", file);
   return apiForm(`/projects/${pid}/documents`, form);
 };
+export const deleteDocument = (pid: string, did: string) =>
+  api(`/projects/${pid}/documents/${did}`, { method: "DELETE" });
 
 export const listRuns = (pid: string) => api(`/projects/${pid}/runs`);
 export const runWorkflow = (pid: string) => api(`/projects/${pid}/workflow/run`, { method: "POST" });
+export const runPipeline = (pid: string) => api(`/projects/${pid}/pipeline/run`, { method: "POST" });
+export const changePassword = (current_password: string, new_password: string) =>
+  api("/auth/change-password", { method: "POST", body: { current_password, new_password } });

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
+import { ThemeToggle } from "../components/ui/theme-toggle";
 
 const PIPELINE = [
   { n: "01", title: "Capture", text: "Product idea becomes clarified, RAG-grounded requirements with stable IDs and explicit approval gates.", img: "/img/sketch-notebook.jpg", alt: "Hands sketching product ideas beside a laptop" },
@@ -31,7 +32,7 @@ const ORBS = [
 const METRICS = [
   { value: "1.00", label: "Recall@3 retrieval" },
   { value: "100%", label: "Traceability coverage" },
-  { value: "38/38", label: "Tests green" },
+  { value: "42/42", label: "Tests green" },
   { value: "0", label: "Failures over 9 runs" },
 ];
 
@@ -58,11 +59,12 @@ export default function Landing() {
             Blueprint<span className="text-muted">AI</span>
           </Link>
           <nav aria-label="Primary" className="ml-auto hidden items-center gap-6 md:flex">
-            <a href="#pipeline" className="text-[15px] text-secondary transition-colors hover:text-primary">Pipeline</a>
-            <a href="#features" className="text-[15px] text-secondary transition-colors hover:text-primary">Capabilities</a>
-            <a href="#evidence" className="text-[15px] text-secondary transition-colors hover:text-primary">Evidence</a>
+            <a href="#pipeline" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Pipeline</a>
+            <a href="#features" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Capabilities</a>
+            <a href="#evidence" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Evidence</a>
           </nav>
           <div className="ml-auto flex items-center gap-2.5 md:ml-0">
+            <ThemeToggle />
             <Link href="/dashboard" className="hidden h-10 items-center px-4 text-[15px] font-medium text-primary transition-colors hover:text-primary-active sm:inline-flex">
               Sign in
             </Link>
@@ -84,7 +86,7 @@ export default function Landing() {
             <p className="rise-in text-[12px] font-semibold uppercase tracking-[0.96px] text-muted">
               Idea → PRD → architecture → validation
             </p>
-            <h1 className="rise-in rise-in-1 mt-5 text-[40px] font-light leading-[1.08] tracking-[-0.96px] text-primary sm:text-[52px] lg:text-[64px]">
+            <h1 className="rise-in rise-in-1 mt-5 font-display text-[40px] font-light leading-[1.08] tracking-[-0.96px] text-primary sm:text-[52px] lg:text-[64px]">
               Go to market with a blueprint you can prove.
             </h1>
             <p className="rise-in rise-in-2 mx-auto mt-6 max-w-[62ch] text-[16px] leading-[1.5] text-secondary">
@@ -120,7 +122,7 @@ export default function Landing() {
       <section id="pipeline" className="scroll-mt-20 border-t border-border px-5 py-24">
         <div className="mx-auto max-w-[1200px]">
           <SectionLabel>Pipeline</SectionLabel>
-          <h2 className="mt-3 max-w-[22ch] text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
+          <h2 className="mt-3 max-w-[22ch] font-display text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
             Four stages, and every handoff is stored.
           </h2>
           <ol className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -145,7 +147,7 @@ export default function Landing() {
         <div className="orb orb-rose orb-drift bottom-0 right-0 h-[340px] w-[340px]" aria-hidden />
         <div className="relative z-10 mx-auto max-w-[1200px]">
           <SectionLabel>How it stays honest</SectionLabel>
-          <h2 className="mt-3 max-w-[24ch] text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
+          <h2 className="mt-3 max-w-[24ch] font-display text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
             Guarantees enforced in code, not promised in copy.
           </h2>
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -153,7 +155,7 @@ export default function Landing() {
               <div key={o.tone} className="relative isolate overflow-hidden rounded-3xl border border-border bg-surface p-8">
                 <div className={`orb orb-${o.tone} orb-drift -right-10 -top-10 h-40 w-40 opacity-60`} aria-hidden />
                 <div className="relative z-10">
-                  <h3 className="text-[24px] font-light leading-[1.2] text-primary">{o.label}</h3>
+                  <h3 className="font-display text-[24px] font-light leading-[1.2] text-primary">{o.label}</h3>
                   <p className="mt-2.5 text-[14px] leading-[1.5] text-secondary">{o.text}</p>
                 </div>
               </div>
@@ -184,7 +186,7 @@ export default function Landing() {
       <section id="features" className="scroll-mt-20 px-5 py-24">
         <div className="mx-auto max-w-[1200px]">
           <SectionLabel>Capabilities</SectionLabel>
-          <h2 className="mt-3 max-w-[24ch] text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
+          <h2 className="mt-3 max-w-[24ch] font-display text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
             What the platform actually does for you.
           </h2>
           <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -203,7 +205,7 @@ export default function Landing() {
       <section id="evidence" className="scroll-mt-20 border-t border-border bg-subtle px-5 py-24">
         <div className="mx-auto max-w-[1200px]">
           <SectionLabel>Evidence</SectionLabel>
-          <h2 className="mt-3 max-w-[20ch] text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
+          <h2 className="mt-3 max-w-[20ch] font-display text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
             Measured, not claimed.
           </h2>
           <dl className="mt-12 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border lg:grid-cols-4">
@@ -226,7 +228,7 @@ export default function Landing() {
         <div className="orb orb-lavender orb-drift -bottom-16 right-0 h-[300px] w-[300px] opacity-30" aria-hidden />
         <div className="relative z-10 mx-auto max-w-[1200px] text-center">
           <p className="text-[12px] font-semibold uppercase tracking-[0.96px] text-white/60">Local-first</p>
-          <h2 className="mx-auto mt-4 max-w-[20ch] text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
+          <h2 className="mx-auto mt-4 max-w-[20ch] font-display text-[32px] font-light leading-[1.13] tracking-[-0.32px] sm:text-[40px]">
             Bring your idea. Leave with a blueprint.
           </h2>
           <p className="mx-auto mt-5 max-w-[58ch] text-[16px] leading-[1.5] text-white/75">
@@ -260,24 +262,24 @@ export default function Landing() {
           <div>
             <p className="text-[12px] font-semibold uppercase tracking-[0.96px] text-muted">Product</p>
             <ul className="mt-4 grid gap-2.5">
-              <li><a href="#pipeline" className="text-[15px] text-secondary transition-colors hover:text-primary">Pipeline</a></li>
-              <li><a href="#features" className="text-[15px] text-secondary transition-colors hover:text-primary">Capabilities</a></li>
-              <li><a href="#evidence" className="text-[15px] text-secondary transition-colors hover:text-primary">Evidence</a></li>
+              <li><a href="#pipeline" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Pipeline</a></li>
+              <li><a href="#features" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Capabilities</a></li>
+              <li><a href="#evidence" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Evidence</a></li>
             </ul>
           </div>
           <div>
             <p className="text-[12px] font-semibold uppercase tracking-[0.96px] text-muted">Workspace</p>
             <ul className="mt-4 grid gap-2.5">
-              <li><Link href="/dashboard" className="text-[15px] text-secondary transition-colors hover:text-primary">Sign in</Link></li>
-              <li><Link href="/dashboard" className="text-[15px] text-secondary transition-colors hover:text-primary">Create account</Link></li>
+              <li><Link href="/dashboard" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Sign in</Link></li>
+              <li><Link href="/dashboard" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Create account</Link></li>
             </ul>
           </div>
           <div>
             <p className="text-[12px] font-semibold uppercase tracking-[0.96px] text-muted">Credits</p>
             <ul className="mt-4 grid gap-2.5">
-              <li><a href="https://www.rareui.com" target="_blank" rel="noreferrer" className="text-[15px] text-secondary transition-colors hover:text-primary">Rare UI</a></li>
-              <li><a href="https://github.com/tt-a1i/archify" target="_blank" rel="noreferrer" className="text-[15px] text-secondary transition-colors hover:text-primary">Archify</a></li>
-              <li><a href="https://unsplash.com" target="_blank" rel="noreferrer" className="text-[15px] text-secondary transition-colors hover:text-primary">Unsplash</a></li>
+              <li><a href="https://www.rareui.com" target="_blank" rel="noreferrer" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Rare UI</a></li>
+              <li><a href="https://github.com/tt-a1i/archify" target="_blank" rel="noreferrer" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Archify</a></li>
+              <li><a href="https://unsplash.com" target="_blank" rel="noreferrer" className="inline-block py-1 text-[15px] text-secondary transition-colors hover:text-primary">Unsplash</a></li>
             </ul>
           </div>
         </div>

@@ -59,7 +59,8 @@ export function ArchDiagram({ comps, rels }: { comps: ArchNode[]; rels: ArchEdge
     setFailed(false);
     (async () => {
       try {
-        const { svg } = await mermaid.render(`arch-${reactId}`, archDefinition(comps, rels));
+        const renderId = `arch-${reactId}-${Math.random().toString(36).slice(2, 8)}`;
+        const { svg } = await mermaid.render(renderId, archDefinition(comps, rels));
         if (!cancelled && ref.current) ref.current.innerHTML = svg;
       } catch {
         if (!cancelled) setFailed(true);
@@ -68,7 +69,30 @@ export function ArchDiagram({ comps, rels }: { comps: ArchNode[]; rels: ArchEdge
     return () => { cancelled = true; };
   }, [comps, rels, reactId]);
 
-  if (failed || comps.length === 0) return null;
+  const def = archDefinition(comps, rels);
+  const [copied, setCopied] = useState(false);
+  const copyDef = async () => {
+    try {
+      await navigator.clipboard.writeText(def);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  if (comps.length === 0) return null;
+
+  if (failed) {
+    return (
+      <div className="rounded-xl border border-border bg-canvas p-4 text-[13px]">
+        <p className="font-medium text-secondary">Mermaid graph could not be previewed visually, but the definition is preserved:</p>
+        <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-elevated p-3 font-mono text-[12px] text-primary">{def}</pre>
+        <button type="button" onClick={copyDef} className="mt-2 text-[12.5px] font-medium text-accent hover:underline">
+          {copied ? "✓ Copied definition" : "Copy Mermaid definition"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div ref={ref} role="img" aria-label="Architecture diagram"
       className="overflow-x-auto [&_svg]:h-auto [&_svg]:w-full [&_svg]:max-w-[900px]" />

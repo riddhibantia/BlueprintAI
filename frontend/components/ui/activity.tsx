@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, GitBranch, Info } from "lucide-react";
+import { ReactNode, useState } from "react";
+import { AlertTriangle, Check, CheckCircle2, Copy, GitBranch, Info } from "lucide-react";
 import { cn } from "../../lib/utils/cn";
 import { Button } from "./button";
 import { StatusBadge } from "./badge";
+import { copyText } from "../../lib/clipboard";
 
 /** Approval banner: AI-generated, review before approval (§37). */
 export function ApprovalBanner({ status, onApprove, onReject, onEdit }: { status: string; onApprove?: () => void; onReject?: () => void; onEdit?: () => void }) {
@@ -55,14 +56,45 @@ export function ActivityItem({ icon, title, context, time }: { icon: ReactNode; 
 }
 
 /** Linked-artifact chip (§19/§26). Renders nothing for empty codes. */
-export function ArtifactLink({ code, href }: { code: string; href?: string }) {
+export function ArtifactLink({ code, href, pid }: { code: string; href?: string; pid?: string }) {
   if (!code) return null;
+  const [copied, setCopied] = useState(false);
+  let targetHref = href;
+  if (!targetHref && pid) {
+    const raw = code.includes(":") ? code.split(":")[1] : code;
+    if (raw.startsWith("REQ-")) targetHref = `/projects/${pid}/requirements`;
+    else if (raw.startsWith("US-")) targetHref = `/projects/${pid}/stories`;
+    else if (raw.startsWith("DB-")) targetHref = `/projects/${pid}/database`;
+    else if (raw.startsWith("API-")) targetHref = `/projects/${pid}/apis`;
+    else if (raw.startsWith("SEC-")) targetHref = `/projects/${pid}/security`;
+    else if (raw.startsWith("TASK-")) targetHref = `/projects/${pid}/tasks`;
+    else if (raw.startsWith("TEST-")) targetHref = `/projects/${pid}/tests`;
+  }
+
+  const copy = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!(await copyText(code))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   const inner = (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-elevated px-2.5 py-0.5 font-mono text-[12px] hover:border-accent">
-      <GitBranch size={11} aria-hidden />{code}
+    <span className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-elevated px-2.5 py-0.5 font-mono text-[11.5px] transition-colors hover:border-border-strong hover:text-primary">
+      <GitBranch size={11} className="text-accent" aria-hidden />
+      <span>{code}</span>
+      <button
+        type="button"
+        onClick={copy}
+        title="Copy ID"
+        aria-label={`Copy ${code}`}
+        className="ml-0.5 opacity-40 transition-opacity hover:opacity-100 group-hover:opacity-80"
+      >
+        {copied ? <Check size={10} className="text-success" /> : <Copy size={10} />}
+      </button>
     </span>
   );
-  return href ? <Link href={href} prefetch>{inner}</Link> : inner;
+  return targetHref ? <Link href={targetHref} prefetch>{inner}</Link> : inner;
 }
 
 /** Small helper for muted metadata lines. */

@@ -92,10 +92,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <Link key={it.label} href={it.slug ? `${base}/${it.slug}` : base} onClick={onNavigate}
         aria-current={active ? "page" : undefined} title={collapsed ? it.label : undefined} prefetch
-        className={cn("mt-0.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[14px] transition-colors duration-150",
+        className={cn("group mt-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] transition-all duration-150",
           collapsed && "justify-center px-0",
-          active ? "bg-elevated font-medium text-primary" : "text-secondary hover:bg-elevated hover:text-primary")}>
-        <Icon size={16} className="flex-none" aria-hidden />
+          active ? "bg-surface font-semibold text-primary shadow-[inset_2.5px_0_0_0_var(--color-primary)] shadow-sm" : "text-secondary hover:bg-elevated hover:text-primary")}>
+        <Icon size={16} className={cn("flex-none transition-colors", active ? "text-primary" : "text-muted group-hover:text-primary")} aria-hidden />
         {!collapsed && <span className="min-w-0 flex-1 truncate">{it.label}</span>}
         {!collapsed && dot && (
           <span className={cn("h-1.5 w-1.5 flex-none rounded-full", DOT_CLS[dot])} aria-hidden />
@@ -109,12 +109,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   };
 
   return (
-    <aside aria-label="Project navigation"
+    <aside aria-label="Project navigation rail"
       className={cn("sticky top-0 flex h-screen flex-col border-r border-border bg-subtle transition-[width] duration-200", collapsed ? "w-14 px-2 py-4" : "w-60 px-3 py-4")}>
-      <div className={cn("mb-2 flex items-center gap-2.5 px-1", collapsed && "justify-center px-0")}>
-        <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 flex-none rounded-full" aria-hidden />
-        {!collapsed && <span className="leading-tight"><b className="block text-[15px] font-medium tracking-[-0.18px]">Blueprint <span className="text-muted">AI</span></b></span>}
-      </div>
+      <Link href="/dashboard" prefetch title="Back to Projects"
+        className={cn("mb-3 flex items-center gap-2.5 rounded-xl px-1.5 py-1.5 transition-colors hover:bg-elevated", collapsed && "justify-center px-0")}>
+        <Image src="/logo.svg" alt="BlueprintAI" width={30} height={30} className="h-7 w-7 flex-none rounded-full" aria-hidden />
+        {!collapsed && (
+          <span className="leading-tight">
+            <b className="block text-[14.5px] font-semibold tracking-[-0.015em] text-primary">Blueprint <span className="font-normal text-muted">AI</span></b>
+          </span>
+        )}
+      </Link>
       <nav className="scroll-thin mt-1 flex-1 overflow-y-auto" aria-label="Modules">
         {SECTIONS.map((sec) => (
           <div key={sec.title || "top"} className="mt-3 first:mt-0">

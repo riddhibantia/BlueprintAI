@@ -18,34 +18,81 @@ export function Breadcrumb({ trail }: { trail: { label: string; href?: string }[
   );
 }
 
-/** Tabs with keyboard arrow support (§40). */
-export function Tabs({ tabs, active, onChange }: { tabs: string[]; active: string; onChange: (t: string) => void }) {
+/** Dense engineering table wrapper (§17: ID, priority, status, coverage, links).
+ *
+ *  The header is sticky *within a bounded scroll box*, because the previous
+ *  `overflow-x-auto` wrapper was a scroll container that never scrolled
+ *  vertically — making `sticky top-0` a no-op while still clipping it.
+ *  On small screens the wrapper keeps horizontal scroll (with a visible
+ *  affordance) rather than compressing every column to unreadable widths. */
+export function DataTable({ head, children, label, footer }: { head: ReactNode; children: ReactNode; label: string; footer?: ReactNode }) {
   return (
-    <div role="tablist" aria-label="Sections" className="mb-4 flex gap-1 border-b border-border">
-      {tabs.map((t) => (
-        <button key={t} role="tab" aria-selected={t === active} onClick={() => onChange(t)}
-          onKeyDown={(e) => {
-            const i = tabs.indexOf(t);
-            if (e.key === "ArrowRight") onChange(tabs[(i + 1) % tabs.length]);
-            if (e.key === "ArrowLeft") onChange(tabs[(i - 1 + tabs.length) % tabs.length]);
-          }}
-          className={cn("border-b-2 px-3 py-2 text-[13px] font-medium transition-colors",
-            t === active ? "border-accent text-primary" : "border-transparent text-secondary hover:text-primary")}>
-          {t}
-        </button>
-      ))}
+    <div className="rounded-2xl border border-border/80 bg-surface shadow-[0_1px_3px_0_rgba(0,0,0,0.02)]">
+      <div className="scroll-thin max-h-[min(70vh,720px)] overflow-auto rounded-2xl" tabIndex={0} role="region" aria-label={`${label} (scrollable)`}>
+        <table aria-label={label} className="w-full min-w-[640px] border-collapse text-[13px]">
+          <thead className="sticky top-0 z-10 bg-subtle shadow-[0_1px_0_0_var(--color-border)]">
+            <tr className="border-b border-border text-left font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{head}</tr>
+          </thead>
+          <tbody className="divide-y divide-border/60 [&_td]:px-4 [&_td]:py-2.5 [&_th]:px-4 [&_th]:py-2.5 [&_tr]:transition-colors [&_tr:hover]:bg-elevated/60">{children}</tbody>
+        </table>
+      </div>
+      {footer}
+      {/* Below md, tell the user the table scrolls instead of letting it look cut off. */}
+      <p className="border-t border-border px-4 py-1.5 text-[11.5px] text-muted md:hidden" aria-hidden>
+        Scroll sideways to see all columns →
+      </p>
     </div>
   );
 }
 
-/** Dense engineering table wrapper (§17: ID, priority, status, coverage, links). */
-export function DataTable({ head, children, label }: { head: ReactNode; children: ReactNode; label: string }) {
+/** Pagination control for engineering tables. */
+export function Pagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+  totalItems,
+  pageSize,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  totalItems?: number;
+  pageSize?: number;
+}) {
+  if (totalPages <= 1) return null;
+
   return (
-    <div className="scroll-thin overflow-x-auto rounded-2xl border border-border bg-surface">
-      <table aria-label={label} className="w-full min-w-[640px] border-collapse text-[13px]">
-        <thead className="sticky top-0 z-10 bg-surface"><tr className="border-b border-border text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">{head}</tr></thead>
-        <tbody className="[&_td]:border-b [&_td]:border-border [&_td]:px-4 [&_td]:py-2 [&_th]:px-4 [&_th]:py-2 [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-elevated">{children}</tbody>
-      </table>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[12.5px] text-secondary">
+      <div>
+        {totalItems !== undefined && pageSize !== undefined && (
+          <span>
+            Showing {Math.min(totalItems, (currentPage - 1) * pageSize + 1)}–
+            {Math.min(totalItems, currentPage * pageSize)} of {totalItems}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage <= 1}
+          aria-label="Previous page"
+          className="min-h-9 rounded-lg border border-border bg-surface px-3 py-1.5 font-medium text-secondary transition-all hover:bg-elevated hover:text-primary active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+        >
+          Previous
+        </button>
+        <span className="px-2 font-mono text-[12px] text-muted">
+          {currentPage} / {totalPages}
+        </span>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          aria-label="Next page"
+          className="min-h-9 rounded-lg border border-border bg-surface px-3 py-1.5 font-medium text-secondary transition-all hover:bg-elevated hover:text-primary active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }
+

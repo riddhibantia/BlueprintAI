@@ -65,7 +65,7 @@ export default function Architecture() {
             <PrereqBanner text="Architecture is derived from the Product Spec — generate it first."
               href={`/projects/${pid}/prd`} action="Go to Product Spec" />
           )}
-          <StageEmpty title="No architecture yet" hint="Generate components and relationships from the PRD."
+          <StageEmpty pageTitle="Architecture" title="No architecture yet" hint="Generate components and relationships from the PRD."
             actionLabel="Generate architecture" generating={write.isPending}
             disabledReason={!hasPrd ? "Waiting on the Product Spec." : undefined}
             onGenerate={() => write.mutate({ path: `/projects/${pid}/architecture/generate`, init: { method: "POST" } })} />

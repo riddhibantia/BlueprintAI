@@ -1,7 +1,25 @@
 ---
 version: alpha
 name: Clay-design-analysis
+status: REFERENCE ONLY — NOT THIS PRODUCT'S SYSTEM
 description: A vibrant claymation-meets-data interface for Clay.com (GTM data-orchestration platform). Anchors on white canvas with dark-navy primary CTAs, custom rounded display type, and saturated single-color feature cards — hot pink, deep teal, lavender, peach, ochre — that punctuate long-scroll explainer pages. Brand voltage comes from 3D-rendered claymation illustrations (mountains, characters, mascots) used as full-bleed hero artifacts and the bright multi-color card surfaces showing product UI fragments.
+
+# ⚠️ This file describes Clay.com, not BlueprintAI.
+#
+# The live system is `styles/tokens.css`. The two disagree on fundamentals:
+#
+#   | Concern      | This file (Clay)        | tokens.css (shipped)          |
+#   |--------------|-------------------------|-------------------------------|
+#   | Canvas       | cream #fffaf0           | cool grey #f5f5f5             |
+#   | Display face | "Plain Black" 500       | EB Garamond 300               |
+#   | Accent       | 6 saturated card colors | none — ink is the only action |
+#   | Footer       | cream (never dark)      | not applicable                |
+#
+# Keep this as an extracted reference for marketing-page work if useful, but do
+# not treat it as the design contract. Note also that its "Don'ts" below warn
+# against "AI purple/pink gradients" while the shipped orb system uses exactly
+# those pastels — the orbs are decoration only and never carry content or a
+# button fill, which is what makes them acceptable.
 
 colors:
   primary: "#0a0a0a"

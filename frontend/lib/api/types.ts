@@ -6,6 +6,7 @@ export type ProjectDetail = {
   name: string;
   description?: string;
   idea?: string;
+  product_idea?: string;
   status?: string;
   created_at?: string;
   updated_at?: string;
@@ -81,4 +82,14 @@ export type Issue = {
 };
 
 export type DocEntry = { id: string; name: string; chunks: number; checksum: string };
-export type AgentRun = { agent: string; output_summary?: string; created_at?: string };
+export type AgentRun = { agent: string; output_summary?: string; created_at?: string; latency_ms?: number; at?: string };
+
+export type CopilotMode = { mode: "ai" | "rule"; provider?: string; model?: string; note?: string };
+export type CopilotEvidence = { source: string; section?: string; score?: number; content?: string };
+export type CopilotAnswer = {
+  mode: "ai" | "rule";
+  answer: string;
+  evidence?: CopilotEvidence[];
+  tokens?: number;
+  latency_ms?: number;
+};

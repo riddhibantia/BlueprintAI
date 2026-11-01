@@ -5,9 +5,12 @@ import { useEffect, useState } from "react";
 import { Check, ChevronRight, Menu, MessageSquarePlus, MoreHorizontal, Search } from "lucide-react";
 import { useShell } from "./context";
 import { Button, IconButton } from "../ui/button";
+import { ThemeToggle } from "../ui/theme-toggle";
 import { Dropdown } from "../ui/overlay";
 import { apiDownload, logout, me } from "../../lib/api/client";
 import { checkConsistency } from "../../lib/api/endpoints";
+import { copyText } from "../../lib/clipboard";
+import { useToast } from "../ui/toast";
 
 type SessionUser = { name?: string; email?: string };
 
@@ -23,6 +26,7 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
   const router = useRouter();
   const path = usePathname() || "";
   const { pid, project, reload, setCopilotOpen } = useShell();
+  const toast = useToast();
   const [copied, setCopied] = useState(false);
   const [validating, setValidating] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -36,7 +40,10 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
   const here = seg === pid ? "Overview" : NAMES[seg] || "Overview";
 
   const share = async () => {
-    await navigator.clipboard.writeText(window.location.href);
+    if (!(await copyText(window.location.href))) {
+      toast.error("Couldn't copy the link — your browser blocked clipboard access.");
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -54,17 +61,25 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-canvas/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-border bg-canvas/80 backdrop-blur-md">
       <div className="flex min-h-16 items-center gap-2 px-5 py-2">
         <span className="lg:hidden">
           <IconButton label="Open navigation" onClick={onMenu}><Menu size={17} /></IconButton>
         </span>
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-[13px]">
-          <Link href={`/projects/${pid}`} prefetch className="truncate font-medium text-secondary hover:text-primary">
-            {project?.name || "Project"}
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px]">
+          <Link href="/dashboard" prefetch className="truncate rounded-md px-2 py-1 font-medium text-muted transition-colors hover:bg-elevated hover:text-primary">
+            Projects
           </Link>
           <ChevronRight size={13} className="flex-none text-muted" aria-hidden />
-          <span className="truncate text-primary" aria-current="page">{here}</span>
+          <Link href={`/projects/${pid}`} prefetch className="max-w-[180px] truncate rounded-md px-2 py-1 font-medium text-secondary transition-colors hover:bg-elevated hover:text-primary">
+            {project?.name || "Project"}
+          </Link>
+          {here !== "Overview" && (
+            <>
+              <ChevronRight size={13} className="flex-none text-muted" aria-hidden />
+              <span className="truncate rounded-md bg-elevated/70 px-2 py-0.5 font-medium text-primary border border-border/60" aria-current="page">{here}</span>
+            </>
+          )}
         </nav>
         <div className="mx-auto hidden md:block">
           <button onClick={onPalette} aria-label="Command palette (Ctrl+K)"
@@ -74,13 +89,16 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
           </button>
         </div>
         <div className="ml-auto flex flex-none items-center gap-1.5 md:ml-0">
+          <ThemeToggle />
           <IconButton label="Ask Copilot (Ctrl+J)" onClick={() => setCopilotOpen(true)}>
             <MessageSquarePlus size={17} />
           </IconButton>
-          <Button variant="ghost" size="sm" onClick={share}>
-            {copied ? <><Check size={14} className="text-success" />Copied</> : <>Share</>}
+          {/* A stable accessible name: the visible text flips to "Copied",
+              which would otherwise silently rename the control mid-interaction. */}
+          <Button variant="ghost" size="sm" onClick={share} aria-label="Copy project link">
+            <span aria-hidden>{copied ? <><Check size={14} className="text-success" />Copied</> : <>Share</>}</span>
           </Button>
-          <Dropdown label={<MoreHorizontal size={16} />} items={[
+          <Dropdown label={<MoreHorizontal size={16} />} labelText="More actions" items={[
             { label: validating ? "Validating…" : "Run validation", onSelect: validate },
             { label: "Export Markdown", onSelect: () => download("markdown") },
             { label: "Export PDF", onSelect: () => download("pdf") },
@@ -89,10 +107,11 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
             { label: "Settings", onSelect: () => router.push(`/projects/${pid}/settings`) },
           ]} />
           <Dropdown label={
-            <span aria-label="Account" className="grid h-8 w-8 place-items-center rounded-full bg-elevated text-[12px] font-semibold text-secondary">
+            <span aria-hidden className="grid h-8 w-8 place-items-center rounded-full bg-elevated text-[12px] font-semibold text-secondary">
               {(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}
             </span>
-          } items={[
+          } labelText="Account menu" items={[
+            { label: "All Projects", onSelect: () => router.push("/dashboard") },
             { label: `Settings`, onSelect: () => router.push(`/projects/${pid}/settings`) },
             { label: "Log out", onSelect: () => logout() },
           ]} />
