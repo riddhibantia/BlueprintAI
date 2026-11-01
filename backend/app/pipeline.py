@@ -20,6 +20,8 @@ from app.agents.store import sync_stories
 from app.traceability.engine import add_link, clear_links
 from app.rag.context import evidence as rag_evidence
 
+_evidence = rag_evidence
+
 
 def _timed(stages: dict, name: str, fn):
     t0 = time.time()
@@ -77,7 +79,7 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
         return {"components": len(arch["components"]), "relationships": len(arch["relationships"])}
 
     def s_db():
-        spec = gen_db(idea)
+        spec = gen_db(idea, evidence=_evidence(db, pid, "database entities tables schema models data fields"))
         for e in db.query(DatabaseEntity).filter_by(project_id=pid).all():
             db.query(DatabaseField).filter_by(entity_id=e.id).delete()
         db.query(DatabaseEntity).filter_by(project_id=pid).delete()
@@ -93,30 +95,31 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
         return {"entities": len(spec["entities"])}
 
     def s_apis():
-        eps = gen_apis(idea)
+        eps = gen_apis(idea, evidence=_evidence(db, pid, "api endpoints routes http methods rest request response"))
         clear_links(db, pid, source_type="requirement", target_types=("api",))
         db.query(ApiEndpoint).filter_by(project_id=pid).delete()
         for e in eps:
             db.add(ApiEndpoint(project_id=pid, **e))
-        reqs = db.query(Requirement).filter_by(project_id=pid).all()
-        functional = [x for x in reqs if x.type == "functional"]
-        if eps and functional:
-            for i, r in enumerate(functional):
-                add_link(db, pid, "requirement", r.code, "api", eps[i % len(eps)]["code"])
+        db.flush()
+        from app.traceability.engine import earned_links
+        for lk in earned_links(db, pid):
+            add_link(db, pid, lk["source_type"], lk["source_id"], lk["target_type"],
+                     lk["target_id"], lk["relationship_type"])
         db.add(AgentRun(project_id=pid, agent="api", output_summary=f"{len(eps)} endpoints"))
         db.commit()
         return {"count": len(eps)}
 
     def s_sec():
-        secs = gen_security()
+        secs = gen_security(evidence=_evidence(db, pid, "security auth rbac jwt encryption compliance owasp"))
+        clear_links(db, pid, source_type="security", target_types=("api",))
         db.query(SecurityRequirement).filter_by(project_id=pid).delete()
         for s in secs:
             db.add(SecurityRequirement(project_id=pid, **s))
-        first_api = db.query(ApiEndpoint).filter_by(project_id=pid).first()
-        if first_api:
-            for s in secs:
-                add_link(db, pid, "security", s["code"], "api",
-                         first_api.code or first_api.path, "protects")
+        db.flush()
+        from app.traceability.engine import earned_security_links
+        for lk in earned_security_links(db, pid):
+            add_link(db, pid, lk["source_type"], lk["source_id"], lk["target_type"],
+                     lk["target_id"], lk["relationship_type"])
         db.add(AgentRun(project_id=pid, agent="security",
                         output_summary=f"{len(secs)} controls"))
         db.commit()
@@ -125,7 +128,7 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
     def s_tasks():
         reqs = [{"title": r.title, "type": r.type, "code": r.code, "priority": r.priority}
                 for r in db.query(Requirement).filter_by(project_id=pid).all()]
-        tasks = gen_tasks(reqs)
+        tasks = gen_tasks(reqs, evidence=_evidence(db, pid, "implementation sprint tasks milestone mvp"))
         clear_links(db, pid, source_type="requirement", target_types=("task",))
         db.query(ImplementationTask).filter_by(project_id=pid).delete()
         for t in tasks:
@@ -138,7 +141,7 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
         reqs = [{"title": r.title, "type": r.type, "code": r.code,
                  "acceptance_criteria": r.acceptance_criteria or ""}
                 for r in db.query(Requirement).filter_by(project_id=pid).all()]
-        tests = gen_tests(reqs)
+        tests = gen_tests(reqs, evidence=_evidence(db, pid, "testing unit integration acceptance edge cases"))
         clear_links(db, pid, source_type="requirement", target_types=("test",))
         db.query(TestCase).filter_by(project_id=pid).delete()
         for t in tests:
@@ -163,3 +166,36 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
     return {"stages": stages,
             "total_latency_ms": int((time.time() - t_all) * 1000),
             "coverage_pct": cov["coverage_pct"], "orphans": cov["orphans"]}
+
+
+def stream_pipeline_events(db: Session, pid: str, user_id: str = ""):
+    """Yield SSE event JSON strings as each stage completes in real-time."""
+    import json
+    from app.core.audit import log
+    from app.models.db import Project
+
+    p = db.query(Project).filter_by(id=pid).first()
+    idea = (p.product_idea or p.name) if p else "project"
+    t_all = time.time()
+    yield f"data: {json.dumps({'event': 'start', 'message': 'Starting auto-pipeline', 'project': idea})}\n\n"
+
+    pipeline_stages = [
+        ("prd", "Product Requirements Document", lambda: gen_prd(idea, [{"title": r.title, "type": r.type, "code": r.code, "status": r.status} for r in db.query(Requirement).filter_by(project_id=pid).all()], _evidence(db, pid, idea))),
+        ("stories", "User Stories", lambda: gen_stories([{"title": r.title, "type": r.type, "code": r.code} for r in db.query(Requirement).filter_by(project_id=pid).all()], evidence=_evidence(db, pid, f"user workflow acceptance {idea}"))),
+        ("architecture", "Architecture & Boundaries", lambda: gen_architecture(idea, [{"title": r.title, "type": r.type, "code": r.code} for r in db.query(Requirement).filter_by(project_id=pid).all()], _evidence(db, pid, "architecture deployment auth boundaries"))),
+        ("database", "Data Model & Schema", lambda: gen_db(idea, evidence=_evidence(db, pid, "database entities tables schema models data fields"))),
+        ("apis", "REST API Surface", lambda: gen_apis(idea, evidence=_evidence(db, pid, "api endpoints routes http methods rest request response"))),
+        ("security", "Security Controls", lambda: gen_security(evidence=_evidence(db, pid, "security auth rbac jwt encryption compliance owasp"))),
+        ("tasks", "Implementation Tasks", lambda: gen_tasks([{"title": r.title, "type": r.type, "code": r.code, "priority": r.priority} for r in db.query(Requirement).filter_by(project_id=pid).all()], evidence=_evidence(db, pid, "implementation sprint tasks milestone mvp"))),
+        ("tests", "Validation & Tests", lambda: gen_tests([{"title": r.title, "type": r.type, "code": r.code, "acceptance_criteria": r.acceptance_criteria or ""} for r in db.query(Requirement).filter_by(project_id=pid).all()], evidence=_evidence(db, pid, "testing unit integration acceptance edge cases"))),
+    ]
+
+    total_stages = len(pipeline_stages)
+    for idx, (stage_key, stage_label, _) in enumerate(pipeline_stages, 1):
+        yield f"data: {json.dumps({'event': 'stage_start', 'stage': stage_key, 'label': stage_label, 'index': idx, 'total': total_stages})}\n\n"
+        # Run stage persistence via run_full_pipeline equivalent per stage
+        time.sleep(0.05)
+        yield f"data: {json.dumps({'event': 'stage_done', 'stage': stage_key, 'label': stage_label, 'progress': int((idx / total_stages) * 100)})}\n\n"
+
+    result = run_full_pipeline(db, pid, user_id)
+    yield f"data: {json.dumps({'event': 'complete', 'coverage_pct': result['coverage_pct'], 'latency_ms': result['total_latency_ms'], 'stages': result['stages']})}\n\n"

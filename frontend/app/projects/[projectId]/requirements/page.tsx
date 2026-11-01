@@ -3,13 +3,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Filter, Plus, Search, Unlink } from "lucide-react";
+import { ArrowRight, Filter, Pencil, Plus, Search, Trash2, Unlink } from "lucide-react";
 import { useRequirements, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { linkCounts } from "../../../../lib/query/links";
 import { timeAgo } from "../../../../lib/utils/time";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge, Badge } from "../../../../components/ui/badge";
-import { DataTable } from "../../../../components/ui/data";
+import { DataTable, Pagination } from "../../../../components/ui/data";
 import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/feedback";
 import { Drawer, Dialog } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
@@ -30,6 +30,62 @@ export default function Requirements() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sel, setSel] = useState<any>(null);
   const [selLinks, setSelLinks] = useState<any[]>([]);
+  const [editingSel, setEditingSel] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editPriority, setEditPriority] = useState("medium");
+  const [editAc, setEditAc] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const startEdit = (r: any) => {
+    setEditTitle(r.title || "");
+    setEditDesc(r.description || "");
+    setEditPriority(r.priority || "medium");
+    setEditAc(r.acceptance_criteria || "");
+    setEditingSel(true);
+  };
+
+  const saveEdit = () => {
+    if (!sel || !editTitle.trim()) return;
+    write.mutate({
+      path: `/requirements/${sel.id}`,
+      init: {
+        method: "PUT",
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          description: editDesc.trim(),
+          priority: editPriority,
+          acceptance_criteria: editAc.trim(),
+          expected_version: sel.version,
+        }),
+      },
+    }, {
+      onSuccess: () => {
+        setEditingSel(false);
+        setSel((prev: any) => ({
+          ...prev,
+          title: editTitle.trim(),
+          description: editDesc.trim(),
+          priority: editPriority,
+          acceptance_criteria: editAc.trim(),
+          version: (prev.version || 1) + 1,
+        }));
+      },
+    });
+  };
+
+  const deleteReq = () => {
+    if (!sel) return;
+    write.mutate({
+      path: `/requirements/${sel.id}`,
+      init: { method: "DELETE" },
+    }, {
+      onSuccess: () => {
+        setDeleteConfirmOpen(false);
+        setSel(null);
+      },
+    });
+  };
 
   const reqs = reqsQ.data || [];
   const links = traceQ.data?.links || [];
@@ -38,6 +94,20 @@ export default function Requirements() {
   const filtered = reqs.filter((r) =>
     (statusFilter === "all" || r.status === statusFilter) &&
     (r.code + r.title).toLowerCase().includes(q.toLowerCase()));
+
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [q, statusFilter]);
+
   // Bulk approve: checkbox column + bar. Approvals go through the mutation
   // cache one row at a time (no bulk endpoint) with per-run pending state.
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -147,11 +217,12 @@ export default function Requirements() {
           <p className="text-[13px] text-secondary">{reqs.length} total · {approved} approved · {reqs.length - approved} draft</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="relative" aria-label="Search requirements">
+          <div className="relative">
+            <label htmlFor="req-search" className="sr-only">Search requirements by ID or title</label>
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search ID or title…"
+            <input id="req-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search ID or title…"
               className="w-56 rounded-full border border-border bg-surface py-2 pl-9 pr-3 text-[13px] placeholder:text-muted focus:border-accent focus:outline-none" />
-          </label>
+          </div>
           <label className="flex items-center gap-1.5 text-[12.5px] text-secondary">
             <Filter size={13} aria-hidden />
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status"
@@ -218,15 +289,15 @@ export default function Requirements() {
             {write.isError && <span className="text-[12.5px] text-danger">{(write.error as Error)?.message}</span>}
           </div>
         )}
-        <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-4 w-4 accent-teal-700" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th><th><span className="sr-only">Approve</span></th></>}>
-          {filtered.map((r) => (
+        <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-5 w-5 accent-primary" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th><th><span className="sr-only">Approve</span></th></>}>
+          {paginated.map((r) => (
             <tr key={r.id} onClick={() => open(r)} className="cursor-pointer" tabIndex={0}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(r); } }}
               aria-label={`Open ${r.code}`}>
               <td onClick={(e) => e.stopPropagation()}>
                 {r.status !== "approved" && (
                   <input type="checkbox" checked={checked.has(r.id)} onChange={(e) => toggleCheck(r.id, e.target.checked)}
-                    onKeyDown={(e) => e.stopPropagation()} aria-label={`Select ${r.code}`} className="h-4 w-4 accent-teal-700" />
+                    onKeyDown={(e) => e.stopPropagation()} aria-label={`Select ${r.code}`} className="h-5 w-5 accent-primary" />
                 )}
               </td>
               <td className="font-mono text-[12.5px] text-secondary">{r.code}</td>
@@ -241,7 +312,7 @@ export default function Requirements() {
                 </span>
               )}</td>
               <td><button onClick={(e) => { e.stopPropagation(); open(r); }}
-                className="font-mono text-[12.5px] text-secondary hover:text-accent hover:underline" aria-label={`${counts[r.code] || 0} links for ${r.code}`}>
+                className="rounded-md px-1.5 py-1 font-mono text-[12.5px] text-secondary transition-colors hover:bg-elevated hover:text-primary" aria-label={`${counts[r.code] || 0} links for ${r.code}`}>
                 {counts[r.code] || 0}
               </button></td>
               <td className="text-[12.5px] text-secondary">{timeAgo(r.updated_at)}</td>
@@ -260,44 +331,103 @@ export default function Requirements() {
             </tr>
           ))}
         </DataTable>
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={filtered.length}
+          pageSize={pageSize}
+        />
         </>
       )}
 
-      <Drawer open={!!sel} onClose={() => setSel(null)} label={`Requirement ${sel?.code}`} title={<span className="font-mono">{sel?.code}</span>}>
+      <Drawer open={!!sel} onClose={() => { setSel(null); setEditingSel(false); }} label={`Requirement ${sel?.code}`} title={<span className="font-mono">{sel?.code}</span>}>
         {sel && (
-          <div className="grid gap-3 text-[13.5px]">
-            <p className="text-[15px] font-semibold">{sel.title}</p>
-            <p className="flex gap-2"><StatusBadge value={sel.status} /><Badge value={sel.priority} tone="neutral" /><span className="text-secondary">v{sel.version}</span></p>
-            {sel.description && <p className="text-secondary">{sel.description}</p>}
-            {sel.acceptance_criteria && (
-              <div>
-                <b className="text-[12px] uppercase tracking-wide text-secondary">Acceptance criteria</b>
-                <p className="mt-1 rounded-xl border border-border bg-canvas p-2.5 text-[13px]">{sel.acceptance_criteria}</p>
+          editingSel ? (
+            <div className="grid gap-3 text-[13.5px]">
+              <label className="block text-[13px] font-medium text-secondary">
+                Title
+                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-canvas px-3 text-[13.5px] focus:border-primary focus:outline-none" />
+              </label>
+              <label className="block text-[13px] font-medium text-secondary">
+                Priority
+                <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)}
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-canvas px-3 text-[13px] focus:border-primary focus:outline-none">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </label>
+              <label className="block text-[13px] font-medium text-secondary">
+                Description
+                <textarea rows={3} value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-canvas p-2.5 text-[13px] focus:border-primary focus:outline-none" />
+              </label>
+              <label className="block text-[13px] font-medium text-secondary">
+                Acceptance criteria
+                <textarea rows={3} value={editAc} onChange={(e) => setEditAc(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-canvas p-2.5 text-[13px] focus:border-primary focus:outline-none" />
+              </label>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" loading={write.isPending} onClick={saveEdit}>Save changes</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingSel(false)}>Cancel</Button>
               </div>
-            )}
-            <div>
-              <b className="text-[12px] uppercase tracking-wide text-secondary">Traceability</b>
-              {selLinks.length === 0
-                ? <p className="mt-1 text-secondary">Orphaned — no downstream links yet.</p>
-                : <ul className="mt-1 grid gap-1.5">{selLinks.map((l: any, i: number) => (
-                  <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to} <span className="text-secondary">({l.rel})</span></li>
-                ))}</ul>}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {sel.status !== "approved" && (
-                <Button size="sm" loading={write.isPending} onClick={() => write.mutate(
-                  { path: `/requirements/${sel.id}/approve`, init: { method: "POST" } },
-                  { onSuccess: () => { setSel(null); maybeAdvance(1); } })}>Approve</Button>
+          ) : (
+            <div className="grid gap-3 text-[13.5px]">
+              <p className="text-[15px] font-semibold">{sel.title}</p>
+              <p className="flex gap-2"><StatusBadge value={sel.status} /><Badge value={sel.priority} tone="neutral" /><span className="text-secondary">v{sel.version}</span></p>
+              {sel.description && <p className="text-secondary">{sel.description}</p>}
+              {sel.acceptance_criteria && (
+                <div>
+                  <b className="text-[12px] uppercase tracking-wide text-secondary">Acceptance criteria</b>
+                  <p className="mt-1 rounded-xl border border-border bg-canvas p-2.5 text-[13px]">{sel.acceptance_criteria}</p>
+                </div>
               )}
-              <Link href={`/projects/${pid}/impact`} prefetch
-                className="inline-flex items-center rounded-lg border border-border px-2.5 py-1.5 text-[12.5px] font-medium text-secondary hover:border-accent hover:text-primary">
-                View impact
-              </Link>
+              <div>
+                <b className="text-[12px] uppercase tracking-wide text-secondary">Traceability</b>
+                {selLinks.length === 0
+                  ? <p className="mt-1 text-secondary">Orphaned — no downstream links yet.</p>
+                  : <ul className="mt-1 grid gap-1.5">{selLinks.map((l: any, i: number) => (
+                    <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to} <span className="text-secondary">({l.rel})</span></li>
+                  ))}</ul>}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {sel.status !== "approved" && (
+                  <Button size="sm" loading={write.isPending} onClick={() => write.mutate(
+                    { path: `/requirements/${sel.id}/approve`, init: { method: "POST" } },
+                    { onSuccess: () => { setSel(null); maybeAdvance(1); } })}>Approve</Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => startEdit(sel)}>
+                  <Pencil size={13} />Edit
+                </Button>
+                <Link href={`/projects/${pid}/impact`} prefetch
+                  className="inline-flex items-center rounded-lg border border-border px-2.5 py-1.5 text-[12.5px] font-medium text-secondary hover:border-accent hover:text-primary">
+                  View impact
+                </Link>
+                <button type="button" aria-label={`Delete ${sel.code}`}
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="ml-auto rounded-lg p-1.5 text-muted transition-colors hover:bg-elevated hover:text-danger"
+                  title="Delete requirement">
+                  <Trash2 size={15} />
+                </button>
+              </div>
+              <p className="text-[12px] text-secondary">Linked artifacts: {selLinks.map((l: any, i: number) => <span key={i} className="mr-1"><ArtifactLink code={l.to} /></span>)}</p>
             </div>
-            <p className="text-[12px] text-secondary">Linked artifacts: {selLinks.map((l: any, i: number) => <span key={i} className="mr-1"><ArtifactLink code={l.to} /></span>)}</p>
-          </div>
+          )
         )}
       </Drawer>
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} title={`Delete ${sel?.code}?`}>
+        <p className="text-[13.5px] text-secondary">
+          Are you sure you want to delete <b>{sel?.code} — {sel?.title}</b>? This will also remove any downstream traceability links touching this requirement.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button variant="danger" loading={write.isPending} onClick={deleteReq}>Delete requirement</Button>
+        </div>
+      </Dialog>
       {write.isPending && <div className="mt-3"><LoadingState stage="Working — cache refreshes automatically" /></div>}
       <Dialog open={confirmRegen} onClose={() => setConfirmRegen(false)} title="Replace requirements?">
         <p className="text-[13.5px] text-secondary">

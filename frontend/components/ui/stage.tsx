@@ -19,24 +19,29 @@ export function PrereqBanner({ text, href, action }: { text: string; href: strin
   );
 }
 
-/** Empty stage with a real generate CTA (never a dead end). */
+/** Empty stage with a real generate CTA (never a dead end).
+ *  `pageTitle` renders the page's <h1>: this branch replaces the normal page
+ *  body, so without it the route ships with no level-one heading at all. */
 export function StageEmpty({ title, hint, actionLabel, onGenerate, generating,
-                             disabledReason, secondary }: {
+                             disabledReason, secondary, pageTitle }: {
   title: string; hint: string; actionLabel: string;
   onGenerate: () => void; generating: boolean;
-  disabledReason?: string; secondary?: ReactNode;
+  disabledReason?: string; secondary?: ReactNode; pageTitle?: string;
 }) {
   return (
-    <EmptyState title={title} hint={hint} action={
-      <div className="grid justify-items-center gap-2">
-        <span title={disabledReason}>
-          <Button onClick={onGenerate} loading={generating} disabled={!!disabledReason || generating}>
-            {actionLabel}
-          </Button>
-        </span>
-        {disabledReason && <p className="text-[12.5px] text-warning" role="status">{disabledReason}</p>}
-        {secondary}
-      </div>
-    } />
+    <div>
+      {pageTitle && <h1 className="mb-4 text-[24px] font-bold tracking-tight">{pageTitle}</h1>}
+      <EmptyState title={title} hint={hint} action={
+        <div className="grid justify-items-center gap-2">
+          <span title={disabledReason}>
+            <Button onClick={onGenerate} loading={generating} disabled={!!disabledReason || generating}>
+              {actionLabel}
+            </Button>
+          </span>
+          {disabledReason && <p className="text-[12.5px] text-warning" role="status">{disabledReason}</p>}
+          {secondary}
+        </div>
+      } />
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import { Command } from "lucide-react";
 import { useShell } from "./context";
 import { apiDownload } from "../../lib/api/client";
 import { checkConsistency, genStories } from "../../lib/api/endpoints";
+import { useFocusTrap } from "../ui/overlay";
 
 /** Command palette (§10): Ctrl/⌘K, fully keyboard-operable. */
 export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -16,6 +17,9 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
   const [err, setErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const base = `/projects/${pid}`;
+  // The palette is a modal: Tab must not escape behind the scrim, and Escape
+  // must return focus to the trigger. Same contract as Dialog/Drawer.
+  const trapRef = useFocusTrap(open, onClose, inputRef);
 
   const cmds = useMemo(() => [
     { label: "Search requirements", hint: "Go to Requirements", run: () => router.push(`${base}/requirements`) },
@@ -29,14 +33,18 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     { label: "Generate user stories", hint: "From requirements", run: async () => { setBusy("Generating stories…"); await genStories(pid); await reload(); router.push(`${base}/stories`); } },
     { label: "Open knowledge", hint: "RAG base", run: () => router.push(`${base}/knowledge`) },
     { label: "Open Blueprint Copilot", hint: "Contextual help", run: () => setCopilotOpen(true) },
-    { label: "Export blueprint (Markdown)", hint: "Download", run: () => apiDownload(`/projects/${pid}/export/markdown`, `blueprint-${pid.slice(0, 8)}.md`, false) },
+    { label: "Export blueprint (Markdown)", hint: "Download .md", run: () => apiDownload(`/projects/${pid}/export/markdown`, `blueprint-${pid.slice(0, 8)}.md`, false) },
+    { label: "Export Postman Collection v2.1", hint: "Download JSON", run: () => apiDownload(`/projects/${pid}/export/postman`, `postman-collection-${pid.slice(0, 8)}.json`, true) },
+    { label: "Export OpenAPI 3.0 specification", hint: "Download JSON", run: () => apiDownload(`/projects/${pid}/export/openapi`, `openapi-${pid.slice(0, 8)}.json`, true) },
+    { label: "Export PostgreSQL Schema DDL", hint: "Download SQL", run: () => apiDownload(`/projects/${pid}/export/schema?target=postgres`, `schema-${pid.slice(0, 8)}.sql`, false) },
     { label: "Settings", hint: "System status", run: () => router.push(`${base}/settings`) },
   ], [base, pid, reload, router, setCopilotOpen]);
 
   const filtered = cmds.filter((c) => (c.label + c.hint).toLowerCase().includes(q.toLowerCase()));
 
   useEffect(() => {
-    if (open) { setQ(""); setIdx(0); setBusy(""); setErr(""); setTimeout(() => inputRef.current?.focus(), 30); }
+    // Focus is handled by useFocusTrap (initialFocus = the input).
+    if (open) { setQ(""); setIdx(0); setBusy(""); setErr(""); }
   }, [open ]);
 
   useEffect(() => { setIdx(0); }, [q]);
@@ -58,36 +66,41 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
   };
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div ref={trapRef} className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Command palette">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       <div className="relative mx-auto mt-[12vh] w-full max-w-[560px] overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Command size={15} className="text-muted" aria-hidden />
           <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
+            role="combobox" aria-expanded aria-controls="palette-listbox" aria-autocomplete="list"
+            aria-activedescendant={filtered.length ? `palette-opt-${idx}` : undefined}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") { e.preventDefault(); setIdx((idx + 1) % Math.max(1, filtered.length)); }
               if (e.key === "ArrowUp") { e.preventDefault(); setIdx((idx - 1 + filtered.length) % Math.max(1, filtered.length)); }
               if (e.key === "Enter") run(idx);
               if (e.key === "Escape") onClose();
             }}
-            placeholder={busy || "Type a command…"} aria-label="Command search"
+            placeholder="Type a command…" aria-label="Command search"
             className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted" />
           <kbd className="rounded bg-elevated px-1.5 font-mono text-[11px] text-secondary">esc</kbd>
         </div>
-        <ul role="listbox" aria-label="Commands" className="max-h-[320px] overflow-auto p-1.5">
+        {/* Combobox listbox: focus stays in the input and the highlighted option
+            is announced via aria-activedescendant. Options are plain <li>s —
+            role="option" on a <button> both nests interactive content and leaves
+            the option unreachable, since focus never leaves the input. */}
+        <ul id="palette-listbox" role="listbox" aria-label="Commands" className="scroll-thin max-h-[320px] overflow-auto p-1.5">
           {filtered.map((c, i) => (
-            <li key={c.label}>
-              <button role="option" aria-selected={i === idx} onClick={() => run(i)} onMouseEnter={() => setIdx(i)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13.5px] ${i === idx ? "bg-elevated text-primary" : "text-secondary"}`}>
-                <span>{c.label}</span><span className="text-[12px] text-muted">{c.hint}</span>
-              </button>
+            <li key={c.label} id={`palette-opt-${i}`} role="option" aria-selected={i === idx}
+              onClick={() => run(i)} onMouseEnter={() => setIdx(i)}
+              className={`flex min-h-9 cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-left text-[13.5px] ${i === idx ? "bg-elevated text-primary" : "text-secondary"}`}>
+              <span>{c.label}</span><span className="text-[12px] text-muted">{c.hint}</span>
             </li>
           ))}
-          {filtered.length === 0 && <li className="px-3 py-4 text-center text-[13px] text-secondary">No matching command.</li>}
+          {filtered.length === 0 && <li role="presentation" className="px-3 py-4 text-center text-[13px] text-secondary">No matching command.</li>}
         </ul>
         {(busy || err) && (
           <p className={`border-t border-border px-4 py-2 text-[12.5px] ${err ? "text-danger" : "text-secondary"}`} role={err ? "alert" : "status"}>
-            {err || busy}
+            {busy || err}
           </p>
         )}
       </div>

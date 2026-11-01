@@ -19,10 +19,15 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-canvas text-primary">
+      {/* The desktop rail and the mobile drawer each mount their own Sidebar, but
+          never at the same time — two mounted copies would duplicate every nav
+          link in the tab order. */}
       <div className="hidden lg:block"><Sidebar /></div>
-      <Drawer open={navOpen} onClose={() => setNavOpen(false)} label="Project navigation" title="Navigate">
-        <Sidebar onNavigate={() => setNavOpen(false)} />
-      </Drawer>
+      {navOpen && (
+        <Drawer open onClose={() => setNavOpen(false)} label="Project navigation" title="Navigate">
+          <Sidebar onNavigate={() => setNavOpen(false)} />
+        </Drawer>
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onPalette={openPalette} onMenu={() => setNavOpen(true)} />
         <div className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-5">

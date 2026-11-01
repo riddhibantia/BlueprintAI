@@ -9,6 +9,8 @@ The blend weight was picked on the 43-query fixture in `evaluation/benchmark.py`
 and is the single knob to re-tune if the corpus changes shape.
 """
 import math
+from typing import List, Dict, Any, Optional
+from sqlalchemy.orm import Session
 
 from app.rag.embeddings import DIM, cosine, embed, embed_chunk
 from app.rag.text import terms
@@ -85,8 +87,50 @@ def retrieve(chunks: list[dict], query: str, k: int = 5,
         else:
             lv = []
         vec = max(0.0, cosine(qv, lv))
-        scored.append((w_vec * vec + (1 - w_vec) * lex, c))
+        scored.append(((w_vec * vec + (1 - w_vec) * lex, vec, lex), c))
 
-    scored.sort(key=lambda x: x[0], reverse=True)
+    scored.sort(key=lambda x: x[0][0], reverse=True)
     return [{"content": c["content"][:1200], "section": c.get("section", ""),
-             "score": round(s, 4), "source": c.get("source", "")} for s, c in scored[:k]]
+             "score": round(s, 4), "similarity": round(v, 4), "lexical": round(l, 4),
+             "source": c.get("source", "")}
+            for (s, v, l), c in scored[:k]]
+
+
+def get_evidence(db: Session, project_id: str, query: str, k: int = 5) -> list[dict]:
+    """Retrieve top-k relevant knowledge chunks for a project query."""
+    from app.models.db import Document, DocumentChunk
+
+    rows = (
+        db.query(DocumentChunk, Document.name)
+        .join(Document, Document.id == DocumentChunk.document_id)
+        .filter(Document.project_id == project_id)
+        .limit(300)
+        .all()
+    )
+    if not rows:
+        return []
+
+    chunks = [
+        {
+            "id": c.id,
+            "content": c.content,
+            "section": c.section,
+            "source": name,
+            "embedding": c.embedding,
+        }
+        for c, name in rows
+    ]
+    return retrieve(chunks, query, k=k)
+
+
+def format_evidence_text(hits: list[dict], max_chars_per_hit: int = 500) -> str:
+    """Format retrieved hits into clean contextual evidence for LLM prompts and generators."""
+    if not hits:
+        return ""
+    lines = []
+    for h in hits:
+        src = h.get("source", "doc")
+        sec = h.get("section", "")
+        header = f"[{src} · {sec}]" if sec else f"[{src}]"
+        lines.append(f"{header}\n{h.get('content', '')[:max_chars_per_hit]}")
+    return "\n\n".join(lines)

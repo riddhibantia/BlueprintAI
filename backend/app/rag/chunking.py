@@ -2,7 +2,6 @@
 import re
 
 HEADING = re.compile(r"^(#{1,4}\s+.+|[A-Z][A-Z0-9 \-_/]{4,80}$|\d+(\.\d+)*\s+[A-Z].+)$", re.M)
-
 MIN_SECTION = 80  # a heading only splits off a section that says something
 
 
@@ -16,8 +15,9 @@ def chunk_text(text: str, target: int = 500, overlap: int = 80) -> list[dict]:
     text = (text or "").strip()
     if not text:
         return []
-
-    parts, cur_sec, buf = [], "general", ""
+    parts: list[dict] = []
+    cur_sec = "Introduction"
+    buf = ""
     for line in text.splitlines():
         stripped = line.strip()
         if HEADING.match(stripped):
@@ -28,7 +28,7 @@ def chunk_text(text: str, target: int = 500, overlap: int = 80) -> list[dict]:
         buf += line + "\n"
         if len(buf) >= target * 1.6:
             parts.append({"section": cur_sec, "content": buf.strip()})
-            buf = buf[-overlap:]
+            buf = ""
     if buf.strip():
         parts.append({"section": cur_sec, "content": buf.strip()})
 

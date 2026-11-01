@@ -1,12 +1,14 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.audit import log
 from app.core.config import settings
-from app.core.security import hash_password, verify_password, create_token
+from app.core.security import hash_password, verify_password, create_token, decode_token
 from app.api.deps import current_user
 from app.models.db import User
-from app.schemas import RegisterIn, LoginIn, PasswordChangeIn
+from app.schemas import RegisterIn, LoginIn, ResetIn, ChangePasswordIn, RequestResetIn, PasswordChangeIn
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,6 +61,17 @@ def logout(resp: Response, user: User = Depends(current_user)):
     """Clear the session cookie."""
     resp.delete_cookie(COOKIE, path="/")
     return {"status": "logged out"}
+
+
+@router.post("/change-password")
+def change_password_compat(body: ChangePasswordIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Authenticated password change."""
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(400, "Current password incorrect")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    log(db, user_id=user.id, action="user.password_change")
+    return {"status": "ok", "message": "Password changed successfully"}
 
 
 @router.post("/password")

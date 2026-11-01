@@ -6,6 +6,7 @@ from app.api.deps import current_user, project_or_403
 from app.models.db import Requirement, AgentRun, ArtifactVersion
 from app.schemas import RequirementIn, RequirementUpdate, ClarifyIn
 from app.agents.generators import clarify_questions, gen_requirements
+from app.rag.retriever import get_evidence, format_evidence_text
 import time
 
 router = APIRouter(tags=["requirements"])
@@ -53,7 +54,9 @@ def generate(pid: str, body: ClarifyIn, db: Session = Depends(get_db), user=Depe
                 ArtifactVersion.artifact_code.in_(codes)).delete(synchronize_session=False)
             db.query(Requirement).filter_by(project_id=pid).delete(synchronize_session=False)
             db.flush()
-    reqs = gen_requirements(p.product_idea or p.name, body.answers)
+    hits = get_evidence(db, pid, p.product_idea or p.name, k=5)
+    ev = format_evidence_text(hits)
+    reqs = gen_requirements(p.product_idea or p.name, body.answers, evidence=ev)
     used = _used_codes(db, pid)
     counter = len(used) + 1
     for r in reqs:
@@ -62,6 +65,10 @@ def generate(pid: str, body: ClarifyIn, db: Session = Depends(get_db), user=Depe
             counter += 1
         used.add(r["code"])
         db.add(Requirement(project_id=pid, **r))
+    db.add(AgentRun(project_id=pid, agent="requirements",
+                    output_summary=f"{len(reqs)} requirements drafted" + (f" (grounded in {len(hits)} knowledge sources)" if hits else ""),
+                    latency_ms=int((time.time() - t0) * 1000),
+                    evidence=[{"source": "rag", "hits": len(hits)}]))
     db.commit()
     db.add(AgentRun(project_id=pid, agent="requirement", stage="generate",
                     input_summary=(p.product_idea or "")[:300], output_summary=f"{len(reqs)} requirements",
@@ -117,6 +124,8 @@ def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db),
         values["title"] = body.title.strip()
     if body.description is not None and body.description != r.description:
         values["description"] = body.description
+    if body.acceptance_criteria is not None and body.acceptance_criteria != r.acceptance_criteria:
+        values["acceptance_criteria"] = body.acceptance_criteria
     if body.priority:
         if body.priority not in ("low", "medium", "high", "critical"):
             raise HTTPException(400, "priority must be low|medium|high|critical")
@@ -126,7 +135,7 @@ def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db),
             raise HTTPException(400, "status must be draft|approved|rejected|changed")
         values["status"] = body.status
 
-    content_changed = "title" in values or "description" in values
+    content_changed = "title" in values or "description" in values or "acceptance_criteria" in values
     if content_changed:
         # One conditional UPDATE is the lock: two editors cannot both match the
         # same version, so the loser gets 409 instead of silently overwriting.
@@ -143,12 +152,12 @@ def update_req(rid: str, body: RequirementUpdate, db: Session = Depends(get_db),
         db.add(ArtifactVersion(project_id=r.project_id, artifact_type="requirement",
                                artifact_code=r.code, version=new_version,
                                content={"title": values.get("title", r.title),
-                                        "description": values.get("description", r.description)},
+                                        "description": values.get("description", r.description),
+                                        "acceptance_criteria": values.get("acceptance_criteria", r.acceptance_criteria)},
                                status=values.get("status", r.status)))
     else:
         for key, value in values.items():
             setattr(r, key, value)
-
     db.commit()
     db.refresh(r)
     return {"code": r.code, "version": r.version, "status": r.status}

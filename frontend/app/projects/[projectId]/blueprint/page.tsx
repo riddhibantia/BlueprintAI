@@ -11,6 +11,7 @@ import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge, Badge } from "../../../../components/ui/badge";
 import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
+import { API } from "../../../../lib/api/client";
 
 /** Blueprint pipeline (§16): contextual Generate / Review / Approve / Validate per stage. */
 export default function Blueprint() {
@@ -30,6 +31,9 @@ export default function Blueprint() {
   const runsQ = useRuns(pid);
   const write = useWrite(pid, ["project", "requirements", "prd", "stories", "architecture", "database", "apis", "security", "tasks", "tests", "traceability", "issues", "activity", "runs"]);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  // Declared here, not below the loading guard: a hook after an early return
+  // changes the hook count between renders and React throws.
+  const [streamProgress, setStreamProgress] = useState<string | null>(null);
 
   const queries = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ, runsQ];
   const loading = queries.some((q) => q.isLoading);
@@ -99,10 +103,49 @@ export default function Blueprint() {
     ],
   };
 
+  const runLivePipeline = () => {
+    setStreamProgress("Starting auto-pipeline…");
+    const es = new EventSource(`${API}/projects/${pid}/pipeline/stream`, { withCredentials: true });
+    es.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.event === "stage_start") {
+          setStreamProgress(`Generating ${d.label} (${d.index}/${d.total})…`);
+        } else if (d.event === "complete") {
+          setStreamProgress(`Pipeline complete! Coverage: ${d.coverage_pct}%`);
+          write.mutate(
+            { path: `/projects/${pid}`, init: { method: "GET" } },
+            { onSuccess: () => { router.refresh(); setTimeout(() => setStreamProgress(null), 3000); } }
+          );
+          es.close();
+        }
+      } catch {
+        /* parse ignore */
+      }
+    };
+    es.onerror = () => {
+      setStreamProgress(null);
+      es.close();
+      post(`/projects/${pid}/pipeline/run`, "blueprint", "Run Auto-Pipeline");
+    };
+  };
+
   return (
     <div>
-      <h1 className="text-[24px] font-bold tracking-tight">Blueprint Pipeline</h1>
-      <p className="mb-5 text-[13.5px] text-secondary">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-[24px] font-bold tracking-tight">Blueprint Pipeline</h1>
+          <p className="text-[13.5px] text-secondary">Idea → requirements → artifacts → relationships → validation → impact → approval.</p>
+        </div>
+        <Button variant="primary" loading={streamProgress !== null || busyLabel !== null} onClick={runLivePipeline}>
+          {streamProgress || "Run Auto-Pipeline"}
+        </Button>
+      </div>
+      {streamProgress && (
+        <div className="mb-4 rounded-xl border border-accent/40 bg-accent/10 px-4 py-2.5 text-[13px] text-primary" role="status">
+          <span className="font-semibold text-accent">Auto-Pipeline in progress:</span> {streamProgress}
+        </div>
+      )}
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
       <div className="grid gap-2">
         {stages.map((s, i) => {

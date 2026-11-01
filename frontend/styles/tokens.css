@@ -20,7 +20,12 @@
   --color-primary: #292524;         /* ink pill, display text */
   --color-primary-active: #0c0a09;  /* press state — deepens */
   --color-secondary: #4e4e4e;       /* body */
-  --color-muted: #777169;           /* sub-title */
+  /* Muted carries real content (labels, hints, table heads, placeholders), so
+     it must clear 4.5:1 on both canvas and surface. #6b655e = 5.6:1 on
+     #ffffff and 5.2:1 on #f5f5f5. */
+  --color-muted: #6b655e;           /* sub-title, captions, placeholders */
+  /* Decorative-only muted: dividers, disabled glyphs. NEVER body text. */
+  --color-muted-soft: #a8a29e;
   --color-foreground: var(--color-primary);
   --color-background: var(--color-surface);
 
@@ -29,11 +34,14 @@
   --color-accent2: #4e4e4e;
   --color-on-accent: #ffffff;
 
-  /* Semantic (reserved for real state, never decoration) */
-  --color-success: #16a34a;
-  --color-danger: #dc2626;
-  --color-warning: #b45309;
-  --color-info: #57534e;
+  /* Semantic (reserved for real state, never decoration).
+     These are used as TEXT (e.g. `text-success` on "Copied", "· N confirmed"),
+     so each must clear 4.5:1 on canvas AND surface. The previous success
+     #16a34a measured 3.30:1 and failed AA for normal text. */
+  --color-success: #12693a;         /* 4.7:1 on the #f0efed badge plate */
+  --color-danger: #c11f1f;          /* 4.9:1 on #f0efed */
+  --color-warning: #8a5206;         /* 4.8:1 on #f0efed, 5.8:1 on white */
+  --color-info: #57534e;            /* 7.6:1 on #ffffff */
 
   /* Atmospheric gradient stops — signature. Decoration only: never a
      button fill, never a text colour, never a component background. */
@@ -42,6 +50,29 @@
   --color-gradient-lavender: #c8b8e0;
   --color-gradient-sky: #a8c8e8;
   --color-gradient-rose: #e8b8c4;
+
+  /* Tinted hues for categorical labels (HTTP-method badges, FK/PK chips,
+     pipeline states). Each clears 4.5:1 on the light canvas. Add a `-soft`
+     companion for the tinted fill behind them. Do NOT reach for Tailwind's
+     stock palette here: `text-emerald-500` measures 2.50:1 on white. */
+  --color-tone-green: #12693a;
+  --color-tone-blue: #155dfc;
+  --color-tone-amber: #8a5206;
+  --color-tone-orange: #c2410c;
+  --color-tone-rose: #be123c;
+  --color-tone-sky: #0369a1;
+
+  /* Type scale. Headings need real sizes attached to h1–h6: without these
+     every heading inherits the 14px body size and the hierarchy flattens. */
+  --text-caption: 12px;
+  --text-body-sm: 13px;
+  --text-body: 14px;
+  --text-body-lg: 15px;
+  --text-h4: 16px;
+  --text-h3: 19px;
+  --text-h2: 24px;
+  --text-h1: 30px;
+  --text-display: 40px;
 
   /* Shape: pill geometry is the brand button; cards sit at 16–24px. */
   --radius-xs: 4px;
@@ -53,22 +84,42 @@
   --radius-3xl: 24px; /* gradient-orb cards */
 }
 
-/* Dormant dark palette, remapped to the ink family so it stays coherent if
-   the toggle is ever finished. The UI ships light. */
+/* Dark theme palette mapped to the warm ink family for high-fidelity dark mode. */
 [data-theme="dark"] {
   --color-canvas: #0c0a09;
+  --color-canvas-deep: #050404;
   --color-subtle: #1c1917;
-  --color-surface: #1c1917;
-  --color-elevated: #292524;
-  --color-border: #292524;
+  --color-surface: #171513;
+  --color-elevated: #262220;
+  --color-border: #2e2a28;
   --color-border-strong: #44403c;
   --color-primary: #fafaf9;
   --color-primary-active: #ffffff;
   --color-secondary: #d6d3d1;
-  --color-muted: #a8a29e;
+  --color-muted: #b3ada8;           /* 8.0:1 on #171513 surface */
+  --color-muted-soft: #6b655e;      /* decorative only in dark */
+  --color-foreground: var(--color-primary);
+  --color-background: var(--color-surface);
   --color-accent: #fafaf9;
   --color-accent2: #d6d3d1;
   --color-on-accent: #0c0a09;
+
+  /* Semantic colours MUST be re-declared here. Without this the light-mode
+     values (tuned for a white canvas) inherit into the dark theme and render
+     as dark text on a near-black surface — every error toast, "Copied"
+     confirmation and consistency issue failed AA at 2.4–4.1:1. */
+  --color-success: #4ade80;         /* 10.5:1 on #171513 */
+  --color-danger: #f87171;          /*  6.6:1 */
+  --color-warning: #fbbf24;         /* 10.9:1 */
+  --color-info: #a8a29e;            /*  7.2:1 */
+
+  /* Categorical tones, lightened for the dark canvas. */
+  --color-tone-green: #4ade80;
+  --color-tone-blue: #60a5fa;
+  --color-tone-amber: #fbbf24;
+  --color-tone-orange: #fb923c;
+  --color-tone-rose: #fb7185;
+  --color-tone-sky: #38bdf8;
 }
 
 /* Font stacks are declared here, not in `@theme`, on purpose.
@@ -86,25 +137,92 @@ body {
   font-family: var(--font-jetbrains), ui-monospace, monospace;
 }
 
-body {
-  background: var(--color-canvas);
-  color: var(--color-primary);
-  font-size: 14px;
-  line-height: 1.5;
-  letter-spacing: 0.16px; /* the editorial dialect — slightly looser than Inter default */
-  -webkit-font-smoothing: antialiased;
-  font-variant-numeric: tabular-nums;
+/* Base element defaults live in `@layer base` so Tailwind's utility layer still
+   outranks them. Declared unlayered they would win on source order and silently
+   override every `text-[…]` utility already applied to a heading — there are 46
+   such call sites in this app. Base sets the floor; a page can always override. */
+@layer base {
+  body {
+    background: var(--color-canvas);
+    color: var(--color-primary);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    letter-spacing: 0.16px; /* the editorial dialect — slightly looser than Inter default */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Tabular figures belong on numbers that sit in columns (metrics, tables,
+     IDs) — not on running prose, where they open visible gaps inside words. */
+  .tabular, table, .font-mono, kbd, code, pre, samp {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Display & technical typography:
+     Technical workspace headings default to crisp geometric sans (Inter).
+     Editorial display headings (landing hero, magazine-style banners) use
+     .font-display or .font-serif (EB Garamond 300). */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.022em;
+  }
+  /* Real sizes, so an unprefixed <h2> is visibly larger than body copy. The
+     loose body tracking is deliberately NOT inherited: letter-spacing is set
+     per level here, and the shared rule above only tightens. */
+  h1 { font-size: var(--text-h1); font-weight: 600; line-height: 1.15; }
+  h2 { font-size: var(--text-h2); font-weight: 600; line-height: 1.2; }
+  h3 { font-size: var(--text-h3); font-weight: 600; line-height: 1.28; }
+  h4 { font-size: var(--text-h4); font-weight: 600; line-height: 1.35; }
+  h5, h6 { font-size: var(--text-body-lg); font-weight: 600; line-height: 1.35; }
 }
 
-/* Display voice: EB Garamond at weight 300, never bold. */
-h1, h2, h3 {
+.font-display, .font-serif, [data-font="display"] {
   font-family: var(--font-ebgaramond), "Times New Roman", serif;
   font-weight: 300;
-  letter-spacing: -0.32px;
+  letter-spacing: -0.025em;
 }
-h1 { line-height: 1.17; }
-h2 { line-height: 1.2; }
-h3 { line-height: 1.28; }
+
+/* One consistent focus ring for every interactive element. `:where()` keeps
+   specificity at zero so any component that defines its own focus-visible
+   utility still wins — this is the floor, not an override. Without it most
+   controls fall back to the browser's 1px `auto` outline, which is easy to
+   miss on an off-white canvas. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Tactile Keyboard Shortcut Badge (<kbd>) */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 2.5px 5.5px;
+  border-radius: 5px;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.08);
+  color: var(--color-secondary);
+}
+[data-theme="dark"] kbd {
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Tactile input focus transitions */
+input[type="text"], input[type="password"], input[type="email"], textarea, select {
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focus, textarea:focus, select:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(41, 37, 36, 0.08);
+}
+[data-theme="dark"] input[type="text"]:focus, [data-theme="dark"] input[type="password"]:focus, [data-theme="dark"] input[type="email"]:focus, [data-theme="dark"] textarea:focus, [data-theme="dark"] select:focus {
+  box-shadow: 0 0 0 3px rgba(250, 250, 249, 0.12);
+}
 
 /* ---------------------------------------------------------------------------
    Atmospheric gradient orbs — the brand's strongest pattern. Soft radial
@@ -117,7 +235,6 @@ h3 { line-height: 1.28; }
   opacity: 0.5;
   pointer-events: none;
   z-index: 0;
-  will-change: transform;
 }
 .orb-mint     { background: var(--color-gradient-mint); }
 .orb-peach    { background: var(--color-gradient-peach); }
@@ -125,14 +242,16 @@ h3 { line-height: 1.28; }
 .orb-sky      { background: var(--color-gradient-sky); }
 .orb-rose     { background: var(--color-gradient-rose); }
 
-/* Slow, offset drift so orbs never move in lockstep. */
+/* Slow, offset drift so orbs never move in lockstep. `will-change` is scoped to
+   the animating class (not the base .orb) so a compositor layer is only
+   promised while an animation actually runs. */
 @keyframes orb-drift {
   0%   { transform: translate3d(0, 0, 0) scale(1); }
   50%  { transform: translate3d(3%, -4%, 0) scale(1.06); }
   100% { transform: translate3d(-3%, 3%, 0) scale(0.96); }
 }
-.orb-drift { animation: orb-drift 22s ease-in-out infinite; }
-.orb-drift-slow { animation: orb-drift 34s ease-in-out infinite reverse; }
+.orb-drift { animation: orb-drift 22s ease-in-out infinite; will-change: transform; }
+.orb-drift-slow { animation: orb-drift 34s ease-in-out infinite reverse; will-change: transform; }
 
 /* Entrance: copy rises once and settles. Used on hero and section heads. */
 @keyframes rise-in {
@@ -151,6 +270,8 @@ h3 { line-height: 1.28; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* Release layers promised for motion that no longer happens. */
+  .orb, .orb-drift, .orb-drift-slow { will-change: auto; }
 }
 
 /* Thin scrollbars — native white ones break the canvas. */

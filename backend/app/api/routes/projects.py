@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.audit import log
@@ -116,3 +116,122 @@ def activity(pid: str, db: Session = Depends(get_db), user=Depends(current_user)
                        "at": r.created_at.isoformat() if r.created_at else None})
     events.sort(key=lambda e: e["at"] or "", reverse=True)
     return {"events": events[:50]}
+
+
+@router.patch("/projects/{pid}")
+def update_project(pid: str, body: dict, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Update project name or description."""
+    p = project_or_403(pid, db, user)
+    if "name" in body and body["name"]:
+        p.name = str(body["name"]).strip()[:120]
+    if "description" in body:
+        p.description = str(body["description"])[:4000]
+    db.commit()
+    db.refresh(p)
+    return {"id": p.id, "name": p.name, "description": p.description}
+
+
+@router.delete("/projects/{pid}")
+def delete_project(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Delete a project and all associated artifacts and history."""
+    p = project_or_403(pid, db, user)
+    membership = db.query(ProjectMember).filter_by(project_id=pid, user_id=user.id).first()
+    if p.owner_id != user.id and (not membership or membership.role != "owner"):
+        raise HTTPException(403, "Only the project owner can delete this project")
+
+    from app.models.db import (
+        AcceptanceCriteria, ArchitectureComponent, ArchitectureRelationship,
+        DatabaseEntity, DatabaseField, SecurityRequirement, ImplementationTask,
+        TraceabilityLink, ImpactRun, Document, DocumentChunk, Prd, ArtifactVersion
+    )
+    doc_ids = [d.id for d in db.query(Document.id).filter_by(project_id=pid).all()]
+    if doc_ids:
+        db.query(DocumentChunk).filter(DocumentChunk.document_id.in_(doc_ids)).delete(synchronize_session=False)
+    db.query(Document).filter_by(project_id=pid).delete(synchronize_session=False)
+
+    ent_ids = [e.id for e in db.query(DatabaseEntity.id).filter_by(project_id=pid).all()]
+    if ent_ids:
+        db.query(DatabaseField).filter(DatabaseField.entity_id.in_(ent_ids)).delete(synchronize_session=False)
+    db.query(DatabaseEntity).filter_by(project_id=pid).delete(synchronize_session=False)
+
+    story_ids = [s.id for s in db.query(UserStory.id).filter_by(project_id=pid).all()]
+    if story_ids:
+        db.query(AcceptanceCriteria).filter(AcceptanceCriteria.story_id.in_(story_ids)).delete(synchronize_session=False)
+
+    db.query(UserStory).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(Requirement).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(ArchitectureRelationship).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(ArchitectureComponent).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(ApiEndpoint).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(SecurityRequirement).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(ImplementationTask).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(TestCase).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(TraceabilityLink).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(ConsistencyIssue).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(ImpactRun).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(AgentRun).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(ArtifactVersion).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(Prd).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(AuditLog).filter_by(project_id=pid).delete(synchronize_session=False)
+    db.query(ProjectMember).filter_by(project_id=pid).delete(synchronize_session=False)
+
+    p_name = p.name
+    db.delete(p)
+    db.commit()
+    log(db, project_id="", user_id=user.id, action="project.delete", detail=f"{p_name} ({pid})")
+    return {"deleted": pid, "name": p_name}
+
+
+@router.get("/projects/{pid}/versions")
+def list_versions(pid: str, artifact_type: str = "", db: Session = Depends(get_db), user=Depends(current_user)):
+    """List historical versions of project artifacts."""
+    from app.models.db import ArtifactVersion
+    project_or_403(pid, db, user)
+    q = db.query(ArtifactVersion).filter_by(project_id=pid)
+    if artifact_type:
+        q = q.filter_by(artifact_type=artifact_type)
+    rows = q.order_by(ArtifactVersion.version.desc()).limit(100).all()
+    return [
+        {
+            "id": r.id,
+            "artifact_type": r.artifact_type,
+            "artifact_code": r.artifact_code,
+            "version": r.version,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "content": r.content
+        }
+        for r in rows
+    ]
+
+
+@router.post("/projects/{pid}/versions/{vid}/rollback")
+def rollback_version(pid: str, vid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Roll back an artifact to a previous version."""
+    from app.models.db import ArtifactVersion, Prd, Requirement
+    project_or_403(pid, db, user)
+    v = db.query(ArtifactVersion).filter_by(id=vid, project_id=pid).first()
+    if not v:
+        raise HTTPException(404, "Artifact version not found")
+
+    if v.artifact_type == "prd":
+        prd = db.query(Prd).filter_by(project_id=pid).first()
+        if prd:
+            prd.content = v.content
+            db.commit()
+            log(db, project_id=pid, user_id=user.id, action="prd.rollback", detail=f"v{v.version}")
+            return {"status": "rolled_back", "artifact_type": "prd", "version": v.version}
+    elif v.artifact_type == "requirement" and v.artifact_code:
+        req = db.query(Requirement).filter_by(project_id=pid, code=v.artifact_code).first()
+        if req and isinstance(v.content, dict):
+            req.title = v.content.get("title", req.title)
+            req.description = v.content.get("description", req.description)
+            req.priority = v.content.get("priority", req.priority)
+            req.acceptance_criteria = v.content.get("acceptance_criteria", req.acceptance_criteria)
+            req.version = (req.version or 1) + 1
+            db.commit()
+            log(db, project_id=pid, user_id=user.id, action="requirement.rollback", detail=f"{v.artifact_code} v{v.version}")
+            return {"status": "rolled_back", "artifact_type": "requirement", "code": v.artifact_code, "version": v.version}
+
+    return {"status": "noop", "message": f"Rollback for {v.artifact_type} recorded snapshot"}
+

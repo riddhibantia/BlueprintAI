@@ -29,7 +29,9 @@ async function req(path: string, init: RequestInit = {}) {
     void _ignored;
     const res = await fetch(`${API}${path}`, { ...rest, credentials: "include", signal: ctrl.signal });
     if (res.status === 401 && !path.startsWith("/auth/")) {
-      window.location.href = "/dashboard";
+      if (typeof window !== "undefined" && window.location.pathname !== "/dashboard") {
+        window.location.href = "/dashboard";
+      }
       throw new Error("Session expired — please log in again.");
     }
     return res;

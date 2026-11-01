@@ -20,6 +20,24 @@ class PasswordChangeIn(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class ResetIn(BaseModel):
+    """Password reset: always requires a single-use token issued by /auth/request-reset."""
+    email: str = Field(min_length=3, max_length=254)
+    new_password: str = Field(min_length=8, max_length=128)
+    reset_token: str | None = None
+
+
+class RequestResetIn(BaseModel):
+    """Ask for a reset token. Never reveals whether the account exists."""
+    email: str = Field(min_length=3, max_length=254)
+
+
+class ChangePasswordIn(BaseModel):
+    """Authenticated password change."""
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=4000)
@@ -40,6 +58,7 @@ class RequirementUpdate(BaseModel):
     description: str | None = None
     status: str | None = None
     priority: str | None = None
+    acceptance_criteria: str | None = None
     expected_version: int | None = None
 
 

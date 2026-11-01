@@ -1,5 +1,6 @@
 import "../styles/tokens.css";
 import { EB_Garamond, Inter, JetBrains_Mono } from "next/font/google";
+import { ToastProvider } from "../components/ui/toast";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 /* Waldenburg Light is licensed; EB Garamond 300 is the documented substitute.
@@ -22,8 +23,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${inter.variable} ${display.variable} ${mono.variable} bg-canvas font-sans text-primary`}>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-lg focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-on-accent">Skip to content</a>
-        <main id="main">{children}</main>
+        <ToastProvider>
+          <main id="main">{children}</main>
+        </ToastProvider>
       </body>
     </html>
   );
 }
+

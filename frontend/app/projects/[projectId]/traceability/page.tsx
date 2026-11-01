@@ -16,17 +16,16 @@ import { ArtifactLink } from "../../../../components/ui/activity";
 import { SlashInput } from "../../../../components/ui/slash";
 
 const ORDER = ["requirement", "story", "api", "db", "security", "task", "test", "component"];
-// Node colors follow the semantic tokens in styles/tokens.css (accent family).
-const COLORS: Record<string, string> = {
-  requirement: "var(--color-accent)", story: "var(--color-accent2)", api: "var(--color-info)", db: "var(--color-warning)",
-  security: "var(--color-danger)", task: "var(--color-success)", test: "#c084fc", component: "var(--color-secondary)",
-};
-// Legend swatches need real colors (CSS vars don't resolve in canvas-free HTML? they do —
-// but keep one static map for the legend so it never depends on token resolution).
+/* Graph node colors are static, not token-driven. Here color ENCODES artifact
+   type, so it must stay distinguishable from every other color — which the
+   brand palette deliberately does not guarantee (accent and accent2 are both
+   ink). Tokenizing these collapsed requirement/story into the same grey and
+   made this legend describe colors the graph never drew. */
 const LEGEND: Record<string, string> = {
   requirement: "#0e7c6b", story: "#818cf8", api: "#3b5bdb", db: "#b7791f",
   security: "#c53030", task: "#2f855a", test: "#7c5cd6", component: "#8a857d",
 };
+const COLORS = LEGEND;
 
 type TypeNodeData = { type: string; code: string; selected?: boolean };
 
@@ -96,10 +95,22 @@ export default function Traceability() {
     const ids = new Set(nodes.map((n) => n.id));
     const edges: Edge[] = data.links
       .filter((l: any) => ids.has(l.from) && ids.has(l.to))
-      .map((l: any, i: number) => ({
-        id: `e${i}`, source: l.from, target: l.to, label: l.rel, animated: false,
-        style: { stroke: "var(--color-border)" }, labelStyle: { fill: "var(--color-secondary)", fontSize: 10 },
-      }));
+      .map((l: any, i: number) => {
+        const isConnected = sel ? l.from === sel || l.to === sel : false;
+        return {
+          id: `e${i}`,
+          source: l.from,
+          target: l.to,
+          label: l.rel,
+          animated: isConnected,
+          style: {
+            stroke: isConnected ? "var(--color-accent)" : "var(--color-border)",
+            strokeWidth: isConnected ? 2 : 1,
+            opacity: sel ? (isConnected ? 1 : 0.25) : 0.8,
+          },
+          labelStyle: { fill: isConnected ? "var(--color-accent)" : "var(--color-secondary)", fontSize: 10 },
+        };
+      });
     return { nodes, edges };
   }, [data, sel]);
 

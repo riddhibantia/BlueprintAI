@@ -43,3 +43,34 @@ def complete(prompt: str, context: str = "", system: str = "") -> dict:
                     "latency_ms": int((time.time() - t0) * 1000), "provider": "mock"}
     txt, tok = _mock_complete(prompt, context)
     return {"text": txt, "tokens": tok, "latency_ms": int((time.time() - t0) * 1000), "provider": "mock"}
+
+
+def complete_json(prompt: str, context: str = "", system: str = "") -> dict:
+    """Structured LLM completions requesting json_object format with fallback."""
+    import json
+    t0 = time.time()
+    if settings.use_openai:
+        try:
+            from openai import OpenAI
+            kwargs: dict = {"api_key": settings.OPENAI_API_KEY, "timeout": 30}
+            if settings.OPENAI_BASE_URL:
+                kwargs["base_url"] = settings.OPENAI_BASE_URL
+            client = OpenAI(**kwargs)
+            msgs = []
+            sys_msg = (system + "\nYou MUST respond with valid JSON.") if system else "You MUST respond with valid JSON."
+            msgs.append({"role": "system", "content": sys_msg})
+            msgs.append({"role": "user", "content": (context + "\n\n" + prompt) if context else prompt})
+            r = client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=msgs,
+                response_format={"type": "json_object"},
+                temperature=0.2,
+            )
+            txt = r.choices[0].message.content or "{}"
+            tok = getattr(r.usage, "total_tokens", len(txt.split())) if getattr(r, "usage", None) else len(txt.split())
+            parsed = json.loads(txt)
+            return {"data": parsed, "tokens": int(tok), "latency_ms": int((time.time() - t0) * 1000), "provider": "openai"}
+        except Exception as e:
+            log.warning("complete_json fallback: %s", type(e).__name__)
+    return {"data": {}, "tokens": 0, "latency_ms": int((time.time() - t0) * 1000), "provider": "mock"}
+

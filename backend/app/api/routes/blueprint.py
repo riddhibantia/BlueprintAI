@@ -14,7 +14,10 @@ from app.traceability.engine import add_link, clear_links
 from app.agents.store import sync_stories
 from app.rag.context import evidence as rag_evidence
 
+_evidence = rag_evidence
+
 router = APIRouter(tags=["blueprint"])
+
 
 
 @router.post("/projects/{pid}/prd/generate")
@@ -30,7 +33,10 @@ def prd_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user))
         existing.content = content
     else:
         db.add(Prd(project_id=pid, content=content))
-    db.add(AgentRun(project_id=pid, agent="prd", output_summary="PRD generated",
+    from app.models.db import ArtifactVersion
+    curr_v = db.query(ArtifactVersion).filter_by(project_id=pid, artifact_type="prd").count() + 1
+    db.add(ArtifactVersion(project_id=pid, artifact_type="prd", version=curr_v, content=content, status="generated"))
+    db.add(AgentRun(project_id=pid, agent="prd", output_summary=f"PRD generated (v{curr_v})",
                     evidence=[{"source": "rag", "used": bool(ev)}]))
     db.commit()
     return content
@@ -66,7 +72,7 @@ def prd_put(pid: str, body: PrdUpdate, db: Session = Depends(get_db), user=Depen
 @router.post("/projects/{pid}/stories/generate")
 def stories_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     """Generate user stories (+ acceptance criteria) from requirements (§7)."""
-    project_or_403(pid, db, user)
+    p = project_or_403(pid, db, user)
     reqs = db.query(Requirement).filter_by(project_id=pid).all()
     rd = [{"title": r.title, "type": r.type, "code": r.code} for r in reqs]
     stories = gen_stories(rd)
@@ -160,7 +166,8 @@ def arch_del(pid: str, cid: str, db: Session = Depends(get_db), user=Depends(cur
 def db_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     """Generate the database design with stable DB-xxx codes (§9)."""
     p = project_or_403(pid, db, user)
-    spec = gen_db(p.product_idea or p.name)
+    ev = _evidence(db, pid, "database entities tables schema models data fields")
+    spec = gen_db(p.product_idea or p.name, evidence=ev)
     for e in db.query(DatabaseEntity).filter_by(project_id=pid).all():
         db.query(DatabaseField).filter_by(entity_id=e.id).delete()
     db.query(DatabaseEntity).filter_by(project_id=pid).delete()
@@ -179,9 +186,18 @@ def db_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
 def db_get(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
     """Read entities + fields (keys, references, nullability)."""
     project_or_403(pid, db, user)
+    entities = db.query(DatabaseEntity).filter_by(project_id=pid).all()
+    if not entities:
+        return {"entities": []}
+    entity_ids = [e.id for e in entities]
+    all_fields = db.query(DatabaseField).filter(DatabaseField.entity_id.in_(entity_ids)).all()
+    field_map: dict[str, list] = {}
+    for f in all_fields:
+        field_map.setdefault(f.entity_id, []).append(f)
+
     out = []
-    for e in db.query(DatabaseEntity).filter_by(project_id=pid).all():
-        fields = db.query(DatabaseField).filter_by(entity_id=e.id).all()
+    for e in entities:
+        fields = field_map.get(e.id, [])
         out.append({"code": e.code, "name": e.name,
                     "fields": [{"name": f.name, "dtype": f.dtype, "pk": f.is_pk,
                                 "fk": f.is_fk, "references": f.references, "nullable": f.nullable}
@@ -191,20 +207,21 @@ def db_get(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
 
 @router.post("/projects/{pid}/apis/generate")
 def apis_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
-    """Generate API endpoints + auto-link functional requirements (§10)."""
+    """Generate API endpoints + link requirements that genuinely match them (§10)."""
     p = project_or_403(pid, db, user)
-    eps = gen_apis(p.product_idea or p.name)
+    ev = _evidence(db, pid, "api endpoints routes http methods rest request response")
+    eps = gen_apis(p.product_idea or p.name, evidence=ev)
     clear_links(db, pid, source_type="requirement", target_types=("api",))
     db.query(ApiEndpoint).filter_by(project_id=pid).delete()
     for e in eps:
         db.add(ApiEndpoint(project_id=pid, **e))
-    # auto traceability: link functional REQs -> APIs round-robin
-    reqs = db.query(Requirement).filter_by(project_id=pid).all()
-    functional = [x for x in reqs if x.type == "functional"]
-    if eps and functional:
-        for i, r in enumerate(functional):
-            api = eps[i % len(eps)]
-            add_link(db, pid, "requirement", r.code, "api", api["code"])
+    db.flush()  # endpoints must be queryable before scoring links against them
+    # Traceability links are earned by shared terminology, never dealt out by
+    # list position: a requirement that matches no endpoint stays orphaned so
+    # the coverage gap stays visible.
+    from app.traceability.engine import earned_links
+    for lk in earned_links(db, pid):
+        add_link(db, pid, lk["source_type"], lk["source_id"], lk["target_type"], lk["target_id"], lk["relationship_type"])
     db.add(AgentRun(project_id=pid, agent="api", output_summary=f"{len(eps)} endpoints"))
     db.commit()
     return {"count": len(eps), "endpoints": eps}
@@ -222,16 +239,21 @@ def apis_list(pid: str, db: Session = Depends(get_db), user=Depends(current_user
 
 @router.post("/projects/{pid}/security/analyze")
 def sec_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
-    """Generate security controls traceable to real APIs (§11)."""
+    """Generate security controls linked to the endpoints they actually concern (§11)."""
     project_or_403(pid, db, user)
-    secs = gen_security()
+    ev = _evidence(db, pid, "security auth rbac jwt encryption compliance owasp")
+    secs = gen_security(evidence=ev)
+    clear_links(db, pid, source_type="security", target_types=("api",))
     db.query(SecurityRequirement).filter_by(project_id=pid).delete()
     for s in secs:
         db.add(SecurityRequirement(project_id=pid, **s))
-    first_api = db.query(ApiEndpoint).filter_by(project_id=pid).first()
-    if first_api:  # never link to an endpoint that does not exist
-        for s in secs:
-            add_link(db, pid, "security", s["code"], "api", first_api.code or first_api.path, "protects")
+    db.flush()
+    # Place each control where it applies instead of stacking all of them on
+    # the first endpoint, which made the graph look complete while asserting
+    # that the upload-validation rule protects the login route.
+    from app.traceability.engine import earned_security_links
+    for lk in earned_security_links(db, pid):
+        add_link(db, pid, lk["source_type"], lk["source_id"], lk["target_type"], lk["target_id"], lk["relationship_type"])
     db.add(AgentRun(project_id=pid, agent="security", output_summary=f"{len(secs)} controls"))
     db.commit()
     return {"count": len(secs), "controls": secs}
@@ -251,7 +273,8 @@ def tasks_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user
     project_or_403(pid, db, user)
     reqs = [{"title": r.title, "type": r.type, "code": r.code, "priority": r.priority}
             for r in db.query(Requirement).filter_by(project_id=pid).all()]
-    tasks = gen_tasks(reqs)
+    ev = _evidence(db, pid, "implementation sprint tasks milestone mvp")
+    tasks = gen_tasks(reqs, evidence=ev)
     clear_links(db, pid, source_type="requirement", target_types=("task",))
     db.query(ImplementationTask).filter_by(project_id=pid).delete()
     for t in tasks:
@@ -290,7 +313,8 @@ def tests_gen(pid: str, db: Session = Depends(get_db), user=Depends(current_user
     project_or_403(pid, db, user)
     reqs = [{"title": r.title, "type": r.type, "code": r.code, "acceptance_criteria": r.acceptance_criteria or ""}
             for r in db.query(Requirement).filter_by(project_id=pid).all()]
-    tests = gen_tests(reqs)
+    ev = _evidence(db, pid, "testing unit integration acceptance edge cases")
+    tests = gen_tests(reqs, evidence=ev)
     clear_links(db, pid, source_type="requirement", target_types=("test",))
     db.query(TestCase).filter_by(project_id=pid).delete()
     for t in tests:
