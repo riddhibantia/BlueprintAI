@@ -20,6 +20,18 @@ class User(Base, TimestampMixin):
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     name = Column(String, default="")
+    # Bumped on every password change/reset: any session or reset token issued
+    # before this instant is dead, so a stolen token cannot outlive the reset
+    # that was meant to revoke it.
+    password_changed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PasswordResetToken(Base):
+    """Single-use reset-token ledger. A `jti` present here has been spent."""
+    __tablename__ = "password_reset_tokens"
+    jti = Column(String, primary_key=True)
+    email = Column(String, index=True, nullable=False)
+    used_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Project(Base, TimestampMixin):

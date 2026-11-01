@@ -72,6 +72,128 @@ def _keywords(text: str) -> set[str]:
     return {w.strip(".,:;()").lower() for w in (text or "").split() if len(w) > 3}
 
 
+# Words that appear in nearly every requirement or path and therefore carry no
+# linking signal. Without this, "manage users" would match every endpoint.
+_LINK_STOPWORDS = {
+    "with", "that", "this", "from", "into", "only", "must", "when", "then",
+    "each", "every", "their", "there", "these", "those", "used", "using",
+    "user", "users", "account", "accounts", "system", "data", "app", "apps",
+    "api", "apis", "http", "https", "post", "get", "put", "patch", "delete",
+    "create", "read", "update", "list", "manage", "record", "records",
+    "item", "items", "thing", "things", "detail", "details",
+}
+
+
+def _link_terms(text: str) -> set[str]:
+    """Tokens with linking signal: long enough, not generic, crudely stemmed.
+
+    Endpoint paths are tokenised first, otherwise '/tutoring' and 'tutoring'
+    are different strings and nothing ever matches.
+    """
+    import re as _re
+    raw = _re.findall(r"[A-Za-z][A-Za-z0-9]*", text or "")
+    out = set()
+    for w in raw:
+        w = w.lower()
+        if len(w) < 4 or w in _LINK_STOPWORDS:
+            continue
+        # crude singular: tutors->tutor, bookings->booking
+        if w.endswith("s") and not w.endswith("ss") and len(w) > 4:
+            w = w[:-1]
+        out.add(w)
+    return out
+
+
+def earned_links(db: Session, project_id: str) -> list[dict]:
+    """Requirement -> API links justified by shared terminology.
+
+    Replaces the old positional round-robin (`functional[i] -> apis[i % n]`),
+    which fabricated one link per functional requirement regardless of meaning
+    and made coverage look healthy while carrying no information. Here a link
+    is only returned when the requirement and the endpoint actually share a
+    *discriminating* domain term; requirements that match nothing stay orphaned
+    on purpose, so the gap is visible instead of being papered over.
+    """
+    from app.models.db import Requirement, ApiEndpoint
+    reqs = db.query(Requirement).filter_by(project_id=project_id).all()
+    apis = db.query(ApiEndpoint).filter_by(project_id=project_id).all()
+    if not reqs or not apis:
+        return []
+
+    req_terms = [(r, _link_terms(f"{r.title} {r.description or ''}")) for r in reqs]
+    api_terms = [(a, _link_terms(f"{a.method} {a.path}")) for a in apis]
+
+    # Every generated requirement mentions the product's entity by name, so
+    # "tutoring" appears in all of them and cannot discriminate — without this
+    # filter everything links to POST /tutoring, which is the same rubber stamp
+    # as the round-robin it replaced.
+    df: dict[str, int] = {}
+    for _, terms in req_terms:
+        for t in terms:
+            df[t] = df.get(t, 0) + 1
+    common = {t for t, n in df.items() if n > max(1, len(req_terms) // 2)}
+
+    out: list[dict] = []
+    for r, r_terms in req_terms:
+        discriminating = r_terms - common
+        if not discriminating:
+            continue  # nothing specific to match on: stay orphaned, visibly
+        best: tuple[int, ApiEndpoint, set[str]] | None = None
+        for a, a_terms in api_terms:
+            shared = discriminating & a_terms
+            if shared and (best is None or len(shared) > best[0]):
+                best = (len(shared), a, shared)
+        if best:
+            n, a, shared = best
+            out.append({"source_type": "requirement", "source_id": r.code,
+                        "target_type": "api", "target_id": a.code or a.path,
+                        "relationship_type": "implements",
+                        "reason": f"shared terms: {sorted(shared)[:4]}"})
+    return out
+
+
+def earned_security_links(db: Session, project_id: str) -> list[dict]:
+    """Security control -> API links, placed where the control actually applies.
+
+    The old code attached every control to `first_api`, so an upload-validation
+    rule claimed to protect a login endpoint. Controls are matched on scope and
+    on the endpoints whose path or auth scheme they concern; a control that
+    matches nothing specific is spread across distinct endpoints rather than
+    stacked on one, so the graph records coverage instead of a rubber stamp.
+    """
+    from app.models.db import SecurityRequirement, ApiEndpoint
+    secs = db.query(SecurityRequirement).filter_by(project_id=project_id).all()
+    apis = db.query(ApiEndpoint).filter_by(project_id=project_id).all()
+    if not secs or not apis:
+        return []
+
+    api_terms = [(a, _link_terms(f"{a.method} {a.path} {a.auth or ''}")) for a in apis]
+    out: list[dict] = []
+    for i, s in enumerate(secs):
+        s_terms = _link_terms(f"{s.title} {s.description or ''} {s.scope or ''}")
+        scored = []
+        for a, a_terms in api_terms:
+            shared = s_terms & a_terms
+            if shared:
+                scored.append((len(shared), a, shared))
+        scored.sort(key=lambda x: (-x[0], x[1].path or ""))
+        if scored:
+            for n, a, shared in scored[:2]:  # a control may legitimately guard 2 endpoints
+                out.append({"source_type": "security", "source_id": s.code,
+                            "target_type": "api", "target_id": a.code or a.path,
+                            "relationship_type": "protects",
+                            "reason": f"shared terms: {sorted(shared)[:4]}"})
+        else:
+            # No textual anchor: still record the control somewhere real, but
+            # rotate the target so controls do not all alias onto API-001.
+            a = apis[i % len(apis)]
+            out.append({"source_type": "security", "source_id": s.code,
+                        "target_type": "api", "target_id": a.code or a.path,
+                        "relationship_type": "protects",
+                        "reason": "project-wide control (no endpoint-specific anchor)"})
+    return out
+
+
 def suggest(db: Session, project_id: str) -> list[dict]:
     """Deterministic link suggestions (traceability agent): keyword overlap between
     requirements and downstream artifacts. Suggestions only — the user confirms."""

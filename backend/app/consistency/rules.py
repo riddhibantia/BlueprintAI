@@ -48,13 +48,14 @@ def run_checks(db: Session, project_id: str) -> list[dict]:
                                "affected": [a.code or a.path], "suggestion": "Add Expense entity/fields"})
                 break
     # S3 vs binary receipt heuristic (§16 example)
-    for e in ents:
-        fields = db.query(DatabaseField).filter_by(entity_id=e.id).all()
-        for f in fields:
+    ent_ids = [e.id for e in ents]
+    if ent_ids:
+        all_fields = db.query(DatabaseField).filter(DatabaseField.entity_id.in_(ent_ids)).all()
+        for f in all_fields:
             if "receipt" in f.name.lower() and "bin" in (f.dtype or "").lower():
                 issues.append({"check": "prd-db", "severity": "conflict",
                                "description": "Receipt binary stored in DB; PRD/architecture specify S3",
-                               "affected": [e.name, f.name], "suggestion": "Store S3 key in DB, binary in S3"})
+                               "affected": [f.name], "suggestion": "Store S3 key in DB, binary in S3"})
     if not comps and reqs:
         issues.append({"check": "req-arch", "severity": "info",
                        "description": "No architecture components yet", "affected": [],

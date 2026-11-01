@@ -88,3 +88,49 @@ def test_audit_trail_written():
     finally:
         db.close()
     assert {"user.register", "project.create", "requirements.generate"} <= actions
+
+
+def test_document_lifecycle_and_deletion(client):
+    pid, h = PID["id"], H["h"]
+    r = client.post(f"/projects/{pid}/documents", files={"file": ("guide.txt", b"# Standards\nMust use JWT auth for all APIs.")}, headers=h)
+    assert r.status_code == 200
+    doc_id = r.json()["document_id"]
+    docs = client.get(f"/projects/{pid}/documents", headers=h).json()
+    assert any(d["id"] == doc_id for d in docs)
+    del_r = client.delete(f"/projects/{pid}/documents/{doc_id}", headers=h)
+    assert del_r.status_code == 200 and del_r.json()["status"] == "deleted"
+    docs_after = client.get(f"/projects/{pid}/documents", headers=h).json()
+    assert not any(d["id"] == doc_id for d in docs_after)
+
+
+def test_postman_and_schema_ddl_export(client):
+    pid, h = PID["id"], H["h"]
+    # Verify postman export
+    r_postman = client.get(f"/projects/{pid}/export/postman", headers=h)
+    assert r_postman.status_code == 200
+    pm = r_postman.json()
+    assert "info" in pm and "schema" in pm["info"]
+    assert "collection.json" in pm["info"]["schema"]
+
+    # Verify multi-dialect schema exports
+    for target in ("postgres", "prisma", "typescript", "sqlalchemy"):
+        r_schema = client.get(f"/projects/{pid}/export/schema?target={target}", headers=h)
+        assert r_schema.status_code == 200
+        assert len(r_schema.text) > 0
+
+
+def test_artifact_version_history_and_rollback(client):
+    pid, h = PID["id"], H["h"]
+    # Trigger PRD generation which records a version
+    client.post(f"/projects/{pid}/prd/generate", headers=h)
+    r_ver = client.get(f"/projects/{pid}/versions?artifact_type=prd", headers=h)
+    assert r_ver.status_code == 200
+    versions = r_ver.json()
+    assert len(versions) >= 1
+    vid = versions[0]["id"]
+    # Test rollback endpoint
+    r_rb = client.post(f"/projects/{pid}/versions/{vid}/rollback", headers=h)
+    assert r_rb.status_code == 200
+    assert r_rb.json()["status"] == "rolled_back"
+
+

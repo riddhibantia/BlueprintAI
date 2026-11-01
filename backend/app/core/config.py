@@ -24,14 +24,17 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = ""  # e.g. https://generativelanguage.googleapis.com/v1beta/openai/
     LLM_MODEL: str = ""  # defaults to OPENAI_MODEL when empty
     GEMINI_API_KEY: str = ""  # alias: accepted as copilot key when LLM_API_KEY is empty
-    EMBEDDING_PROVIDER: str = "hash"  # hash | openai
+    EMBEDDING_PROVIDER: str = "auto"  # auto | openai | gemini | dense | hash
     OPENAI_EMBED_MODEL: str = "text-embedding-3-small"
+    GEMINI_EMBED_MODEL: str = "text-embedding-004"
     STORAGE_MODE: str = "local"
     UPLOAD_DIR: str = "./uploads"
     S3_BUCKET: str = ""
     AWS_REGION: str = ""
     ENV: str = "dev"
     CORS_ORIGINS: str = "http://localhost:3000"
+    RATE_LIMIT_ENABLED: bool = True
+    RESET_SECRET: str = ""  # Optional secret/token for password resets in production
 
     @field_validator("JWT_SECRET")
     @classmethod

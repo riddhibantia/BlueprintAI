@@ -37,6 +37,24 @@ def test_03_requirements(client):
         a = client.post(f"/requirements/{q['id']}/approve", headers=H["auth"])
         assert a.status_code == 200
 
+    # Test edit requirement including acceptance_criteria
+    first_req = reqs[0]
+    rid = first_req["id"]
+    update_res = client.put(f"/requirements/{rid}", json={
+        "expected_version": first_req["version"],
+        "title": "Updated Title",
+        "acceptance_criteria": "Given user is manager When click approve Then save"
+    }, headers=H["auth"])
+    assert update_res.status_code == 200
+    assert update_res.json()["version"] == first_req["version"] + 1
+
+    # Stale version test: old expected_version must reject with 409
+    stale_res = client.put(f"/requirements/{rid}", json={
+        "expected_version": first_req["version"],
+        "title": "Stale Title"
+    }, headers=H["auth"])
+    assert stale_res.status_code == 409
+
 
 def test_04_blueprint_chain(client):
     pid = PID["id"]
@@ -66,3 +84,20 @@ def test_06_unauthorized_blocked(client):
     with TestClient(app) as fresh:
         r = fresh.get("/projects")
     assert r.status_code in (401, 422)
+
+
+def test_07_project_update_and_delete(client):
+    pid = PID["id"]
+    r = client.patch(f"/projects/{pid}", json={"name": "Renamed Platform", "description": "Updated description"}, headers=H["auth"])
+    assert r.status_code == 200
+    assert r.json()["name"] == "Renamed Platform"
+
+    # Test delete
+    r = client.delete(f"/projects/{pid}", headers=H["auth"])
+    assert r.status_code == 200
+    assert r.json()["deleted"] == pid
+
+    # Verification: should now 404 or 403
+    r = client.get(f"/projects/{pid}", headers=H["auth"])
+    assert r.status_code in (403, 404)
+
