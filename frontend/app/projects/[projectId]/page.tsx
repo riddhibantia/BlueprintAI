@@ -50,6 +50,7 @@ export default function InboxHome() {
   const traceQ = useTraceability(pid);
   const issuesQ = useIssues(pid);
   const decide = useWrite(pid, ["issues"]);
+  const decideError = decide.isError ? (decide.error as Error)?.message : "";
 
   const loading = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ].some((q) => q.isLoading);
   const err = [reqsQ, prdQ, storiesQ, archQ, dbQ, apisQ, secQ, tasksQ, testsQ, traceQ, issuesQ].find((q) => q.isError);
@@ -238,7 +239,7 @@ export default function InboxHome() {
               </span>
             )}
           </div>
-
+          {decideError && <div className="mb-2"><ErrorState message={decideError} /></div>}
           {triageCount === 0 ? (
             <EmptyState title="All clear" hint="No open issues and no orphaned requirements." />
           ) : (

@@ -1,7 +1,7 @@
 # V3 Design Spec — "Triage OS, familiar first" (2026-09-23)
 
 ## Goal
-Rebuild DevBlueprint's frontend so a first-time user understands it instantly:
+Rebuild BlueprintAI's frontend so a first-time user understands it instantly:
 visible lifecycle navigation, a triage inbox home, shared cached data, contextual Copilot.
 Backend, APIs, auth, data, and calculations are untouched.
 

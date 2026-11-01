@@ -43,6 +43,10 @@ export const analyzeImpact = (pid: string, requirement_code: string) =>
 
 export const listDocuments = (pid: string) => api(`/projects/${pid}/documents`);
 export const getKnowledgeStats = (pid: string) => api(`/projects/${pid}/knowledge/stats`);
+export const seedStandards = (pid: string) =>
+  api(`/projects/${pid}/documents/seed`, { method: "POST" });
+export const changePassword = (current_password: string, new_password: string) =>
+  api(`/auth/password`, { method: "POST", body: { current_password, new_password } });
 export const queryKnowledge = (pid: string, query: string, k = 5) =>
   api(`/projects/${pid}/knowledge/query`, { method: "POST", body: { query, k } });
 export const uploadDocument = (pid: string, file: File) => {
@@ -56,5 +60,3 @@ export const deleteDocument = (pid: string, did: string) =>
 export const listRuns = (pid: string) => api(`/projects/${pid}/runs`);
 export const runWorkflow = (pid: string) => api(`/projects/${pid}/workflow/run`, { method: "POST" });
 export const runPipeline = (pid: string) => api(`/projects/${pid}/pipeline/run`, { method: "POST" });
-export const changePassword = (current_password: string, new_password: string) =>
-  api("/auth/change-password", { method: "POST", body: { current_password, new_password } });

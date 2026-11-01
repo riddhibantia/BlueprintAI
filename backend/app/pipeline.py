@@ -9,20 +9,18 @@ import time
 
 from sqlalchemy.orm import Session
 
-from app.models.db import (Requirement, Prd, UserStory, AcceptanceCriteria,
+from app.models.db import (Requirement, Prd,
                            ArchitectureComponent, ArchitectureRelationship,
                            DatabaseEntity, DatabaseField, ApiEndpoint,
                            SecurityRequirement, ImplementationTask, TestCase,
-                           AgentRun, Document, DocumentChunk)
+                           AgentRun)
 from app.agents.generators import (gen_prd, gen_stories, gen_architecture, gen_db,
-                                   gen_apis, gen_security, gen_tasks, gen_tests)
+                                   gen_apis, gen_security, gen_tasks, gen_tests, parse_db_field)
+from app.agents.store import sync_stories
 from app.traceability.engine import add_link, clear_links
-from app.rag.retriever import retrieve, get_evidence, format_evidence_text
+from app.rag.context import evidence as rag_evidence
 
-
-def _evidence(db: Session, pid: str, query: str) -> str:
-    hits = get_evidence(db, pid, query, k=5)
-    return format_evidence_text(hits)
+_evidence = rag_evidence
 
 
 def _timed(stages: dict, name: str, fn):
@@ -46,7 +44,7 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
     def s_prd():
         reqs = [{"title": r.title, "type": r.type, "code": r.code, "status": r.status}
                 for r in db.query(Requirement).filter_by(project_id=pid).all()]
-        content = gen_prd(idea, reqs, _evidence(db, pid, idea))
+        content = gen_prd(idea, reqs, rag_evidence(db, pid, idea))
         existing = db.query(Prd).filter_by(project_id=pid).first()
         if existing:
             existing.content = content
@@ -59,25 +57,16 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
     def s_stories():
         rd = [{"title": r.title, "type": r.type, "code": r.code}
               for r in db.query(Requirement).filter_by(project_id=pid).all()]
-        stories = gen_stories(rd, evidence=_evidence(db, pid, f"user workflow acceptance criteria {idea}"))
-        for s in stories:
-            if not db.query(UserStory).filter_by(project_id=pid, code=s["code"]).first():
-                row = UserStory(project_id=pid, code=s["code"], title=s["title"],
-                                story=s["story"], requirement_code=s["requirement_code"],
-                                status=s["status"])
-                db.add(row)
-                db.flush()
-                for ac in s.get("acceptance", []):
-                    db.add(AcceptanceCriteria(project_id=pid, story_id=row.id, text=ac))
-                add_link(db, pid, "requirement", s["requirement_code"], "story", s["code"], "implements")
+        stories = gen_stories(rd)
+        counts = sync_stories(db, pid, stories)
         db.add(AgentRun(project_id=pid, agent="story", output_summary=f"{len(stories)} stories"))
         db.commit()
-        return {"count": len(stories)}
+        return {"count": len(stories), **counts}
 
     def s_arch():
         rd = [{"title": r.title, "type": r.type, "code": r.code}
               for r in db.query(Requirement).filter_by(project_id=pid).all()]
-        arch = gen_architecture(idea, rd, _evidence(db, pid, "architecture deployment auth boundaries"))
+        arch = gen_architecture(idea, rd, rag_evidence(db, pid, "architecture deployment auth boundaries"))
         db.query(ArchitectureRelationship).filter_by(project_id=pid).delete()
         db.query(ArchitectureComponent).filter_by(project_id=pid).delete()
         for c in arch["components"]:
@@ -99,10 +88,7 @@ def run_full_pipeline(db: Session, pid: str, user_id: str = "") -> dict:
             db.add(row)
             db.flush()
             for f in ent["fields"]:
-                is_pk, is_fk = "(pk)" in f, "(fk" in f
-                db.add(DatabaseField(entity_id=row.id, name=f.split("(")[0].strip(),
-                                     dtype="uuid" if is_pk else "text",
-                                     is_pk=is_pk, is_fk=is_fk, references=f))
+                db.add(DatabaseField(entity_id=row.id, **parse_db_field(f)))
         db.add(AgentRun(project_id=pid, agent="database",
                         output_summary=f"{len(spec['entities'])} entities"))
         db.commit()

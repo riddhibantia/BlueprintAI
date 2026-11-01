@@ -32,7 +32,9 @@ services:
       - key: ENV
         value: prod
       - key: CORS_ORIGINS
-        value: https://blueprint-ai.vercel.app
+        sync: false
+      - key: COOKIE_SAMESITE
+        value: none
       - key: LLM_PROVIDER
         value: mock
       - key: OPENAI_API_KEY

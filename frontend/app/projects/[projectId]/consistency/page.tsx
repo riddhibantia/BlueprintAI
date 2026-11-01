@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Search } from "lucide-react";
-import { useIssues, useWrite } from "../../../../lib/query/useArtifacts";
+import { useIssues, useRuns, useWrite } from "../../../../lib/query/useArtifacts";
 import { timeAgo } from "../../../../lib/utils/time";
 import { Card, Metric } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
@@ -16,6 +16,7 @@ const CHECKS = ["req-api", "req-test", "sec-api", "api-db", "prd-db", "req-arch"
 export default function Consistency() {
   const { projectId: pid } = useParams() as { projectId: string };
   const issuesQ = useIssues(pid);
+  const runsQ = useRuns(pid);
   const write = useWrite(pid, ["issues", "activity", "runs"]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "DECIDED">("OPEN");
@@ -43,8 +44,8 @@ export default function Consistency() {
   const warns = open.filter((i: any) => i.severity === "warning").length;
   const errors = open.filter((i: any) => ["conflict", "high"].includes((i.severity || "").toLowerCase())).length;
   const withIssues = new Set(open.map((i: any) => i.check));
-  const passed = CHECKS.filter((c) => !withIssues.has(c)).length;
-
+  const hasRun = (runsQ.data || []).some((r: any) => r.agent === "consistency");
+  const passed = hasRun ? CHECKS.filter((c) => !withIssues.has(c)).length : "—";
   const decide = (id: string, status: string) => write.mutate({
     path: `/projects/${pid}/consistency/issues/${id}`, init: { method: "PATCH", body: JSON.stringify({ status }) },
   });
@@ -63,14 +64,16 @@ export default function Consistency() {
       {write.isError && <div className="mb-3"><ErrorState message={(write.error as Error)?.message} /></div>}
 
       <div className="mb-3.5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-        <Metric label="Checks run" value={CHECKS.length} hint="req-api · req-test · sec-api · api-db · prd-db · req-arch" />
-        <Metric label="Passed" value={passed} />
-        <Metric label="Warnings" value={warns} />
-        <Metric label="Errors" value={errors} />
+        <Metric label="Check categories" value={CHECKS.length} hint="req-api · req-test · sec-api · api-db · prd-db · req-arch" />
+        <Metric label="Open issues" value={hasRun ? open.length : "—"} />
+        <Metric label="Warnings" value={hasRun ? warns : "—"} />
+        <Metric label="Errors" value={hasRun ? errors : "—"} />
       </div>
 
       {issues.length === 0 ? (
-        <EmptyState title="No issues recorded" hint="Run a consistency check after generating the blueprint."
+        <EmptyState title={hasRun ? "No open issues" : "No issues recorded"}
+          hint={hasRun ? "The last check found nothing to flag. Re-run after the next change."
+            : "Run a consistency check after generating the blueprint."}
           action={<Button onClick={() => write.mutate({ path: `/projects/${pid}/consistency/check`, init: { method: "POST" } })}>Run check</Button>} />
       ) : (
         <div className="space-y-3.5">

@@ -3,27 +3,37 @@
 All numbers below are measured by running `evaluation/benchmark.py --full`
 (temp SQLite DB, deterministic mock LLM). No invented metrics — re-run to reproduce.
 
-## Last measured run (2026-09-29, Windows, mock LLM, temp SQLite DB, hash embeddings)
+## Last measured run (2026-10-30, Windows, mock LLM, temp SQLite DB, hash embeddings)
 
 `python evaluation/benchmark.py --full --repeats 3` — 9 green runs, 0 failures.
 
 ### Retrieval (seeded fixture: 12 chunks, 4 topics, 43 queries with known answers)
 
 35 keyword-grounded queries (`std`) + 8 adversarial paraphrases with no keyword
-overlap (`adv`). Reported split — the `adv` subset is *expected* to fail under
-hash embeddings; it quantifies the semantic gap real embeddings close.
+overlap (`adv`). Reported split — the `adv` subset is where semantic embeddings
+still matter.
+
+Retrieval is BM25 (IDF, term-frequency saturation, length normalisation) over
+heading + body, blended with a signed unigram/bigram hash vector (`W_VEC=0.20`).
+The blend was grid-searched on this fixture; pure BM25 scores the same R@3 and
+2 points lower MRR, so the vector earns its small share. Heading-aware scoring
+also fixed the status-code query: `## Methods and status codes` is now the top
+hit instead of `## What every endpoint must prove`.
 
 | Subset | n | Recall@1 | Recall@3 | MRR |
 |---|---|---|---|---|
-| std (keyword-grounded) | 35 | 0.971 | 1.000 | 0.981 |
-| adv (no-overlap paraphrases) | 8 | 0.250 | 0.250 | 0.250 |
-| overall | 43 | 0.837 | 0.860 | 0.845 |
+| std (keyword-grounded) | 35 | 0.943 | 1.000 | 0.971 |
+| adv (no-overlap paraphrases) | 8 | 0.500 | 0.500 | 0.500 |
+| overall | 43 | 0.860 | 0.907 | 0.884 |
 
 History: the first 10-query fixture scored R@3 0.80 and exposed a stemming gap
-(`writes`≠`write`, `idempotent`≠`idempotency`, unsplittable `rate-limit`);
-prefix-token normalization moved it to 0.90 with all 35 tests green, then the
-fixture grew to 43. Only 2/8 adversarial queries hit — e.g. "how to secure API
-writes?" cannot bridge `secure`→`JWT` without semantic vectors.
+(`writes`≠`write`, `idempotent`≠`idempotency`, unsplittable `rate-limit`).
+Prefix-token normalization moved it to 0.90, then the fixture grew to 43.
+Replacing set-overlap with BM25, sharing one stemmer between both halves,
+scoring the heading and halving chunk size took overall R@3 0.860 → 0.907 and
+adversarial recall 0.250 → 0.500. The remaining 4/8 misses ("throttling abusive
+clients?" vs "Rate-limit auth routes") share no terms with their answer; only a
+semantic model closes those.
 
 ### Embedding ablation (same fixture, same code path)
 

@@ -5,6 +5,7 @@ venv/
 .env
 frontend/.env.local
 devblueprint.db*
+blueprintai.db*
 e2e_test.db
 uploads/
 *.pdf

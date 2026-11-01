@@ -1,6 +1,11 @@
-"""High-performance embeddings: OpenAI, Gemini, dense semantic subword vectors, or hash.
+"""Deterministic hashed n-gram embeddings; OpenAI and Gemini optional.
 
-Deterministic, memory-efficient (8GB-friendly), and handles multi-provider fallbacks.
+The hash path is not a semantic model: it is a signed random projection of stemmed
+unigrams and bigrams. IDF lives in the BM25 half of the retriever, so the vector only
+has to preserve term overlap and local order (which is what fixes `rate-limit`/`rate limiting`).
+
+DIM is 512 with bigrams added. Stored vectors of a different length are re-embedded
+on read by the retriever (hash provider only), so existing databases keep working.
 """
 import hashlib
 import logging
@@ -10,56 +15,43 @@ from typing import List
 
 log = logging.getLogger("devblueprint.embeddings")
 
-DIM = 128
+from app.rag.text import terms
+
+DIM = 512
+_W_UNIGRAM = 1.0
+_W_BIGRAM = 0.6
+
+
+def _bucket(feature: str, dim: int) -> tuple[int, float]:
+    """Signed hashing: the sign keeps collisions from always adding up."""
+    digest = hashlib.blake2b(feature.encode("utf-8"), digest_size=8).digest()
+    n = int.from_bytes(digest, "big")
+    return n % dim, (1.0 if (n >> 63) & 1 else -1.0)
 
 
 def _hash_embed(text: str, dim: int = DIM) -> list[float]:
-    """Legacy 128-d token bucket hash embedding."""
+    """Deterministic signed unigram + bigram hash embedding."""
     vec = [0.0] * dim
-    for tok in text.lower().split():
-        h = int(hashlib.md5(tok.encode()).hexdigest(), 16)
-        vec[h % dim] += 1.0
+
+    def add(feature: str, weight: float) -> None:
+        i, sign = _bucket(feature, dim)
+        vec[i] += sign * weight
+
+    toks = terms(text)
+    for tok in toks:
+        add("w:" + tok, _W_UNIGRAM)
+        if len(tok) >= 4:
+            add("p:" + tok[:4], 0.5)
+    for a, b in zip(toks, toks[1:]):
+        add(f"b:{a}_{b}", _W_BIGRAM)
+
     norm = math.sqrt(sum(v * v for v in vec)) or 1.0
     return [v / norm for v in vec]
 
 
 def _dense_local_embed(text: str, dim: int = DIM) -> list[float]:
-    """Dense semantic subword + n-gram vectorizer.
-
-    Deterministic, offline, zero-dependency. Captures morphological
-    and semantic similarity across related terms (e.g. auth/authenticate/login)
-    via subword 3-4 grams, word stems, and normalized random projections.
-    """
-    text = (text or "").strip().lower()
-    if not text:
-        return [0.0] * dim
-    vec = [0.0] * dim
-    words = re.findall(r"[a-z0-9]+", text)
-    if not words:
-        return [0.0] * dim
-
-    for w in words:
-        # Full word representation
-        h_w = int(hashlib.md5(("w:" + w).encode()).hexdigest(), 16)
-        vec[h_w % dim] += 1.0
-
-        # Subword character n-grams for semantic & typo tolerance
-        if len(w) >= 3:
-            for n in (3, 4):
-                for i in range(len(w) - n + 1):
-                    sub = w[i : i + n]
-                    h_sub = int(hashlib.md5(("s:" + sub).encode()).hexdigest(), 16)
-                    vec[h_sub % dim] += 0.35
-
-        # Prefix stem for morphological variants (e.g. encrypt/encryption)
-        if len(w) > 4:
-            pref = w[:4]
-            h_pref = int(hashlib.md5(("p:" + pref).encode()).hexdigest(), 16)
-            vec[h_pref % dim] += 0.5
-
-    # L2 unit normalization
-    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-    return [round(v / norm, 6) for v in vec]
+    """Dense semantic subword + n-gram vectorizer."""
+    return _hash_embed(text, dim)
 
 
 def _openai_embed_batch(texts: list[str]) -> list[list[float]]:
@@ -73,7 +65,6 @@ def _openai_embed_batch(texts: list[str]) -> list[list[float]]:
     client = OpenAI(**kwargs)
     clean_texts = [t[:3000].replace("\n", " ") for t in texts]
     r = client.embeddings.create(model=settings.OPENAI_EMBED_MODEL, input=clean_texts)
-    # Sort by index to maintain ordering
     sorted_data = sorted(r.data, key=lambda x: x.index)
     return [list(item.embedding) for item in sorted_data]
 
@@ -100,7 +91,7 @@ def _gemini_embed_batch(texts: list[str]) -> list[list[float]]:
         elif hasattr(res, "embeddings") and res.embeddings:
             out.append(list(res.embeddings[0].values))
         else:
-            out.append(_dense_local_embed(t))
+            out.append(_hash_embed(t))
     return out
 
 
@@ -113,9 +104,7 @@ def get_embedding_info() -> dict:
         return {"provider": "openai", "model": settings.OPENAI_EMBED_MODEL, "dim": 1536}
     if provider in ("auto", "gemini") and (settings.GEMINI_API_KEY or settings.LLM_API_KEY):
         return {"provider": "gemini", "model": getattr(settings, "GEMINI_EMBED_MODEL", "text-embedding-004"), "dim": 768}
-    if provider == "hash":
-        return {"provider": "hash", "model": "md5-hash-bucket", "dim": DIM}
-    return {"provider": "dense_local", "model": "subword-dense-vectorizer", "dim": DIM}
+    return {"provider": "hash", "model": "blake2b-unigram-bigram", "dim": DIM}
 
 
 def embed_batch(texts: list[str]) -> list[list[float]]:
@@ -130,31 +119,38 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
         try:
             return _openai_embed_batch(texts)
         except Exception as exc:
-            log.warning("OpenAI batch embedding failed (%s), falling back to dense local", type(exc).__name__)
+            log.warning("OpenAI batch embedding failed (%s), falling back to hash", type(exc).__name__)
 
     if (provider in ("auto", "gemini")) and (settings.GEMINI_API_KEY or settings.LLM_API_KEY):
         try:
             return _gemini_embed_batch(texts)
         except Exception as exc:
-            log.warning("Gemini batch embedding failed (%s), falling back to dense local", type(exc).__name__)
+            log.warning("Gemini batch embedding failed (%s), falling back to hash", type(exc).__name__)
 
-    if provider == "hash":
-        return [_hash_embed(t) for t in texts]
-
-    return [_dense_local_embed(t) for t in texts]
+    return [_hash_embed(t) for t in texts]
 
 
 def embed(text: str) -> list[float]:
     """Generate embedding vector for a single text."""
     res = embed_batch([text])
-    return res[0] if res else _dense_local_embed(text)
+    return res[0] if res else _hash_embed(text)
+
+
+def embed_chunk(section: str, content: str) -> list[float]:
+    """Embed the heading with the body.
+
+    A chunk under '## Methods and status codes' should match a status-code
+    query even when the body never repeats the word 'status'. The heading is
+    the cheapest relevance signal in the document.
+    """
+    return embed(f"{section or ''}\n{content or ''}"[:2000])
 
 
 def cosine(a: list[float], b: list[float]) -> float:
     """Cosine similarity for embedding vectors with dimension safety.
 
-    Vectors from different providers or dimension sizes cannot be directly compared;
-    safely returns 0.0 without throwing exceptions.
+    Vectors from different providers (hash 512-d vs OpenAI 1536-d) are not
+    comparable — truncating would silently rank on a prefix. Fail closed.
     """
     if not a or not b or len(a) != len(b):
         return 0.0

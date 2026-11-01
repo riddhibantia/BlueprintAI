@@ -46,7 +46,7 @@ export default function Impact() {
       {err && <div className="mb-3"><ErrorState message={err} /></div>}
       <Card className="mb-3.5">
         <div className="flex flex-wrap items-center gap-2">
-          <SlashInput value={code} onChange={setCode} items={reqCodes} placeholder="/REQ-001" label="Requirement code" />
+          <SlashInput value={code} onChange={(next) => { setCode(next); setResult(null); setErr(""); }} items={reqCodes} placeholder="/REQ-001" label="Requirement code" />
           <Button loading={busy} onClick={analyze}>Analyze impact</Button>
         </div>
       </Card>

@@ -331,6 +331,7 @@ def gen_prd(idea: str, reqs: list[dict], evidence: str = "") -> dict:
     high = [f"[{r['code']}] {r['title']}" for r in approved if r.get("priority") in ("high", "critical")]
     short = (idea[:140] + "…") if len(idea) > 140 else idea
 
+    llm = complete(f"PRD outline for {idea} with {len(reqs)} requirements", evidence)
     # Attempt structured LLM generation if configured
     if settings.use_openai:
         prompt = (
@@ -547,7 +548,7 @@ def gen_prd(idea: str, reqs: list[dict], evidence: str = "") -> dict:
             "Local SQLite development compatibility with PostgreSQL + pgvector in production",
         ],
         "assumptions": [
-            "Users operate standard modern web browsers with active broadband connections",
+            llm["text"][:200] if (evidence and llm.get("text")) else "Users operate standard modern web browsers with active broadband connections",
             "Primary domain entities and schemas are finalized prior to production cutover",
         ],
         "acceptance": [
@@ -641,6 +642,20 @@ def gen_db(idea: str, evidence: str = "") -> dict:
     return {"entities": [{"name": k, "fields": v} for k, v in ents.items()]}
 
 
+def parse_db_field(raw: str) -> dict:
+    """Split a field annotation like `employee_id(fk→User)` into column data.
+
+    The generator's compact notation is for humans; storage keeps the target
+    table on its own so the UI and generated DDL do not print the annotation
+    twice (`REFERENCES employee_id(fk→User)` is not valid SQL).
+    """
+    is_pk, is_fk = "(pk)" in raw, "(fk" in raw
+    name = raw.split("(")[0].strip()
+    target = raw.split("→", 1)[1].rstrip(")").strip() if is_fk and "→" in raw else ""
+    return {"name": name, "dtype": "uuid" if is_pk else "text",
+            "is_pk": is_pk, "is_fk": is_fk, "references": target}
+
+
 def gen_apis(idea: str, evidence: str = "") -> list[dict]:
     """Propose REST endpoints with auth and schemas (§10). Grounded in domain."""
     domain = _detect_domain(f"{idea} {evidence}")
@@ -654,7 +669,7 @@ def gen_apis(idea: str, evidence: str = "") -> list[dict]:
             ("POST", "/trials/{id}/match"),
             ("POST", "/enrollments/{id}/approve"),
         ]
-    elif domain == "fintech":
+    elif domain == "fintech" or "expense" in (idea or "").lower():
         eps = [
             ("POST", "/expenses"),
             ("GET", "/expenses"),

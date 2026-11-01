@@ -1,75 +1,42 @@
-"""Structure-aware chunking: headings, sentence boundaries and token preservation (§18)."""
+"""Structure-aware chunking: headings + pages preserved (A18)."""
 import re
-from typing import List, Dict
 
-HEADING = re.compile(
-    r"^(#{1,4}\s+.+|[A-Z][A-Z0-9 \-_/]{4,80}$|\d+(\.\d+)*\s+[A-Z].+)$",
-    re.M,
-)
+HEADING = re.compile(r"^(#{1,4}\s+.+|[A-Z][A-Z0-9 \-_/]{4,80}$|\d+(\.\d+)*\s+[A-Z].+)$", re.M)
+MIN_SECTION = 80  # a heading only splits off a section that says something
 
 
-def _find_split_point(text: str, target: int) -> int:
-    """Find a natural break (paragraph, sentence, or word boundary) near the target."""
-    if len(text) <= target:
-        return len(text)
-    window_start = int(target * 0.70)
-    window_end = min(len(text), int(target * 1.25))
-    sub = text[window_start:window_end]
+def chunk_text(text: str, target: int = 500, overlap: int = 80) -> list[dict]:
+    """Split on headings first, then by size — sections survive chunking (A18).
 
-    # Look for paragraph or sentence endings
-    for p in ("\n\n", ".\n", ". ", "? ", "! "):
-        idx = sub.rfind(p)
-        if idx != -1:
-            return window_start + idx + len(p)
-
-    # Fallback to word boundary
-    space_idx = text[:target].rfind(" ")
-    if space_idx > target * 0.55:
-        return space_idx + 1
-
-    return target
-
-
-def chunk_text(text: str, target: int = 900, overlap: int = 120) -> list[dict]:
-    """Split on headings first, then natural boundaries — sections survive chunking (§18)."""
+    Chunks are smaller than they used to be (500 vs 900 chars) so one chunk
+    holds one rule instead of averaging four. The heading becomes the chunk's
+    `section` and is scored with the body by the retriever.
+    """
     text = (text or "").strip()
     if not text:
         return []
-
-    parts, cur_sec, buf = [], "general", ""
+    parts: list[dict] = []
+    cur_sec = "Introduction"
+    buf = ""
     for line in text.splitlines():
         stripped = line.strip()
         if HEADING.match(stripped):
-            clean_sec = re.sub(r"^[#\d\.\s]+", "", stripped).strip() or stripped
-            if not buf.strip():
-                cur_sec = clean_sec[:120]
-                continue
-            elif len(buf.strip()) > 100:
+            if buf.strip() and len(buf.strip()) >= MIN_SECTION:
                 parts.append({"section": cur_sec, "content": buf.strip()})
-                cur_sec, buf = clean_sec[:120], ""
+                buf = ""
+            cur_sec = stripped[:120]
         buf += line + "\n"
         if len(buf) >= target * 1.6:
             parts.append({"section": cur_sec, "content": buf.strip()})
-            buf = buf[-overlap:] if len(buf) > overlap else ""
-
+            buf = ""
     if buf.strip():
         parts.append({"section": cur_sec, "content": buf.strip()})
 
-    # Hard-split oversized sections on clean sentence / word boundaries
     out = []
     for p in parts:
-        c = p["content"]
-        while len(c) > target * 1.5:
-            sp = _find_split_point(c, target)
-            chunk_slice = c[:sp].strip()
-            if chunk_slice:
-                out.append({"section": p["section"], "content": chunk_slice})
-            # Step forward with overlap respecting word boundaries
-            ov_start = max(0, sp - overlap)
-            while ov_start < len(c) and c[ov_start] not in (" ", "\n") and ov_start < sp:
-                ov_start += 1
-            c = c[ov_start:].strip()
-        if c.strip():
-            out.append({"section": p["section"], "content": c.strip()})
-
+        content = p["content"]
+        while len(content) > target * 1.5:
+            out.append({"section": p["section"], "content": content[:target]})
+            content = content[target - overlap:]
+        out.append({"section": p["section"], "content": content})
     return [o for o in out if o["content"].strip()]

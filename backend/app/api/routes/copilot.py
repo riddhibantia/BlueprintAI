@@ -12,14 +12,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
 from app.api.deps import current_user, project_or_403
-from app.models.db import (Project, Requirement, UserStory, ApiEndpoint, ConsistencyIssue,
-                           Document, DocumentChunk, AgentRun)
+from app.models.db import (Project, Requirement, UserStory, ApiEndpoint, ConsistencyIssue)
 from app.traceability.engine import coverage
-from app.rag.retriever import retrieve, get_evidence
+from app.rag.context import project_chunks
+from app.rag.retriever import retrieve
 
 router = APIRouter(tags=["copilot"])
 
-logger = logging.getLogger("devblueprint.copilot")
+logger = logging.getLogger("blueprintai.copilot")
 
 
 class AskIn(BaseModel):
@@ -47,7 +47,8 @@ def _snapshot(db: Session, pid: str) -> dict:
 
 def _evidence(db: Session, pid: str, question: str) -> list[dict]:
     """Top retrieved chunks (source + section + excerpt) for grounding."""
-    return get_evidence(db, pid, question, k=3)
+    chunks = project_chunks(db, pid)
+    return retrieve(chunks, question, k=3) if chunks else []
 
 
 def rule_answer(snap: dict, page: str, selection: str) -> tuple[str, list[dict]]:

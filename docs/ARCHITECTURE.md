@@ -16,7 +16,7 @@ FastAPI (backend/app/main.py, 11 routers)
   │                       rule checks, affected-artifact analysis (deterministic, §30)
   └── Export — PRD / architecture PDF via ReportLab, Archify diagram IR
   ▼
-Postgres + pgvector (prod) / SQLite (local dev, devblueprint.db)
+Postgres + pgvector (prod) / SQLite (local dev, blueprintai.db)
 ```
 
 ## Request flow
@@ -29,6 +29,7 @@ Postgres + pgvector (prod) / SQLite (local dev, devblueprint.db)
 
 ## RAG + LangGraph
 
-- `backend/app/rag/{chunking,embeddings,retriever}.py` — chunking, hash fallback + OpenAI embeddings.
+- `backend/app/rag/{chunking,text,embeddings,retriever}.py` — heading-aware chunking, a shared stemmer/tokenizer, hash fallback + OpenAI embeddings, and BM25 + hashed-vector hybrid retrieval.
+- `backend/app/rag/{ingest,standards_pack}.py` + `rag/standards/*.md` — one ingestion path for uploads and the built-in standards pack; the pack is seeded on project creation so retrieval is grounded before the user uploads anything, and `POST /projects/{id}/documents/seed` re-installs it idempotently.
 - `backend/app/agents/{base,generators}.py` — LangGraph workflow; falls back to sequential pipeline and reports which path ran in `evaluation/benchmark.py`.
 - Full spec: `docs/SPEC.md`. Security boundaries: `docs/SECURITY.md`. Measured numbers: `docs/EVALUATION.md`.

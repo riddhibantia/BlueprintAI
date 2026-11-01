@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { FileUp, Search, Trash2, Database, Cpu, Layers, Sparkles, CheckCircle2 } from "lucide-react";
 import { useDocuments } from "../../../../lib/query/useArtifacts";
-import { queryKnowledge, uploadDocument, deleteDocument, getKnowledgeStats } from "../../../../lib/api/endpoints";
+import { queryKnowledge, uploadDocument, deleteDocument, getKnowledgeStats, seedStandards } from "../../../../lib/api/endpoints";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { Badge } from "../../../../components/ui/badge";
@@ -16,10 +16,10 @@ interface KnowledgeStats {
   document_count: number;
   chunk_count: number;
   embedding_provider: string;
-  embedding_model: string;
-  embedding_dim: number;
-  vector_db: string;
-  storage_mode: string;
+  embedding_model?: string;
+  embedding_dim?: number;
+  vector_db?: string;
+  storage_mode?: string;
 }
 
 export default function Knowledge() {
@@ -27,20 +27,21 @@ export default function Knowledge() {
   const docsQ = useDocuments(pid);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<any[]>([]);
   const [note, setNote] = useState("");
-  const [err, setErr] = useState("");
   const [querying, setQuerying] = useState(false);
+  const [err, setErr] = useState("");
   const [fileKey, setFileKey] = useState(0);
 
   const fetchStats = async () => {
     try {
-      const data = await getKnowledgeStats(pid);
-      setStats(data);
+      const res = await getKnowledgeStats(pid);
+      setStats(res as KnowledgeStats);
     } catch {
-      // Non-blocking telemetry
+      // Best effort stats inspection
     }
   };
 
@@ -48,13 +49,14 @@ export default function Knowledge() {
     fetchStats();
   }, [pid]);
 
-  if (docsQ.isLoading) return <LoadingState stage="Loading knowledge base" />;
-  if (docsQ.isError) return <ErrorState message={(docsQ.error as Error)?.message} onRetry={() => docsQ.refetch()} />;
   const docs = docsQ.data || [];
-  const chunks = docs.reduce((a: number, d: any) => a + (d.chunks || 0), 0);
+  const chunks = docs.reduce((acc: number, d: any) => acc + (d.chunks || 0), 0);
 
   const doUpload = async (f: File) => {
-    if (f.size > MAX_UPLOAD_BYTES) { setErr("File exceeds the 15MB limit."); return; }
+    if (f.size > MAX_UPLOAD_BYTES) {
+      setErr(`"${f.name}" is ${(f.size / 1024 / 1024).toFixed(1)}MB. Max upload is 15MB.`);
+      return;
+    }
     setUploading(true);
     setErr("");
     try {
@@ -66,6 +68,20 @@ export default function Knowledge() {
       setErr(e instanceof Error ? e.message : "Upload failed.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const seedDefaults = async () => {
+    setSeeding(true);
+    setErr("");
+    try {
+      await seedStandards(pid);
+      await docsQ.refetch();
+      await fetchStats();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not install the default standards.");
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -87,18 +103,17 @@ export default function Knowledge() {
   const query = async () => {
     if (!q.trim() || querying) return;
     setQuerying(true);
-    setErr("");
+    setNote("");
     try {
-      const r = await queryKnowledge(pid, q.trim(), 5);
+      const r = await queryKnowledge(pid, q);
       setHits(r.hits || []);
-      setNote(r.note || "");
+      setNote(r.hits?.length ? `Top ${r.hits.length} relevant chunks for "${q}"` : `No matching evidence found for "${q}"`);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Search failed.");
+      setErr(e instanceof Error ? e.message : "Query failed.");
     } finally {
       setQuerying(false);
     }
   };
-
 
   return (
     <div>
@@ -117,7 +132,7 @@ export default function Knowledge() {
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1 text-[11.5px] font-medium text-secondary">
               <Cpu size={13} className="text-accent" />
-              {stats.embedding_provider} ({stats.embedding_dim}-d)
+              {stats.embedding_provider}
             </span>
           </div>
         )}
@@ -145,7 +160,11 @@ export default function Knowledge() {
 
           <div className="mt-3 grid gap-2">
             {docs.length === 0 && !uploading && (
-              <EmptyState title="No engineering documents yet" hint="Upload architecture standards, API contracts, security compliance, or product specs." />
+              <EmptyState
+                title="No engineering documents yet"
+                hint="Install the built-in API, security, testing and data standards, or upload your own."
+                action={<Button size="sm" onClick={seedDefaults} loading={seeding}>Load default standards</Button>}
+              />
             )}
             {docs.map((d: any) => (
               <div key={d.id} className="flex items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3.5 py-2.5 text-[13px] hover:border-border-strong transition-colors">
@@ -155,6 +174,11 @@ export default function Knowledge() {
                     <span className="shrink-0 rounded-md bg-subtle px-1.5 py-0.5 text-[11px] font-mono text-secondary">
                       {d.chunks} chunks
                     </span>
+                    {d.source === "default-pack" && (
+                      <span className="rounded-md border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+                        built-in
+                      </span>
+                    )}
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
                     <span>SHA: {d.checksum}</span>
@@ -179,60 +203,24 @@ export default function Knowledge() {
         </Card>
 
         <Card>
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-[15px] font-semibold"><Search size={15} />Semantic Evidence Search</h3>
-            <span className="text-[11.5px] text-secondary">Dense Vector + BM25 Hybrid</span>
-          </div>
-
+          <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold"><Search size={15} />Semantic Evidence Search</h3>
+          <p className="mb-2 text-[12.5px] text-secondary">Test how agents retrieve context from your engineering standards corpus.</p>
           <div className="flex gap-2">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+            <input type="text" value={q} onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && query()}
-              placeholder="e.g. What authentication & token expiration is required?"
-              aria-label="Knowledge query"
-              className="min-w-0 flex-1 rounded-xl border border-border bg-canvas px-3.5 py-2 text-[13px] placeholder:text-muted focus:border-accent focus:outline-none transition-colors"
-            />
-            <Button onClick={query} loading={querying} disabled={!q.trim()}>Search</Button>
+              placeholder="e.g. rate limits, token auth, password hashing"
+              className="h-10 flex-1 rounded-md border border-border bg-canvas px-3 py-1.5 text-[13px] focus:border-primary focus:outline-none" />
+            <Button size="sm" onClick={query} loading={querying}>Search</Button>
           </div>
-
-          {note && <p className="mt-2.5 text-[12.5px] text-secondary italic">{note}</p>}
-
-          <div className="mt-2.5 space-y-2.5">
+          {note && <p className="mt-2 text-[12px] text-secondary">{note}</p>}
+          <div className="mt-2.5 max-h-[380px] space-y-2 overflow-y-auto">
             {hits.map((h, i) => (
-              <div key={i} className="rounded-xl border border-border bg-canvas p-3 transition-colors hover:border-border-strong">
-                <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/50 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-[12px] text-accent truncate">{h.source}</span>
-                    {h.section && (
-                      <span className="rounded bg-subtle px-1.5 py-0.5 text-[10.5px] text-secondary font-mono truncate max-w-[180px]">
-                        {h.section}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {h.similarity !== undefined && (
-                      <span className="text-[10.5px] text-muted">
-                        v: {Math.round(h.similarity * 100)}% · bm25: {Math.round(h.lexical * 100)}%
-                      </span>
-                    )}
-                    <Badge
-                      value={`${Math.round(h.score * 100)}% Match`}
-                      tone={h.score >= 0.70 ? "ok" : h.score >= 0.40 ? "warn" : "neutral"}
-                    />
-                  </div>
+              <div key={i} className="rounded-lg border border-border bg-canvas p-2.5 text-[12px]">
+                <div className="mb-1 flex items-center justify-between text-muted">
+                  <span className="font-semibold text-primary">{h.source || "doc"} · {h.section || "Excerpt"}</span>
+                  <span className="font-mono text-[11px] text-accent">Score: {(h.score ?? 0).toFixed(3)}</span>
                 </div>
-
-                <p className="mt-2 text-[12.5px] leading-relaxed text-secondary whitespace-pre-wrap">
-                  {h.content}
-                </p>
-
-                {h.highlights && h.highlights.length > 0 && (
-                  <div className="mt-2 rounded-lg bg-surface/70 p-2 text-[11.5px] text-primary border border-border/40">
-                    <span className="font-medium text-accent">Key Match: </span>
-                    {h.highlights[0]}
-                  </div>
-                )}
+                <p className="text-secondary leading-relaxed line-clamp-4">{h.content}</p>
               </div>
             ))}
           </div>

@@ -182,9 +182,19 @@ export function Tooltip({ tip, children }: { tip: string; children: ReactNode })
 }
 
 /** Dropdown menu with roving arrow-key focus, Home/End, and Escape (§40).
- *  `labelText` supplies the accessible name when `label` is icon/visual only
- *  (an inline `aria-label` on a nested span does not name the button). */
-export function Dropdown({ label, labelText, items }: { label: ReactNode; labelText: string; items: { label: string; onSelect: () => void }[] }) {
+ *  `labelText` or `ariaLabel` supplies the accessible name when `label` is icon/visual only. */
+export function Dropdown({
+  label,
+  labelText,
+  ariaLabel,
+  items,
+}: {
+  label: ReactNode;
+  labelText?: string;
+  ariaLabel?: string;
+  items: { label: string; onSelect: () => void }[];
+}) {
+  const accessibleLabel = ariaLabel || labelText || (typeof label === "string" ? label : undefined);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -223,7 +233,7 @@ export function Dropdown({ label, labelText, items }: { label: ReactNode; labelT
 
   return (
     <div ref={ref} className="relative inline-block">
-      <button ref={triggerRef} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} aria-label={labelText}
+      <button ref={triggerRef} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} aria-label={accessibleLabel}
         className="inline-flex min-h-9 items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-[13px] font-medium transition-colors hover:border-border-strong hover:bg-elevated active:scale-[0.98]">
         {label}
       </button>

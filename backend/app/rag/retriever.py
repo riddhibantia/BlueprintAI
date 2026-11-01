@@ -1,101 +1,103 @@
-"""Hybrid retrieval engine: Dense Vector + BM25 Lexical with RRF and highlighting."""
-import re
+"""Hybrid retrieval: BM25 over the project corpus + hashed-vector cosine.
+
+The lexical half is real BM25 (IDF, term-frequency saturation, length
+normalisation) rather than raw set overlap, so a common word like `endpoint`
+cannot outweigh a rare one like `idempotency`. The vector half is a signed
+n-gram sketch (see `embeddings.py`); it adds local order, not semantics.
+
+The blend weight was picked on the 43-query fixture in `evaluation/benchmark.py`
+and is the single knob to re-tune if the corpus changes shape.
+"""
+import math
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from app.rag.embeddings import embed, cosine
-from app.rag.vector_store import (
-    extract_tokens,
-    extract_stems,
-    compute_bm25_scores,
-    compute_vector_similarities,
-    find_highlights,
-)
+from app.rag.embeddings import DIM, cosine, embed, embed_chunk
+from app.rag.text import terms
+
+K1 = 1.2   # BM25 term-frequency saturation
+B = 0.75   # BM25 length normalisation
+W_VEC = 0.20  # vector share; BM25 carries exact terms (tuned on the fixture)
 
 
-def _tokens(text: str) -> set[str]:
-    """Lowercase alphanumeric tokens; hyphens/slashes split (rate-limit → rate, limit)."""
-    return set(re.findall(r"[a-z0-9]+", (text or "").lower()))
+def _bm25(docs: list[list[str]], query: list[str]) -> list[float]:
+    """BM25 scores in [0, 1], normalised by the score of a chunk holding every term."""
+    n = len(docs)
+    if not n:
+        return []
+    avgdl = sum(len(d) for d in docs) / n or 1.0
 
+    df: dict[str, int] = {}
+    for d in docs:
+        for t in set(d):
+            df[t] = df.get(t, 0) + 1
 
-def _stems(words: set[str]) -> set[str]:
-    """Light stemming: 5-char prefixes for long words, exact forms for short ones."""
-    out = set()
-    for w in words:
-        out.add(w if len(w) <= 5 else w[:5])
+    def idf(t: str) -> float:
+        return math.log(1 + (n - df.get(t, 0) + 0.5) / (df.get(t, 0) + 0.5))
+
+    present = [t for t in query if df.get(t, 0)]
+    ceiling = sum(idf(t) for t in present)
+    if not ceiling:
+        return [0.0] * n
+
+    out = []
+    for d in docs:
+        tf: dict[str, int] = {}
+        for t in d:
+            tf[t] = tf.get(t, 0) + 1
+        score = 0.0
+        for t in present:
+            f = tf.get(t, 0)
+            if f:
+                score += idf(t) * (f * (K1 + 1)) / (
+                    f + K1 * (1 - B + B * len(d) / avgdl))
+        out.append(score / ceiling)
     return out
 
 
-def retrieve(chunks: list[dict], query: str, k: int = 5) -> list[dict]:
-    """Hybrid retrieval: Dense Vector + BM25 Lexical overlap with section boosting.
+def retrieve(chunks: list[dict], query: str, k: int = 5,
+             w_vec: float = W_VEC) -> list[dict]:
+    """Rank stored chunks for a query; heading and body are scored together.
 
-    Prefers caller-supplied stored embeddings (one vector per chunk, computed
-    at ingest) over re-embedding every chunk per query.
+    Prefers caller-supplied stored embeddings (computed at ingest) over
+    re-embedding every chunk per query. A stored vector of the wrong length
+    (an old 128-d row, or a provider switch) is re-embedded on read when the
+    hash provider is active; under OpenAI it fails closed to lexical-only so a
+    query never fans out into hundreds of API calls.
     """
-    if not chunks or not (query or "").strip():
+    if not chunks:
         return []
 
-    q_clean = query.strip()
-    qv = embed(q_clean)
-    q_words = [w for w in extract_tokens(q_clean) if len(w) > 2]
-    q_words_set = set(q_words)
-    q_stems = extract_stems(q_words)
+    qterms = sorted(set(terms(query)))
+    docs = [terms(f"{c.get('section', '')}\n{c.get('content', '')}") for c in chunks]
+    lexical = _bm25(docs, qterms)
 
-    # Prepare chunk contents and candidate embeddings
-    contents = [c.get("content", "") for c in chunks]
-    candidate_embeddings = []
-    for c, content in zip(chunks, contents):
-        stored = c.get("embedding")
-        if isinstance(stored, list) and stored:
-            candidate_embeddings.append(stored)
-        else:
-            candidate_embeddings.append(embed(content[:1000]))
-
-    # Compute vector similarities (numpy-accelerated where possible)
-    vec_sims = compute_vector_similarities(qv, candidate_embeddings)
-
-    # Compute lexical BM25 scores
-    corpus_tokens = [extract_tokens(cnt) for cnt in contents]
-    bm25_sims = compute_bm25_scores(q_words, corpus_tokens)
+    qv = embed(query)
+    # A hash-length query vector means the hash path answered (configured, or
+    # OpenAI failed and fell back), so re-embedding stale rows is free.
+    hash_provider = len(qv) == DIM
 
     scored = []
-    for i, c in enumerate(chunks):
-        cnt = contents[i]
-        v_sim = vec_sims[i]
-        b_sim = bm25_sims[i]
+    for c, lex in zip(chunks, lexical):
+        stored = c.get("embedding")
+        if isinstance(stored, list) and len(stored) == len(qv):
+            lv = stored
+        elif hash_provider:
+            lv = embed_chunk(c.get("section", ""), c.get("content", ""))
+        else:
+            lv = []
+        vec = max(0.0, cosine(qv, lv))
+        scored.append(((w_vec * vec + (1 - w_vec) * lex, vec, lex), c))
 
-        # Stem matching bonus
-        c_stems = extract_stems(corpus_tokens[i])
-        lex_overlap = len(q_stems & c_stems) / max(1, len(q_stems)) if q_stems else 0.0
-
-        # Section boost if section title contains query keywords
-        sec = str(c.get("section", "")).lower()
-        sec_boost = 0.15 if any(qw in sec for qw in q_words) else 0.0
-
-        # Hybrid fusion
-        lex_combined = max(b_sim, lex_overlap)
-        final_score = (0.65 * v_sim) + (0.35 * lex_combined) + sec_boost
-        final_score = min(1.0, max(0.0, final_score))
-
-        highlights = find_highlights(cnt, q_words_set)
-
-        scored.append({
-            "content": cnt[:1200],
-            "section": c.get("section", ""),
-            "score": round(final_score, 4),
-            "similarity": round(v_sim, 4),
-            "lexical": round(lex_combined, 4),
-            "source": c.get("source", ""),
-            "highlights": highlights,
-            "raw_chunk": c,
-        })
-
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    return scored[:k]
+    scored.sort(key=lambda x: x[0][0], reverse=True)
+    return [{"content": c["content"][:1200], "section": c.get("section", ""),
+             "score": round(s, 4), "similarity": round(v, 4), "lexical": round(l, 4),
+             "source": c.get("source", "")}
+            for (s, v, l), c in scored[:k]]
 
 
 def get_evidence(db: Session, project_id: str, query: str, k: int = 5) -> list[dict]:
-    """Retrieve top-k relevant knowledge chunks for a project query with hybrid scoring."""
+    """Retrieve top-k relevant knowledge chunks for a project query."""
     from app.models.db import Document, DocumentChunk
 
     rows = (

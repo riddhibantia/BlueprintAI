@@ -89,10 +89,32 @@ def test_audit_trail_written():
         db.close()
     assert {"user.register", "project.create", "requirements.generate"} <= actions
 
+def test_story_regeneration_refreshes_text_and_reopens_approval(client):
+    r = client.post("/auth/register", json={"email": "stale@dev.blue", "password": "pass12345"})
+    h = {"Authorization": f"Bearer {r.json()['token']}"}
+    p = client.post("/projects", json={"name": "Stale", "product_idea": "tutoring marketplace"}, headers=h).json()
+    client.post(f"/projects/{p['id']}/requirements/generate", json={"answers": ""}, headers=h)
+    client.post(f"/projects/{p['id']}/stories/generate", headers=h)
+    stories = client.get(f"/projects/{p['id']}/stories", headers=h).json()
+    target = stories[0]
+    assert client.post(f"/projects/{p['id']}/stories/{target['code']}/approve", headers=h).status_code == 200
+
+    req = next(q for q in client.get(f"/projects/{p['id']}/requirements", headers=h).json()
+               if q["code"] == target["req"])
+    r = client.put(f"/requirements/{req['id']}", headers=h,
+                   json={"title": "Renamed capability", "expected_version": req["version"]})
+    assert r.status_code == 200, r.text
+
+    client.post(f"/projects/{p['id']}/stories/generate", headers=h)
+    refreshed = {s["code"]: s for s in client.get(f"/projects/{p['id']}/stories", headers=h).json()}
+    assert refreshed[target["code"]]["title"] == "Renamed capability"
+    assert refreshed[target["code"]]["status"] == "draft"  # approval covered the old text
+    assert len(refreshed) == len(stories)
+
 
 def test_document_lifecycle_and_deletion(client):
     pid, h = PID["id"], H["h"]
-    r = client.post(f"/projects/{pid}/documents", files={"file": ("guide.txt", b"# Standards\nMust use JWT auth for all APIs.")}, headers=h)
+    r = client.post(f"/projects/{pid}/documents/upload", files={"file": ("guide.txt", b"# Standards\nMust use JWT auth for all APIs.")}, headers=h)
     assert r.status_code == 200
     doc_id = r.json()["document_id"]
     docs = client.get(f"/projects/{pid}/documents", headers=h).json()
@@ -132,5 +154,3 @@ def test_artifact_version_history_and_rollback(client):
     r_rb = client.post(f"/projects/{pid}/versions/{vid}/rollback", headers=h)
     assert r_rb.status_code == 200
     assert r_rb.json()["status"] == "rolled_back"
-
-

@@ -1,4 +1,4 @@
-# DevBlueprint — Master Project Specification
+# BlueprintAI — Master Project Specification
 
 ## AI-Powered Software Product Lifecycle & Engineering Blueprint Platform
 
@@ -13,7 +13,7 @@
 
 ## 1.1 Product Name
 
-**DevBlueprint**
+**BlueprintAI**
 
 ## 1.2 Full Project Title
 
@@ -21,11 +21,11 @@
 
 ## 1.3 One-Line Product Definition
 
-DevBlueprint transforms a software product idea into a structured, traceable, validated engineering blueprint covering requirements, architecture, database design, APIs, security, implementation planning, and testing.
+BlueprintAI transforms a software product idea into a structured, traceable, validated engineering blueprint covering requirements, architecture, database design, APIs, security, implementation planning, and testing.
 
 ## 1.4 Core Product Principle
 
-DevBlueprint is **not** a generic AI chatbot and is not intended to compete with ChatGPT/Claude on general text generation.
+BlueprintAI is **not** a generic AI chatbot and is not intended to compete with ChatGPT/Claude on general text generation.
 
 Its value comes from maintaining a persistent, structured software-project model and connecting:
 
@@ -48,7 +48,7 @@ General-purpose AI can generate each artifact, but the artifacts can become inco
 - AI-generated architecture may not follow an organization's engineering standards.
 - Developers may have difficulty understanding which design artifacts are affected by a requirement change.
 
-DevBlueprint addresses this by creating a connected software-product blueprint rather than isolated AI-generated documents.
+BlueprintAI addresses this by creating a connected software-product blueprint rather than isolated AI-generated documents.
 
 ---
 
@@ -103,7 +103,7 @@ Typical workflow:
 Prompt → AI Response
 ```
 
-## DevBlueprint
+## BlueprintAI
 
 ```text
 Product Idea
@@ -127,7 +127,7 @@ Impact Analysis
 Engineering Blueprint
 ```
 
-DevBlueprint should not claim that its underlying LLM is better than ChatGPT or Claude.
+BlueprintAI should not claim that its underlying LLM is better than ChatGPT or Claude.
 
 The differentiation is the **software-engineering system around the model**.
 
@@ -480,7 +480,7 @@ Database:
 
 > Receipt binary data is stored directly in PostgreSQL.
 
-DevBlueprint should report:
+BlueprintAI should report:
 
 ```text
 Potential Consistency Issue
@@ -500,7 +500,7 @@ The AI may suggest resolutions, but the user decides what to accept.
 
 # 17. Impact Analysis
 
-When a requirement changes, DevBlueprint identifies affected artifacts.
+When a requirement changes, BlueprintAI identifies affected artifacts.
 
 Example:
 
@@ -993,7 +993,7 @@ Avoid decorative display serifs or "AI pitch deck" typography — this is a work
 
 - Persistent left nav rail for the module list in Section 29.3, not a hamburger menu.
 - A right-hand contextual panel is reserved for the AI Assistant and "linked artifacts" — keeping generation/chat physically separate from the authoritative, human-approved content in the main panel reinforces the human-in-the-loop model (Section 22).
-- Tables and structured editors (requirements, API specs, DB schema) over free-text blocks wherever the underlying data is structured — this is what separates DevBlueprint from a chat transcript.
+- Tables and structured editors (requirements, API specs, DB schema) over free-text blocks wherever the underlying data is structured — this is what separates BlueprintAI from a chat transcript.
 
 **Components & states**
 
@@ -1525,7 +1525,7 @@ Do not implement these until the MVP is stable.
 # 41. Repository Structure
 
 ```text
-devblueprint/
+blueprintai/
 │
 ├── backend/
 │   ├── app/
@@ -1628,7 +1628,7 @@ The project is complete when:
 
 Final resume project title:
 
-**DevBlueprint — AI-Powered Software Product Lifecycle & Engineering Blueprint Platform**
+**BlueprintAI — AI-Powered Software Product Lifecycle & Engineering Blueprint Platform**
 
 Potential resume description after implementation:
 
@@ -1640,7 +1640,7 @@ Only add numerical metrics after they are actually measured.
 
 # 45. Final Product Statement
 
-DevBlueprint is not an attempt to replace ChatGPT, Claude, or coding assistants.
+BlueprintAI is not an attempt to replace ChatGPT, Claude, or coding assistants.
 
 It is an **engineering system around AI**.
 

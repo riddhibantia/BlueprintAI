@@ -1,7 +1,7 @@
 """Full data model per spec §25/§26. SQLite-compatible; pgvector used only on Postgres."""
 import uuid
 from datetime import datetime
-from sqlalchemy import (Column, String, Text, DateTime, ForeignKey, Integer, Float, Boolean, JSON)
+from sqlalchemy import (Column, String, Text, DateTime, ForeignKey, Integer, Boolean, JSON)
 from app.core.database import Base
 
 
