@@ -35,6 +35,17 @@ def test_ask_without_key_uses_real_data(client):
     assert "evidence" in r
 
 
+def test_ask_grounds_answer_from_indexed_standards(client):
+    pid, h = PID["id"], H["h"]
+    r = client.post(f"/projects/{pid}/copilot/ask",
+                    json={"question": "What is our password hashing standard?", "page": "", "selection": ""},
+                    headers=h).json()
+    assert r["mode"] == "rule"
+    assert "Grounded finding from knowledge base" in r["answer"]
+    assert "security-baseline.md" in r["answer"]
+    assert len(r["evidence"]) > 0
+
+
 def test_ask_requires_auth():
     with TestClient(app) as fresh:
         assert fresh.post("/projects/x/copilot/ask", json={"question": "hi"}).status_code in (401, 404)

@@ -51,10 +51,25 @@ def _evidence(db: Session, pid: str, question: str) -> list[dict]:
     return retrieve(chunks, question, k=3) if chunks else []
 
 
-def rule_answer(snap: dict, page: str, selection: str) -> tuple[str, list[dict]]:
-    """Deterministic Copilot: answers from live project data, states its limits."""
-    lines = [f"Rule-based Copilot · {snap['project']} · {snap['requirements']} requirements ({snap['approved']} approved), "
-             f"{snap['stories']} stories, {snap['apis']} APIs, traceability {snap['coverage_pct']}%."]
+def rule_answer(snap: dict, page: str, selection: str, question: str = "", evidence: list[dict] = None) -> tuple[str, list[dict]]:
+    """Deterministic Copilot: answers from live project data and indexed knowledge, states its limits."""
+    lines = []
+    
+    # Ground direct answers from indexed knowledge base if available
+    if question and evidence:
+        top_hits = [h for h in evidence if h.get("content")]
+        if top_hits:
+            best = top_hits[0]
+            src = best.get("source", "Standard")
+            sec = best.get("section", "").lstrip("# ").strip()
+            citation = f"**[{src}{f' · {sec}' if sec else ''}]**"
+            snippet = best.get("content", "").strip().split("\n\n")[0].strip()
+            if len(snippet) > 280:
+                snippet = snippet[:280] + "…"
+            lines.append(f"Grounded finding from knowledge base ({citation}):\n> \"{snippet}\"\n")
+
+    lines.append(f"Rule-based Copilot · {snap['project']} · {snap['requirements']} requirements ({snap['approved']} approved), "
+                 f"{snap['stories']} stories, {snap['apis']} APIs, traceability {snap['coverage_pct']}%.")
     if page:
         lines.append(f"Viewing: {page}" + (f" · selected {selection}" if selection else "") + ".")
     if snap["orphans"]:
@@ -81,15 +96,24 @@ def ai_answer(snap: dict, question: str, evidence: list[dict]) -> dict:
            f"({snap['approved']} approved). Stories: {snap['stories']}. APIs: {snap['apis']}. "
            f"Traceability: {snap['coverage_pct']}%. Orphans: {snap['orphans']}. "
            f"Open issues: {[i['description'][:200] for i in snap['open_issues']]}. ")
-    ev = "\n".join(f"- [{h.get('source')}] {h.get('content', '')[:400]}" for h in evidence)
-    system = ("You are Blueprint Copilot, an assistant inside an engineering workspace. "
-              "Answer only from the project context and evidence below. If the answer is not "
-              "supported, say what is missing instead of guessing. Be concise.")
+    ev_lines = []
+    for h in evidence:
+        src = h.get("source", "doc")
+        sec = h.get("section", "").lstrip("# ").strip()
+        tag = f"[{src} § {sec}]" if sec else f"[{src}]"
+        ev_lines.append(f"- {tag}: {h.get('content', '')[:800]}")
+    ev = "\n".join(ev_lines)
+    system = (
+        "You are Blueprint Copilot, a senior software architect and engineering assistant. "
+        "Answer the user's question directly and precisely using the project context and retrieved evidence below. "
+        "Explicitly cite the source document and section (e.g. [api-conventions.md §Methods and status codes]) whenever referring to a standard. "
+        "If the answer is not supported by the context or evidence, clearly explain what requirement or standard is missing. Be concise."
+    )
     r = client.chat.completions.create(
         model=settings.copilot_model,
         messages=[{"role": "system", "content": system},
                   {"role": "user", "content": ctx + "\nEvidence:\n" + ev + f"\nQuestion: {question}"}],
-        temperature=0.2, max_tokens=500)
+        temperature=0.2, max_tokens=600)
     text = (r.choices[0].message.content or "").strip()
     tokens = getattr(r.usage, "total_tokens", 0) if getattr(r, "usage", None) else 0
     return {"text": text, "tokens": int(tokens or 0)}
@@ -113,7 +137,7 @@ def ask(pid: str, body: AskIn, db: Session = Depends(get_db), user=Depends(curre
     snap = _snapshot(db, pid)
     evidence = _evidence(db, pid, body.question)
     if not settings.copilot_configured:
-        text, _ = rule_answer(snap, body.page, body.selection)
+        text, _ = rule_answer(snap, body.page, body.selection, question=body.question, evidence=evidence)
         return {"mode": "rule", "answer": text, "evidence": evidence,
                 "latency_ms": int((time.time() - t0) * 1000)}
     try:
@@ -123,6 +147,6 @@ def ask(pid: str, body: AskIn, db: Session = Depends(get_db), user=Depends(curre
     except Exception as exc:
         # Serve the deterministic answer; provider internals stay server-side.
         logger.warning("copilot ai_answer failed: %s", type(exc).__name__)
-        text, _ = rule_answer(snap, body.page, body.selection)
+        text, _ = rule_answer(snap, body.page, body.selection, question=body.question, evidence=evidence)
         return {"mode": "rule", "answer": text + "\n(AI unavailable — rule-based answer.)",
                 "evidence": evidence, "latency_ms": int((time.time() - t0) * 1000)}

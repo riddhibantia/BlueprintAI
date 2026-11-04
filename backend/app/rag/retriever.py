@@ -13,7 +13,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from app.rag.embeddings import DIM, cosine, embed, embed_chunk
-from app.rag.text import terms
+from app.rag.text import terms, expand_terms
 
 K1 = 1.2   # BM25 term-frequency saturation
 B = 0.75   # BM25 length normalisation
@@ -69,8 +69,9 @@ def retrieve(chunks: list[dict], query: str, k: int = 5,
         return []
 
     qterms = sorted(set(terms(query)))
+    expanded_qterms = expand_terms(qterms)
     docs = [terms(f"{c.get('section', '')}\n{c.get('content', '')}") for c in chunks]
-    lexical = _bm25(docs, qterms)
+    lexical = _bm25(docs, expanded_qterms)
 
     qv = embed(query)
     # A hash-length query vector means the hash path answered (configured, or
