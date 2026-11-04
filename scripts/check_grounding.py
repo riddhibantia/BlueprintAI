@@ -9,7 +9,10 @@ Usage (from repo root):
 """
 import logging
 import os
+import sys
 import tempfile
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 fd, path = tempfile.mkstemp(prefix="blueprintai_grounding_", suffix=".db")
 os.close(fd)

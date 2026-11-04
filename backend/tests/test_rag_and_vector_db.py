@@ -4,9 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.rag.chunking import chunk_text
-from app.rag.embeddings import embed, embed_batch, cosine, get_embedding_info
-from app.rag.retriever import retrieve, get_evidence, format_evidence_text
-from app.rag.vector_store import compute_bm25_scores, compute_vector_similarities
+from app.rag.embeddings import embed, embed_batch, cosine
+from app.rag.retriever import retrieve
+from app.rag.vector_store import compute_bm25_scores
 
 
 @pytest.fixture(scope="module")
