@@ -86,7 +86,7 @@ def test_hybrid_retrieval_prefers_multimodal_evidence():
 
 def test_docx_document_ingestion_and_stats(client):
     """Test full document upload (including Word docx), chunking, embedding, query, and stats API."""
-    import docx
+    docx = pytest.importorskip("docx")
     import uuid
 
     # 1. Register & create project
