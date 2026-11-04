@@ -77,18 +77,79 @@ def change_password_compat(body: ChangePasswordIn, user: User = Depends(current_
 @router.post("/password")
 def change_password(body: PasswordChangeIn, db: Session = Depends(get_db),
                     user: User = Depends(current_user)):
-    """Change the signed-in user's password.
-
-    Requires the current password: an unauthenticated "reset by email" endpoint
-    would let anyone take over any account, so there isn't one. A real reset
-    needs an out-of-band token (email) and is deliberately not faked here.
-    """
+    """Change the signed-in user's password."""
     if not verify_password(body.current_password, user.password_hash):
         raise HTTPException(401, "Current password is incorrect")
     user.password_hash = hash_password(body.new_password)
+    user.password_changed_at = datetime.now(timezone.utc)
     db.commit()
     log(db, user_id=user.id, action="user.password_change")
     return {"status": "ok", "message": "Password updated. Use it the next time you log in."}
+
+
+@router.post("/request-reset")
+def request_reset(body: RequestResetIn, db: Session = Depends(get_db)):
+    """Request an out-of-band password reset token sent via email.
+    
+    Always responds with a generic confirmation to prevent user enumeration.
+    In non-production environments, provides dev_token for automated testing.
+    """
+    from app.core.security import create_reset_token
+    from app.core.email import send_password_reset_email
+
+    email = body.email.strip().lower()
+    u = db.query(User).filter_by(email=email).first()
+    dev_token = None
+    if u:
+        token = create_reset_token(email)
+        send_password_reset_email(email, token)
+        log(db, user_id=u.id, action="user.reset_requested")
+        if settings.ENV != "prod":
+            dev_token = token
+
+    resp = {
+        "status": "ok",
+        "message": "If this email is registered, password reset instructions have been sent."
+    }
+    if dev_token:
+        resp["dev_token"] = dev_token
+    return resp
+
+
+@router.post("/reset-password")
+def reset_password(body: ResetIn, db: Session = Depends(get_db)):
+    """Redeem a single-use out-of-band reset token to set a new password."""
+    from app.core.security import verify_reset_token, reset_token_id
+    from app.models.db import PasswordResetToken
+
+    token = (body.reset_token or "").strip()
+    if not token:
+        raise HTTPException(400, "Reset token is required")
+
+    email = body.email.strip().lower()
+    sub = verify_reset_token(token, email)
+    if not sub:
+        raise HTTPException(400, "Invalid or expired reset token")
+
+    jti = reset_token_id(token)
+    if not jti:
+        raise HTTPException(400, "Malformed reset token")
+
+    # Enforce single-use token ledger
+    spent = db.query(PasswordResetToken).filter_by(jti=jti).first()
+    if spent:
+        raise HTTPException(400, "Reset token has already been used")
+
+    u = db.query(User).filter_by(email=email).first()
+    if not u:
+        raise HTTPException(404, "User not found")
+
+    u.password_hash = hash_password(body.new_password)
+    u.password_changed_at = datetime.now(timezone.utc)
+    db.add(PasswordResetToken(jti=jti, email=email))
+    db.commit()
+    log(db, user_id=u.id, action="user.password_reset")
+    return {"status": "ok", "message": "Password reset successful. Please log in with your new password."}
 
 
 @router.get("/me")

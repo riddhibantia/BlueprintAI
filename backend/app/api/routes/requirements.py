@@ -195,5 +195,7 @@ def delete_req(rid: str, db: Session = Depends(get_db), user=Depends(current_use
     db.query(ArtifactVersion).filter_by(project_id=pid, artifact_type="requirement", artifact_code=code).delete()
     db.delete(r)
     db.commit()
+    from app.traceability.engine import auto_heal_traceability
+    heal_stats = auto_heal_traceability(db, pid)
     log(db, project_id=pid, user_id=user.id, action="requirement.delete", detail=code)
-    return {"deleted": code}
+    return {"deleted": code, "auto_healed": heal_stats}

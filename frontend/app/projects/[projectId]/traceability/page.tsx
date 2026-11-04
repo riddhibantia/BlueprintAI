@@ -58,6 +58,8 @@ export default function Traceability() {
   const [trace, setTrace] = useState<any>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [healing, setHealing] = useState(false);
+  const [healReport, setHealReport] = useState<string | null>(null);
 
   const data = traceQ.data;
   const codes = useMemo(() => {
@@ -140,6 +142,21 @@ export default function Traceability() {
     finally { setBusy(false); }
   };
 
+  const autoHeal = async () => {
+    setHealing(true);
+    setErr("");
+    try {
+      const res = await api<any>(`/projects/${pid}/traceability/auto-heal`, { method: "POST" });
+      setHealReport(`Healed! Coverage: ${res.coverage_before}% → ${res.coverage_after}%, repaired ${res.healed_stories + res.healed_tests} artifacts.`);
+      setTimeout(() => setHealReport(null), 5000);
+      await traceQ.refetch();
+    } catch (e: any) {
+      setErr(e instanceof Error ? e.message : "Auto-heal failed.");
+    } finally {
+      setHealing(false);
+    }
+  };
+
   const [confirming, setConfirming] = useState<string | null>(null);
   const [confirmedCount, setConfirmedCount] = useState(0);
   const [justConfirmed, setJustConfirmed] = useState<string | null>(null);
@@ -184,8 +201,16 @@ export default function Traceability() {
           <h1 className="text-[24px] font-bold tracking-tight">Traceability</h1>
           <p className="text-[13px] text-secondary">{cov.covered || 0}/{cov.total || 0} requirements traced · every edge stored, none invented</p>
         </div>
-        <Button variant="ghost" onClick={suggest} disabled={busy}>{busy ? "Analyzing…" : "Suggest links"}</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="subtle" onClick={autoHeal} loading={healing}>{healing ? "Healing…" : "Auto-Heal Links"}</Button>
+          <Button variant="ghost" onClick={suggest} disabled={busy}>{busy ? "Analyzing…" : "Suggest links"}</Button>
+        </div>
       </div>
+      {healReport && (
+        <div className="mb-3 rounded-xl border border-success/40 bg-success/10 px-4 py-2.5 text-[13px] text-success" role="status">
+          {healReport}
+        </div>
+      )}
       {err && <div className="mb-3"><ErrorState message={err} /></div>}
 
       <Card className="mb-3.5">

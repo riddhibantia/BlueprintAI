@@ -235,3 +235,121 @@ def suggest(db: Session, project_id: str) -> list[dict]:
             out.append({"from": s_req, "to": f"{typ}:{code}", "rel": "implements",
                         "reason": "story declares this source requirement"})
     return out[:100]
+
+
+def auto_heal_traceability(db: Session, project_id: str) -> dict:
+    """Auto-heal broken, dangling, and orphaned traceability links.
+    
+    1. Prunes dead links pointing to nonexistent requirement/artifact codes.
+    2. Re-attaches orphaned UserStories and TestCases whose source requirements were deleted/renamed.
+    3. Synthesizes justified links for orphaned requirements using term discrimination and suggestions.
+    4. Synchronizes open consistency issues.
+    """
+    from app.models.db import (
+        Requirement, UserStory, TestCase, ApiEndpoint, ImplementationTask,
+        ConsistencyIssue
+    )
+    from app.consistency.rules import run_checks
+
+    reqs = db.query(Requirement).filter_by(project_id=project_id).all()
+    req_codes = {r.code for r in reqs}
+    stories = db.query(UserStory).filter_by(project_id=project_id).all()
+    tests = db.query(TestCase).filter_by(project_id=project_id).all()
+    apis = db.query(ApiEndpoint).filter_by(project_id=project_id).all()
+    api_codes = {a.code or a.path for a in apis}
+
+    pruned = 0
+    healed_stories = 0
+    healed_tests = 0
+    healed_orphans = 0
+
+    # 1. Prune dead links
+    links = db.query(TraceabilityLink).filter_by(project_id=project_id).all()
+    for l in links:
+        dead = False
+        if l.source_type == "requirement" and l.source_id not in req_codes:
+            dead = True
+        elif l.target_type == "requirement" and l.target_id not in req_codes:
+            dead = True
+        elif l.target_type == "api" and l.target_id not in api_codes:
+            dead = True
+        if dead:
+            db.delete(l)
+            pruned += 1
+
+    # 2. Heal dangling UserStory requirement_code references
+    if reqs:
+        for s in stories:
+            if s.requirement_code not in req_codes:
+                s_terms = _link_terms(f"{s.title} {s.story or ''}")
+                best_r = None
+                best_score = -1
+                for r in reqs:
+                    r_terms = _link_terms(f"{r.title} {r.description or ''}")
+                    overlap = len(s_terms & r_terms)
+                    if overlap > best_score:
+                        best_score = overlap
+                        best_r = r
+                if best_r:
+                    s.requirement_code = best_r.code
+                    add_link(db, project_id, "requirement", best_r.code, "story", s.code, "implements")
+                    healed_stories += 1
+
+        # 3. Heal dangling TestCase requirement_code references
+        for t in tests:
+            if t.requirement_code not in req_codes:
+                t_terms = _link_terms(f"{t.title} {t.steps or ''} {t.expected or ''}")
+                best_r = None
+                best_score = -1
+                for r in reqs:
+                    r_terms = _link_terms(f"{r.title} {r.description or ''}")
+                    overlap = len(t_terms & r_terms)
+                    if overlap > best_score:
+                        best_score = overlap
+                        best_r = r
+                if best_r:
+                    t.requirement_code = best_r.code
+                    add_link(db, project_id, "requirement", best_r.code, "test", t.code, "validated-by")
+                    healed_tests += 1
+
+    # 4. Heal orphaned requirements with earned links and suggestions
+    cov_before = coverage(db, project_id)
+    if cov_before["orphans"]:
+        # Add earned API links
+        earned = earned_links(db, project_id)
+        for e in earned:
+            add_link(db, project_id, e["source_type"], e["source_id"], e["target_type"], e["target_id"], e["relationship_type"])
+        # Add suggested links for remaining orphans
+        cov_mid = coverage(db, project_id)
+        if cov_mid["orphans"]:
+            suggestions = suggest(db, project_id)
+            orphan_set = set(cov_mid["orphans"])
+            for sug in suggestions:
+                if sug["from"] in orphan_set:
+                    target_type, target_code = sug["to"].split(":", 1)
+                    add_link(db, project_id, "requirement", sug["from"], target_type, target_code, sug["rel"])
+                    orphan_set.discard(sug["from"])
+                    healed_orphans += 1
+
+    # 5. Refresh open consistency issues
+    db.commit()
+    fresh_issues = run_checks(db, project_id)
+    fresh_descs = {i["description"] for i in fresh_issues}
+    open_issues = db.query(ConsistencyIssue).filter_by(project_id=project_id, status="open").all()
+    for oi in open_issues:
+        base_desc = oi.description.split(" | AI:")[0]
+        if base_desc not in fresh_descs:
+            oi.status = "resolved"
+
+    db.commit()
+    cov_after = coverage(db, project_id)
+    return {
+        "pruned_dead_links": pruned,
+        "healed_stories": healed_stories,
+        "healed_tests": healed_tests,
+        "healed_orphans": healed_orphans,
+        "coverage_before": cov_before["coverage_pct"],
+        "coverage_after": cov_after["coverage_pct"],
+        "remaining_orphans": cov_after["orphans"],
+    }
+

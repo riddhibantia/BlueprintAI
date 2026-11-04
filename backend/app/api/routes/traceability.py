@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.audit import log
 from app.api.deps import current_user, project_or_403
-from app.traceability.engine import coverage, forward, backward, suggest, add_link
+from app.traceability.engine import coverage, forward, backward, suggest, add_link, auto_heal_traceability
 from app.models.db import TraceabilityLink
 
 router = APIRouter(tags=["traceability"])
@@ -55,3 +55,14 @@ def suggest_links(pid: str, db: Session = Depends(get_db), user=Depends(current_
     out = suggest(db, pid)
     log(db, project_id=pid, user_id=user.id, action="traceability.suggest", detail=f"{len(out)} suggestions")
     return {"suggestions": out}
+
+
+@router.post("/projects/{pid}/traceability/auto-heal")
+def auto_heal(pid: str, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Automatically reconcile dangling downstream artifacts and orphan requirements."""
+    project_or_403(pid, db, user)
+    result = auto_heal_traceability(db, pid)
+    log(db, project_id=pid, user_id=user.id, action="traceability.auto_heal",
+        detail=f"coverage {result['coverage_before']}% -> {result['coverage_after']}%")
+    return result
+

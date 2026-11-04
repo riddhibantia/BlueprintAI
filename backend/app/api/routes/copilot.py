@@ -150,3 +150,77 @@ def ask(pid: str, body: AskIn, db: Session = Depends(get_db), user=Depends(curre
         text, _ = rule_answer(snap, body.page, body.selection, question=body.question, evidence=evidence)
         return {"mode": "rule", "answer": text + "\n(AI unavailable — rule-based answer.)",
                 "evidence": evidence, "latency_ms": int((time.time() - t0) * 1000)}
+
+
+@router.post("/projects/{pid}/copilot/ask/stream")
+def ask_stream(pid: str, body: AskIn, db: Session = Depends(get_db), user=Depends(current_user)):
+    """Stream Copilot tokens/chunks in real time via Server-Sent Events (SSE)."""
+    import json
+    from fastapi.responses import StreamingResponse
+
+    project_or_403(pid, db, user)
+    snap = _snapshot(db, pid)
+    evidence = _evidence(db, pid, body.question)
+
+    def event_generator():
+        t0 = time.time()
+        if not settings.copilot_configured:
+            text, _ = rule_answer(snap, body.page, body.selection, question=body.question, evidence=evidence)
+            words = text.split(" ")
+            for i in range(0, len(words), 5):
+                chunk = " ".join(words[i:i + 5]) + " "
+                yield f"data: {json.dumps({'type': 'token', 'text': chunk})}\n\n"
+                time.sleep(0.01)
+            yield f"data: {json.dumps({'type': 'done', 'mode': 'rule', 'evidence': evidence, 'latency_ms': int((time.time() - t0) * 1000)})}\n\n"
+            return
+
+        try:
+            from openai import OpenAI
+            key = settings.LLM_API_KEY or settings.OPENAI_API_KEY
+            kwargs: dict = {"api_key": key, "timeout": 25}
+            if settings.LLM_BASE_URL:
+                kwargs["base_url"] = settings.LLM_BASE_URL
+            client = OpenAI(**kwargs)
+            ctx = (f"Project: {snap['project']} ({snap['idea']}). Requirements: {snap['requirements']} "
+                   f"({snap['approved']} approved). Stories: {snap['stories']}. APIs: {snap['apis']}. "
+                   f"Traceability: {snap['coverage_pct']}%. Orphans: {snap['orphans']}. "
+                   f"Open issues: {[i['description'][:200] for i in snap['open_issues']]}. ")
+            ev_lines = []
+            for h in evidence:
+                src = h.get("source", "doc")
+                sec = h.get("section", "").lstrip("# ").strip()
+                tag = f"[{src} § {sec}]" if sec else f"[{src}]"
+                ev_lines.append(f"- {tag}: {h.get('content', '')[:800]}")
+            ev = "\n".join(ev_lines)
+            system = (
+                "You are Blueprint Copilot, a senior software architect and engineering assistant. "
+                "Answer the user's question directly and precisely using the project context and retrieved evidence below. "
+                "Explicitly cite the source document and section (e.g. [api-conventions.md §Methods and status codes]) whenever referring to a standard. "
+                "If the answer is not supported by the context or evidence, clearly explain what requirement or standard is missing. Be concise."
+            )
+            stream_resp = client.chat.completions.create(
+                model=settings.copilot_model,
+                messages=[{"role": "system", "content": system},
+                          {"role": "user", "content": ctx + "\nEvidence:\n" + ev + f"\nQuestion: {body.question}"}],
+                temperature=0.2, max_tokens=600, stream=True
+            )
+            for chunk in stream_resp:
+                content = chunk.choices[0].delta.content if chunk.choices and chunk.choices[0].delta else None
+                if content:
+                    yield f"data: {json.dumps({'type': 'token', 'text': content})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'mode': 'ai', 'evidence': evidence, 'latency_ms': int((time.time() - t0) * 1000)})}\n\n"
+        except Exception as exc:
+            logger.warning("copilot ask_stream fallback: %s", type(exc).__name__)
+            text, _ = rule_answer(snap, body.page, body.selection, question=body.question, evidence=evidence)
+            fallback_text = text + "\n(AI unavailable — rule-based answer.)"
+            err_payload = json.dumps({'type': 'token', 'text': fallback_text})
+            yield f"data: {err_payload}\n\n"
+            done_payload = json.dumps({'type': 'done', 'mode': 'rule', 'evidence': evidence, 'latency_ms': int((time.time() - t0) * 1000)})
+            yield f"data: {done_payload}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    )
+

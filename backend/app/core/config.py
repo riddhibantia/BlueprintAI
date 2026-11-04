@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000"
     RATE_LIMIT_ENABLED: bool = True
     RESET_SECRET: str = ""  # Optional secret/token for password resets in production
+    # Out-of-band email configuration (SMTP)
+    SMTP_ENABLED: bool = False
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@blueprintai.dev"
+    SMTP_TLS: bool = True
+    FRONTEND_URL: str = "http://localhost:3000"
 
     @field_validator("JWT_SECRET")
     @classmethod

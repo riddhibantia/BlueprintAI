@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Bot, Send, Sparkles, Activity as ActivityIcon, Copy, Check } from "lucide-react";
 import { useShell } from "../shell/context";
-import { api } from "../../lib/api/client";
+import { api, API } from "../../lib/api/client";
 import { checkConsistency, listRuns } from "../../lib/api/endpoints";
 import { useRequirements, useTraceability } from "../../lib/query/useArtifacts";
 import { timeAgo } from "../../lib/utils/time";
@@ -48,13 +48,60 @@ export function CopilotPanel() {
     if (!question.trim()) return;
     setBusy(true); setErr(""); setAnswer(null);
     try {
-      setAnswer(await api(`/projects/${pid}/copilot/ask`, {
+      const res = await fetch(`${API}/projects/${pid}/copilot/ask/stream`, {
         method: "POST",
-        body: { question, page, selection: selection || "" },
-      }));
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ question, page, selection: selection || "" }),
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("No readable stream");
+
+      let accumulated = "";
+      let finalMode: "ai" | "rule" = "rule";
+      let finalEvidence: any[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split("\n\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "token") {
+                accumulated += data.text;
+                setAnswer({ mode: finalMode, answer: accumulated, evidence: finalEvidence });
+              } else if (data.type === "done") {
+                finalMode = data.mode || "rule";
+                finalEvidence = data.evidence || [];
+                setAnswer({ mode: finalMode, answer: accumulated, evidence: finalEvidence });
+              }
+            } catch {
+              /* ignore parse errors */
+            }
+          }
+        }
+      }
       setAnsweredAt(fingerprint);
-    } catch (e: any) { setErr(e.message); }
-    setBusy(false);
+    } catch (e: any) {
+      try {
+        setAnswer(await api(`/projects/${pid}/copilot/ask`, {
+          method: "POST",
+          body: { question, page, selection: selection || "" },
+        }));
+        setAnsweredAt(fingerprint);
+      } catch (err: any) {
+        setErr(err.message || e.message);
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const copyAnswer = async () => {
