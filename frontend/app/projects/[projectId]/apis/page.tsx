@@ -1,6 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useMemo, useState, useEffect } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import { useApis, useArchitecture, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { Card } from "../../../../components/ui/card";
 import { HttpMethodBadge, StatusBadge } from "../../../../components/ui/badge";
@@ -10,14 +10,15 @@ import { ErrorState, EmptyState, TableSkeleton } from "../../../../components/ui
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
-import { Check, Copy, Download, FileJson, Search, Terminal } from "lucide-react";
+import { Check, Copy, Download, FileJson, Play, Search, Terminal, Zap } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useToast } from "../../../../components/ui/toast";
 import { copyText } from "../../../../lib/clipboard";
 
-/** API explorer (§22): method badges, search & filter tabs, cURL copy, schemas, linked artifacts. */
+/** API explorer (§22): method badges, search & filter tabs, cURL copy, schemas, linked artifacts, and interactive try-it-out playground. */
 export default function Apis() {
   const { projectId: pid } = useParams() as { projectId: string };
+  const searchParams = useSearchParams();
   const toast = useToast();
   const apisQ = useApis(pid);
   const archQ = useArchitecture(pid);
@@ -27,10 +28,23 @@ export default function Apis() {
   const [search, setSearch] = useState("");
   const [methodFilter, setMethodFilter] = useState<string>("ALL");
   const [curlCopied, setCurlCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"schemas" | "console">("schemas");
+  const [customBody, setCustomBody] = useState("");
+  const [simulating, setSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<{ status: number; latency: number; body: any } | null>(null);
+  const [simCopied, setSimCopied] = useState(false);
 
   // Hooks run before the loading guard — see note in stories/page.tsx.
   const apis = apisQ.data || [];
   const methods = ["ALL", "GET", "POST", "PUT", "PATCH", "DELETE"];
+
+  // Auto-select from URL query param ?sel=API-xxx
+  const selParam = searchParams.get("sel");
+  useEffect(() => {
+    if (selParam) {
+      setSel(selParam);
+    }
+  }, [selParam]);
 
   const filteredApis = useMemo(() => {
     return apis.filter((a: any) => {
@@ -43,12 +57,21 @@ export default function Apis() {
     });
   }, [apis, search, methodFilter]);
 
+  const current = (sel ? apis.find((a: any) => a.code === sel) : null) || filteredApis[0] || apis[0];
+
+  useEffect(() => {
+    if (current?.request_schema && Object.keys(current.request_schema).length > 0) {
+      setCustomBody(JSON.stringify(current.request_schema, null, 2));
+    } else {
+      setCustomBody("{}");
+    }
+    setSimResult(null);
+  }, [current?.code]);
+
   if (apisQ.isLoading || archQ.isLoading) return <TableSkeleton rows={6} cols={4} />;
   if (apisQ.isError) return <ErrorState message={(apisQ.error as Error)?.message} onRetry={() => apisQ.refetch()} />;
   const hasArch = (archQ.data?.components?.length || 0) > 0;
   const links = traceQ.data?.links || [];
-
-  const current = (sel ? apis.find((a: any) => a.code === sel) : null) || filteredApis[0] || apis[0];
   const linked = current ? touching(links, current.code) : [];
 
   const downloadJson = async (endpoint: string, filename: string) => {
@@ -64,7 +87,7 @@ export default function Apis() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success(`Downloaded ${filename}`);
-    } catch (e) {
+    } catch {
       toast.error("Export error");
     }
   };
@@ -86,6 +109,45 @@ export default function Apis() {
     setCurlCopied(true);
     toast.success("Copied cURL command to clipboard!");
     setTimeout(() => setCurlCopied(false), 2000);
+  };
+
+  const runSimulation = () => {
+    if (!current || simulating) return;
+    setSimulating(true);
+    setSimResult(null);
+
+    setTimeout(() => {
+      try {
+        if (customBody.trim()) {
+          JSON.parse(customBody);
+        }
+        const statusCode = (current.status_codes && current.status_codes[0]) || (current.method === "POST" ? 201 : 200);
+        setSimResult({
+          status: statusCode,
+          latency: Math.floor(Math.random() * 25) + 12,
+          body: current.response_schema && Object.keys(current.response_schema).length > 0
+            ? current.response_schema
+            : { status: "success", timestamp: new Date().toISOString() },
+        });
+      } catch {
+        setSimResult({
+          status: 400,
+          latency: 8,
+          body: { error: "Bad Request", message: "Malformed JSON payload syntax." },
+        });
+      } finally {
+        setSimulating(false);
+      }
+    }, 280);
+  };
+
+  const copySimResponse = async () => {
+    if (!simResult) return;
+    if (await copyText(JSON.stringify(simResult.body, null, 2))) {
+      setSimCopied(true);
+      toast.success("Copied response payload!");
+      setTimeout(() => setSimCopied(false), 1800);
+    }
   };
 
   return (
@@ -145,7 +207,7 @@ export default function Apis() {
                     key={m}
                     onClick={() => setMethodFilter(m)}
                     className={`rounded-lg px-2.5 py-1 text-[12px] font-medium transition-colors ${
-                      active ? "bg-elevated font-semibold text-primary shadow-sm" : "text-secondary hover:text-primary"
+                      active ? "bg-elevated font-semibold text-primary shadow-xs" : "text-secondary hover:text-primary"
                     }`}
                   >
                     {m} <span className="font-mono text-[11px] text-muted">({count})</span>
@@ -155,7 +217,7 @@ export default function Apis() {
             </div>
           </div>
 
-          <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_420px]">
             {filteredApis.length === 0 ? (
               <EmptyState title="No matching endpoints" hint={`No APIs match "${search}" with method filter ${methodFilter}.`} />
             ) : (
@@ -202,29 +264,113 @@ export default function Apis() {
                   </Button>
                 </div>
 
-                <div>
-                  <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-muted">Request Schema</p>
-                  <CodeBlock
-                    code={JSON.stringify(current.request_schema || {}, null, 2)}
-                    language="json"
-                    filename="request.json"
-                    showLineNumbers
-                    className="mt-1"
-                  />
+                {/* Tab switcher: Schemas vs Try It Out */}
+                <div className="flex gap-1 rounded-xl border border-border bg-subtle p-1" role="tablist">
+                  <button
+                    role="tab"
+                    aria-selected={activeTab === "schemas"}
+                    onClick={() => setActiveTab("schemas")}
+                    className={`flex-1 rounded-lg py-1.5 text-[12px] font-medium transition-colors ${
+                      activeTab === "schemas" ? "bg-surface font-semibold text-primary shadow-xs" : "text-secondary hover:text-primary"
+                    }`}
+                  >
+                    Schemas & Spec
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={activeTab === "console"}
+                    onClick={() => setActiveTab("console")}
+                    className={`flex items-center justify-center gap-1.5 flex-1 rounded-lg py-1.5 text-[12px] font-medium transition-colors ${
+                      activeTab === "console" ? "bg-surface font-semibold text-primary shadow-xs" : "text-secondary hover:text-primary"
+                    }`}
+                  >
+                    <Play size={11} className="text-accent" />
+                    Try It Out / Console
+                  </button>
                 </div>
 
-                <div>
-                  <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-muted">
-                    Response Schema · {(current.status_codes || [200]).join(", ")}
-                  </p>
-                  <CodeBlock
-                    code={JSON.stringify(current.response_schema || {}, null, 2)}
-                    language="json"
-                    filename="response.json"
-                    showLineNumbers
-                    className="mt-1"
-                  />
-                </div>
+                {activeTab === "schemas" ? (
+                  <>
+                    <div>
+                      <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-muted">Request Schema</p>
+                      <CodeBlock
+                        code={JSON.stringify(current.request_schema || {}, null, 2)}
+                        language="json"
+                        filename="request.json"
+                        showLineNumbers
+                        className="mt-1"
+                      />
+                    </div>
+
+                    <div>
+                      <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-muted">
+                        Response Schema · {(current.status_codes || [200]).join(", ")}
+                      </p>
+                      <CodeBlock
+                        code={JSON.stringify(current.response_schema || {}, null, 2)}
+                        language="json"
+                        filename="response.json"
+                        showLineNumbers
+                        className="mt-1"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-3 text-[13px]">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-muted">Request Payload</span>
+                        <span className="text-[11px] font-mono text-muted">application/json</span>
+                      </div>
+                      <textarea
+                        rows={5}
+                        value={customBody}
+                        onChange={(e) => setCustomBody(e.target.value)}
+                        placeholder="{}"
+                        className="w-full rounded-xl border border-border bg-canvas p-2.5 font-mono text-[12px] leading-relaxed outline-none focus:border-primary"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11.5px] text-muted">
+                        Auth: {current.auth && current.auth !== "none" ? "Bearer Token included" : "None"}
+                      </span>
+                      <Button size="sm" loading={simulating} onClick={runSimulation}>
+                        <Zap size={13} />Send Request
+                      </Button>
+                    </div>
+
+                    {simResult && (
+                      <div className="rounded-xl border border-border bg-subtle p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`rounded-md px-2 py-0.5 font-mono text-[11.5px] font-bold ${
+                              simResult.status < 300
+                                ? "bg-success/10 text-success border border-success/30"
+                                : "bg-danger/10 text-danger border border-danger/30"
+                            }`}>
+                              {simResult.status} {simResult.status === 200 ? "OK" : simResult.status === 201 ? "Created" : "Error"}
+                            </span>
+                            <span className="font-mono text-[11px] text-muted">{simResult.latency}ms</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={copySimResponse}
+                            className="flex items-center gap-1 text-[11.5px] text-secondary hover:text-primary"
+                          >
+                            {simCopied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
+                            {simCopied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                        <CodeBlock
+                          code={JSON.stringify(simResult.body, null, 2)}
+                          language="json"
+                          showLineNumbers
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="border-t border-border pt-2.5">
                   <p className="text-[11.5px] font-bold uppercase tracking-[0.06em] text-muted">Linked Artifacts</p>

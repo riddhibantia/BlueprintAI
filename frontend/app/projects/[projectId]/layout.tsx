@@ -8,14 +8,16 @@ import { ShellProvider, useShell } from "../../../components/shell/context";
 import { Sidebar } from "../../../components/shell/sidebar";
 import { TopBar } from "../../../components/shell/topbar";
 import { Palette } from "../../../components/shell/palette";
+import { ShortcutsModal } from "../../../components/shell/shortcuts-modal";
 import { useShortcuts } from "../../../lib/shortcuts/keys";
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const { pid, setCopilotOpen, copilotOpen } = useShell();
   const [palette, setPalette] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const openPalette = () => setPalette(true);
-  useShortcuts(pid, openPalette, () => setCopilotOpen(true));
+  useShortcuts(pid, openPalette, () => setCopilotOpen(true), () => setShortcutsOpen(true));
 
   return (
     <div className="flex min-h-screen bg-canvas text-primary">
@@ -29,7 +31,11 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         </Drawer>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onPalette={openPalette} onMenu={() => setNavOpen(true)} />
+        <TopBar
+          onPalette={openPalette}
+          onMenu={() => setNavOpen(true)}
+          onShortcuts={() => setShortcutsOpen(true)}
+        />
         <div className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-5">
           {children}
         </div>
@@ -38,6 +44,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
         <CopilotPanel />
       </Drawer>
       <Palette open={palette} onClose={() => setPalette(false)} />
+      <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }

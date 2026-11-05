@@ -1,12 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Filter, Pencil, Plus, Search, Trash2, Unlink } from "lucide-react";
+import { ArrowRight, Check, Filter, History, Pencil, Plus, RotateCcw, Search, Trash2, Unlink } from "lucide-react";
 import { useRequirements, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { linkCounts } from "../../../../lib/query/links";
-import { timeAgo } from "../../../../lib/utils/time";
+import { timeAgo, fmtDate } from "../../../../lib/utils/time";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge, Badge } from "../../../../components/ui/badge";
 import { DataTable, Pagination } from "../../../../components/ui/data";
@@ -15,11 +15,14 @@ import { Drawer, Dialog } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { api } from "../../../../lib/api/client";
 import { traceArtifact, clarify as clarifyIdea } from "../../../../lib/api/endpoints";
+import { useToast } from "../../../../components/ui/toast";
 
 /** Requirements workspace (§17): table + search/filter + detail drawer, cache-backed. */
 export default function Requirements() {
   const { projectId: pid } = useParams() as { projectId: string };
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const toast = useToast();
   const qc = useQueryClient();
   const reqsQ = useRequirements(pid);
   const traceQ = useTraceability(pid);
@@ -36,6 +39,16 @@ export default function Requirements() {
   const [editPriority, setEditPriority] = useState("medium");
   const [editAc, setEditAc] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"details" | "history">("details");
+  const [versions, setVersions] = useState<any[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [rollingBackId, setRollingBackId] = useState<string | null>(null);
+  const [quickAddTitle, setQuickAddTitle] = useState("");
+  const [quickAddPriority, setQuickAddPriority] = useState("medium");
+  const [quickAddType, setQuickAddType] = useState("functional");
+  const [quickAddBusy, setQuickAddBusy] = useState(false);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [batchDeleteBusy, setBatchDeleteBusy] = useState(false);
 
   const startEdit = (r: any) => {
     setEditTitle(r.title || "");
@@ -204,7 +217,92 @@ export default function Requirements() {
   // changes — never on every requirements refetch.
   const selId = sel?.id;
   const selVersion = sel?.version;
-  useEffect(() => { if (sel) open(sel); }, [selId, selVersion]);
+  useEffect(() => {
+    if (sel) {
+      open(sel);
+      loadVersions(sel.code);
+    }
+  }, [selId, selVersion]);
+
+  // Deep-link from URL query parameter ?sel=REQ-xxx
+  const selParam = searchParams.get("sel");
+  useEffect(() => {
+    if (selParam && reqs.length > 0) {
+      const match = reqs.find((r: any) => r.code === selParam);
+      if (match && (!sel || sel.code !== match.code)) {
+        open(match);
+      }
+    }
+  }, [selParam, reqs]);
+
+  const loadVersions = async (code: string) => {
+    setLoadingVersions(true);
+    try {
+      const allVers = await api<any[]>(`/projects/${pid}/versions?artifact_type=requirement`);
+      const filteredVers = allVers.filter((v: any) => v.artifact_code === code);
+      setVersions(filteredVers);
+    } catch {
+      setVersions([]);
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
+  const rollback = async (vid: string) => {
+    setRollingBackId(vid);
+    try {
+      await api(`/projects/${pid}/versions/${vid}/rollback`, { method: "POST" });
+      toast.success("Rolled back requirement to selected version!");
+      await qc.invalidateQueries({ queryKey: ["p", pid] });
+      setSel(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Rollback failed");
+    } finally {
+      setRollingBackId(null);
+    }
+  };
+
+  const inlineQuickAdd = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!quickAddTitle.trim() || quickAddBusy) return;
+    setQuickAddBusy(true);
+    try {
+      await api(`/projects/${pid}/requirements`, {
+        method: "POST",
+        body: {
+          title: quickAddTitle.trim(),
+          priority: quickAddPriority,
+          type: quickAddType,
+          description: "",
+          acceptance_criteria: "",
+        },
+      });
+      setQuickAddTitle("");
+      await qc.invalidateQueries({ queryKey: ["p", pid, "requirements"] });
+      toast.success("Requirement added!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add requirement");
+    } finally {
+      setQuickAddBusy(false);
+    }
+  };
+
+  const batchDeleteSelected = async () => {
+    if (checked.size === 0 || batchDeleteBusy) return;
+    setBatchDeleteBusy(true);
+    try {
+      for (const id of Array.from(checked)) {
+        await write.mutateAsync({ path: `/requirements/${id}`, init: { method: "DELETE" } });
+      }
+      setChecked(new Set());
+      setBatchDeleteOpen(false);
+      toast.success("Selected requirements deleted");
+    } catch (e) {
+      toast.error("Failed to delete some requirements");
+    } finally {
+      setBatchDeleteBusy(false);
+    }
+  };
 
   if (reqsQ.isLoading) return <LoadingState stage="Loading requirements" />;
   if (reqsQ.isError) return <ErrorState message={(reqsQ.error as Error)?.message} onRetry={() => reqsQ.refetch()} />;
@@ -282,11 +380,15 @@ export default function Requirements() {
       ) : (
         <>
         {checked.size > 0 && (
-          <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.08)]" role="status">
-            <span className="text-[13px] font-medium">{checked.size} selected</span>
-            <Button size="sm" loading={bulkBusy} onClick={approveSelected}>Approve selected</Button>
+          <div className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-2.5 shadow-2xl backdrop-blur-md" role="status">
+            <span className="text-[13px] font-semibold text-primary">{checked.size} selected</span>
+            <Button size="sm" loading={bulkBusy} onClick={approveSelected}>
+              <Check size={14} />Approve selected
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => setBatchDeleteOpen(true)}>
+              <Trash2 size={14} />Delete selected
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setChecked(new Set())}>Clear</Button>
-            {write.isError && <span className="text-[12.5px] text-danger">{(write.error as Error)?.message}</span>}
           </div>
         )}
         <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-5 w-5 accent-primary" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th><th><span className="sr-only">Approve</span></th></>}>
@@ -295,10 +397,8 @@ export default function Requirements() {
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(r); } }}
               aria-label={`Open ${r.code}`}>
               <td onClick={(e) => e.stopPropagation()}>
-                {r.status !== "approved" && (
-                  <input type="checkbox" checked={checked.has(r.id)} onChange={(e) => toggleCheck(r.id, e.target.checked)}
-                    onKeyDown={(e) => e.stopPropagation()} aria-label={`Select ${r.code}`} className="h-5 w-5 accent-primary" />
-                )}
+                <input type="checkbox" checked={checked.has(r.id)} onChange={(e) => toggleCheck(r.id, e.target.checked)}
+                  onKeyDown={(e) => e.stopPropagation()} aria-label={`Select ${r.code}`} className="h-5 w-5 accent-primary" />
               </td>
               <td className="font-mono text-[12.5px] text-secondary">{r.code}</td>
               <td className="max-w-[320px] truncate font-medium text-primary" title={r.title}>{r.title}</td>
@@ -338,87 +438,209 @@ export default function Requirements() {
           totalItems={filtered.length}
           pageSize={pageSize}
         />
+
+        {/* Inline Quick-Add Row */}
+        <form onSubmit={inlineQuickAdd} className="mt-3.5 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-2.5 shadow-xs">
+          <input
+            value={quickAddTitle}
+            onChange={(e) => setQuickAddTitle(e.target.value)}
+            placeholder="+ Add a requirement inline (e.g. Export reports as CSV) — press Enter to save"
+            className="min-w-[280px] flex-1 rounded-lg border border-border bg-canvas px-3 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-primary"
+          />
+          <select
+            value={quickAddPriority}
+            onChange={(e) => setQuickAddPriority(e.target.value)}
+            aria-label="Priority"
+            className="rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-[12.5px] text-secondary outline-none"
+          >
+            <option value="low">Low Priority</option>
+            <option value="medium">Medium Priority</option>
+            <option value="high">High Priority</option>
+            <option value="critical">Critical Priority</option>
+          </select>
+          <select
+            value={quickAddType}
+            onChange={(e) => setQuickAddType(e.target.value)}
+            aria-label="Type"
+            className="rounded-lg border border-border bg-canvas px-2.5 py-1.5 text-[12.5px] text-secondary outline-none"
+          >
+            <option value="functional">Functional</option>
+            <option value="non-functional">Non-functional</option>
+            <option value="security">Security</option>
+          </select>
+          <Button type="submit" size="sm" loading={quickAddBusy} disabled={!quickAddTitle.trim()}>
+            <Plus size={14} />Add
+          </Button>
+        </form>
         </>
       )}
 
-      <Drawer open={!!sel} onClose={() => { setSel(null); setEditingSel(false); }} label={`Requirement ${sel?.code}`} title={<span className="font-mono">{sel?.code}</span>}>
+      <Drawer open={!!sel} onClose={() => { setSel(null); setEditingSel(false); setDrawerTab("details"); }} label={`Requirement ${sel?.code}`} title={<span className="font-mono">{sel?.code}</span>}>
         {sel && (
-          editingSel ? (
-            <div className="grid gap-3 text-[13.5px]">
-              <label className="block text-[13px] font-medium text-secondary">
-                Title
-                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-md border border-border bg-canvas px-3 text-[13.5px] focus:border-primary focus:outline-none" />
-              </label>
-              <label className="block text-[13px] font-medium text-secondary">
-                Priority
-                <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-md border border-border bg-canvas px-3 text-[13px] focus:border-primary focus:outline-none">
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </label>
-              <label className="block text-[13px] font-medium text-secondary">
-                Description
-                <textarea rows={3} value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-canvas p-2.5 text-[13px] focus:border-primary focus:outline-none" />
-              </label>
-              <label className="block text-[13px] font-medium text-secondary">
-                Acceptance criteria
-                <textarea rows={3} value={editAc} onChange={(e) => setEditAc(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-border bg-canvas p-2.5 text-[13px] focus:border-primary focus:outline-none" />
-              </label>
-              <div className="mt-2 flex gap-2">
-                <Button size="sm" loading={write.isPending} onClick={saveEdit}>Save changes</Button>
-                <Button size="sm" variant="ghost" onClick={() => setEditingSel(false)}>Cancel</Button>
-              </div>
+          <div>
+            <div className="mb-4 flex gap-1 rounded-xl border border-border bg-subtle p-1" role="tablist">
+              <button
+                role="tab"
+                aria-selected={drawerTab === "details"}
+                onClick={() => setDrawerTab("details")}
+                className={`flex-1 rounded-lg py-1.5 text-[12.5px] font-medium transition-colors ${
+                  drawerTab === "details" ? "bg-surface font-semibold text-primary shadow-xs" : "text-secondary hover:text-primary"
+                }`}
+              >
+                Details
+              </button>
+              <button
+                role="tab"
+                aria-selected={drawerTab === "history"}
+                onClick={() => { setDrawerTab("history"); loadVersions(sel.code); }}
+                className={`flex-1 rounded-lg py-1.5 text-[12.5px] font-medium transition-colors ${
+                  drawerTab === "history" ? "bg-surface font-semibold text-primary shadow-xs" : "text-secondary hover:text-primary"
+                }`}
+              >
+                Version History {versions.length > 0 && `(${versions.length})`}
+              </button>
             </div>
-          ) : (
-            <div className="grid gap-3 text-[13.5px]">
-              <p className="text-[15px] font-semibold">{sel.title}</p>
-              <p className="flex gap-2"><StatusBadge value={sel.status} /><Badge value={sel.priority} tone="neutral" /><span className="text-secondary">v{sel.version}</span></p>
-              {sel.description && <p className="text-secondary">{sel.description}</p>}
-              {sel.acceptance_criteria && (
-                <div>
-                  <b className="text-[12px] uppercase tracking-wide text-secondary">Acceptance criteria</b>
-                  <p className="mt-1 rounded-xl border border-border bg-canvas p-2.5 text-[13px]">{sel.acceptance_criteria}</p>
-                </div>
-              )}
-              <div>
-                <b className="text-[12px] uppercase tracking-wide text-secondary">Traceability</b>
-                {selLinks.length === 0
-                  ? <p className="mt-1 text-secondary">Orphaned — no downstream links yet.</p>
-                  : <ul className="mt-1 grid gap-1.5">{selLinks.map((l: any, i: number) => (
-                    <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to} <span className="text-secondary">({l.rel})</span></li>
-                  ))}</ul>}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {sel.status !== "approved" && (
-                  <Button size="sm" loading={write.isPending} onClick={() => write.mutate(
-                    { path: `/requirements/${sel.id}/approve`, init: { method: "POST" } },
-                    { onSuccess: () => { setSel(null); maybeAdvance(1); } })}>Approve</Button>
+
+            {drawerTab === "history" ? (
+              <div className="space-y-3">
+                {loadingVersions ? (
+                  <LoadingState stage="Loading version history" />
+                ) : versions.length === 0 ? (
+                  <div className="rounded-xl border border-border bg-subtle p-4 text-center text-[13px] text-secondary">
+                    No previous revisions recorded. Current is version <b>v{sel.version}</b>.
+                  </div>
+                ) : (
+                  versions.map((v: any) => {
+                    const isCurrent = v.version === sel.version;
+                    const vTitle = v.content?.title || "";
+                    const vAc = v.content?.acceptance_criteria || "";
+                    const vDesc = v.content?.description || "";
+                    return (
+                      <div key={v.id} className="rounded-xl border border-border bg-surface p-3.5 text-[13px] space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-primary">v{v.version} {isCurrent && <span className="text-[11px] font-normal text-muted">(current)</span>}</span>
+                          <span className="text-[11.5px] text-muted">{v.created_at ? fmtDate(v.created_at) : "Previous"}</span>
+                        </div>
+                        {vTitle && vTitle !== sel.title && (
+                          <div className="text-[12.5px]">
+                            <span className="text-muted block text-[11px] uppercase font-semibold">Title Difference:</span>
+                            <span className="line-through text-danger mr-2">{vTitle}</span>
+                            <span className="text-success">{sel.title}</span>
+                          </div>
+                        )}
+                        {vDesc && vDesc !== sel.description && (
+                          <div className="text-[12.5px]">
+                            <span className="text-muted block text-[11px] uppercase font-semibold">Description Difference:</span>
+                            <p className="rounded bg-canvas p-1.5 text-[12px]">{vDesc}</p>
+                          </div>
+                        )}
+                        {vAc && vAc !== sel.acceptance_criteria && (
+                          <div className="text-[12.5px]">
+                            <span className="text-muted block text-[11px] uppercase font-semibold">Acceptance Criteria:</span>
+                            <p className="rounded bg-canvas p-1.5 text-[12px]">{vAc}</p>
+                          </div>
+                        )}
+                        {!isCurrent && (
+                          <Button
+                            size="sm"
+                            variant="subtle"
+                            loading={rollingBackId === v.id}
+                            onClick={() => rollback(v.id)}
+                          >
+                            <RotateCcw size={13} />Rollback to v{v.version}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
-                <Button size="sm" variant="ghost" onClick={() => startEdit(sel)}>
-                  <Pencil size={13} />Edit
-                </Button>
-                <Link href={`/projects/${pid}/impact`} prefetch
-                  className="inline-flex items-center rounded-lg border border-border px-2.5 py-1.5 text-[12.5px] font-medium text-secondary hover:border-accent hover:text-primary">
-                  View impact
-                </Link>
-                <button type="button" aria-label={`Delete ${sel.code}`}
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  className="ml-auto rounded-lg p-1.5 text-muted transition-colors hover:bg-elevated hover:text-danger"
-                  title="Delete requirement">
-                  <Trash2 size={15} />
-                </button>
               </div>
-              <p className="text-[12px] text-secondary">Linked artifacts: {selLinks.map((l: any, i: number) => <span key={i} className="mr-1"><ArtifactLink code={l.to} /></span>)}</p>
-            </div>
-          )
+            ) : editingSel ? (
+              <div className="grid gap-3 text-[13.5px]">
+                <label className="block text-[13px] font-medium text-secondary">
+                  Title
+                  <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-md border border-border bg-canvas px-3 text-[13.5px] focus:border-primary focus:outline-none" />
+                </label>
+                <label className="block text-[13px] font-medium text-secondary">
+                  Priority
+                  <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)}
+                    className="mt-1 h-10 w-full rounded-md border border-border bg-canvas px-3 text-[13px] focus:border-primary focus:outline-none">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </label>
+                <label className="block text-[13px] font-medium text-secondary">
+                  Description
+                  <textarea rows={3} value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-canvas p-2.5 text-[13px] focus:border-primary focus:outline-none" />
+                </label>
+                <label className="block text-[13px] font-medium text-secondary">
+                  Acceptance criteria
+                  <textarea rows={3} value={editAc} onChange={(e) => setEditAc(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-border bg-canvas p-2.5 text-[13px] focus:border-primary focus:outline-none" />
+                </label>
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" loading={write.isPending} onClick={saveEdit}>Save changes</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingSel(false)}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-3 text-[13.5px]">
+                <p className="text-[15px] font-semibold">{sel.title}</p>
+                <p className="flex gap-2"><StatusBadge value={sel.status} /><Badge value={sel.priority} tone="neutral" /><span className="text-secondary">v{sel.version}</span></p>
+                {sel.description && <p className="text-secondary">{sel.description}</p>}
+                {sel.acceptance_criteria && (
+                  <div>
+                    <b className="text-[12px] uppercase tracking-wide text-secondary">Acceptance criteria</b>
+                    <p className="mt-1 rounded-xl border border-border bg-canvas p-2.5 text-[13px]">{sel.acceptance_criteria}</p>
+                  </div>
+                )}
+                <div>
+                  <b className="text-[12px] uppercase tracking-wide text-secondary">Traceability</b>
+                  {selLinks.length === 0
+                    ? <p className="mt-1 text-secondary">Orphaned — no downstream links yet.</p>
+                    : <ul className="mt-1 grid gap-1.5">{selLinks.map((l: any, i: number) => (
+                      <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to} <span className="text-secondary">({l.rel})</span></li>
+                    ))}</ul>}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {sel.status !== "approved" && (
+                    <Button size="sm" loading={write.isPending} onClick={() => write.mutate(
+                      { path: `/requirements/${sel.id}/approve`, init: { method: "POST" } },
+                      { onSuccess: () => { setSel(null); maybeAdvance(1); } })}>Approve</Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => startEdit(sel)}>
+                    <Pencil size={13} />Edit
+                  </Button>
+                  <Link href={`/projects/${pid}/impact`} prefetch
+                    className="inline-flex items-center rounded-lg border border-border px-2.5 py-1.5 text-[12.5px] font-medium text-secondary hover:border-accent hover:text-primary">
+                    View impact
+                  </Link>
+                  <button type="button" aria-label={`Delete ${sel.code}`}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="ml-auto rounded-lg p-1.5 text-muted transition-colors hover:bg-elevated hover:text-danger"
+                    title="Delete requirement">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                <p className="text-[12px] text-secondary">Linked artifacts: {selLinks.map((l: any, i: number) => <span key={i} className="mr-1"><ArtifactLink code={l.to} /></span>)}</p>
+              </div>
+            )}
+          </div>
         )}
       </Drawer>
+      <Dialog open={batchDeleteOpen} onClose={() => setBatchDeleteOpen(false)} title={`Delete ${checked.size} requirements?`}>
+        <p className="text-[13.5px] text-secondary">
+          Are you sure you want to delete these <b>{checked.size}</b> selected requirements? This will also remove any downstream traceability links touching them.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setBatchDeleteOpen(false)}>Cancel</Button>
+          <Button variant="danger" loading={batchDeleteBusy} onClick={batchDeleteSelected}>Delete selected</Button>
+        </div>
+      </Dialog>
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} title={`Delete ${sel?.code}?`}>
         <p className="text-[13.5px] text-secondary">
           Are you sure you want to delete <b>{sel?.code} — {sel?.title}</b>? This will also remove any downstream traceability links touching this requirement.

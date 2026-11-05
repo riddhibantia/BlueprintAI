@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Check, ChevronRight, Menu, MessageSquarePlus, MoreHorizontal, Search } from "lucide-react";
+import { Check, ChevronRight, HelpCircle, Menu, MessageSquarePlus, MoreHorizontal, Search, Share2 } from "lucide-react";
 import { useShell } from "./context";
 import { Button, IconButton } from "../ui/button";
 import { ThemeToggle } from "../ui/theme-toggle";
@@ -21,8 +21,24 @@ const NAMES: Record<string, string> = {
   settings: "Settings", blueprint: "Blueprint",
 };
 
+const SECTION_CATS: Record<string, string> = {
+  requirements: "Plan", prd: "Plan", stories: "Plan",
+  architecture: "Design", database: "Design", apis: "Design", security: "Design",
+  tasks: "Delivery", tests: "Delivery",
+  traceability: "Assure", consistency: "Assure", impact: "Assure",
+  knowledge: "Reference", settings: "Project", blueprint: "Pipeline",
+};
+
 /** Project top bar: breadcrumb · search · Share · overflow · avatar. */
-export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: () => void }) {
+export function TopBar({
+  onPalette,
+  onMenu,
+  onShortcuts,
+}: {
+  onPalette: () => void;
+  onMenu: () => void;
+  onShortcuts?: () => void;
+}) {
   const router = useRouter();
   const path = usePathname() || "";
   const { pid, project, reload, setCopilotOpen } = useShell();
@@ -41,15 +57,14 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
   const here = seg === pid ? "Overview" : NAMES[seg] || "Overview";
 
   const share = async () => {
-  const share = async () => {
     if (!(await copyText(window.location.href))) {
       toast.error("Couldn't copy the link — your browser blocked clipboard access.");
       setActionError("Could not copy the link — copy it from the address bar.");
       return;
     }
     setCopied(true);
+    toast.success("Link copied to clipboard!");
     setTimeout(() => setCopied(false), 1500);
-  };
   };
 
   const download = (kind: "markdown" | "pdf" | "openapi" | "json" | "archify") => {
@@ -89,6 +104,12 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
           {here !== "Overview" && (
             <>
               <ChevronRight size={13} className="flex-none text-muted" aria-hidden />
+              {SECTION_CATS[seg] && (
+                <>
+                  <span className="hidden sm:inline text-muted font-normal">{SECTION_CATS[seg]}</span>
+                  <ChevronRight size={13} className="hidden sm:inline flex-none text-muted" aria-hidden />
+                </>
+              )}
               <span className="truncate rounded-md bg-elevated/70 px-2 py-0.5 font-medium text-primary border border-border/60" aria-current="page">{here}</span>
             </>
           )}
@@ -102,6 +123,11 @@ export function TopBar({ onPalette, onMenu }: { onPalette: () => void; onMenu: (
         </div>
         <div className="ml-auto flex flex-none items-center gap-1.5 md:ml-0">
           <ThemeToggle />
+          {onShortcuts && (
+            <IconButton label="Keyboard shortcuts (?)" onClick={onShortcuts}>
+              <HelpCircle size={17} />
+            </IconButton>
+          )}
           <IconButton label="Ask Copilot (Ctrl+J)" onClick={() => setCopilotOpen(true)}>
             <MessageSquarePlus size={17} />
           </IconButton>

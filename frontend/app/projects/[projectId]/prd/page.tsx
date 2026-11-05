@@ -145,6 +145,42 @@ export default function Prd() {
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const [activeSection, setActiveSection] = useState("vision");
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (totalHeight > 0) {
+        setScrollProgress(Math.min(100, Math.round((window.scrollY / totalHeight) * 100)));
+      }
+
+      const sectionIds = ["vision", "problem", "personas", "goals", "journeys", "functional", "nfr", "metrics"];
+      for (let i = sectionIds.length - 1; i >= 0; i--) {
+        const el = document.getElementById(sectionIds[i]);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= 180) {
+            setActiveSection(sectionIds[i]);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+      setActiveSection(id);
+    }
+  };
+
   const openHistory = async () => {
     setHistoryOpen(true);
     setLoadingVersions(true);
@@ -392,27 +428,48 @@ export default function Prd() {
       {viewMode === "document" ? (
         /* ================= EXECUTIVE PRODUCT MANAGER DOCUMENT VIEW ================= */
         <div className="space-y-6">
-          {/* Quick Jump Bar */}
-          <div className="sticky top-14 z-20 -mx-2 flex items-center gap-1.5 overflow-x-auto rounded-xl border border-border/80 bg-surface/95 px-3 py-2 shadow-2xs backdrop-blur-md">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted mr-1">Sections:</span>
-            {[
-              { id: "vision", label: "Executive Summary" },
-              { id: "problem", label: "Problem Statement" },
-              { id: "personas", label: "Personas" },
-              { id: "goals", label: "Goals & Scope" },
-              { id: "journeys", label: "User Journeys" },
-              { id: "functional", label: "Functional Matrix" },
-              { id: "nfr", label: "SLAs & NFRs" },
-              { id: "metrics", label: "KPIs & Roadmap" },
-            ].map((s) => (
-              <a
-                key={s.id}
-                href={`#${s.id}`}
-                className="rounded-lg px-2.5 py-1 text-[12px] font-medium text-secondary hover:bg-elevated hover:text-primary whitespace-nowrap transition-colors"
-              >
-                {s.label}
-              </a>
-            ))}
+          {/* Quick Jump Bar with Scroll-Spy & Reading Progress */}
+          <div className="sticky top-16 z-20 -mx-2 overflow-hidden rounded-xl border border-border/80 bg-surface/95 shadow-xs backdrop-blur-md">
+            {/* Reading progress hairline */}
+            <div
+              className="h-0.5 bg-primary transition-all duration-150"
+              style={{ width: `${scrollProgress}%` }}
+              aria-hidden
+            />
+            <div className="flex items-center justify-between gap-2 overflow-x-auto px-3.5 py-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted mr-1">Outline:</span>
+                {[
+                  { id: "vision", label: "Executive Summary" },
+                  { id: "problem", label: "Problem Statement" },
+                  { id: "personas", label: "Personas" },
+                  { id: "goals", label: "Goals & Scope" },
+                  { id: "journeys", label: "User Journeys" },
+                  { id: "functional", label: "Functional Matrix" },
+                  { id: "nfr", label: "SLAs & NFRs" },
+                  { id: "metrics", label: "KPIs & Roadmap" },
+                ].map((s) => {
+                  const isActive = activeSection === s.id;
+                  return (
+                    <a
+                      key={s.id}
+                      href={`#${s.id}`}
+                      onClick={(e) => scrollToSection(e, s.id)}
+                      className={`rounded-lg px-2.5 py-1 text-[12px] font-medium whitespace-nowrap transition-all ${
+                        isActive
+                          ? "bg-elevated font-semibold text-primary shadow-xs border border-border/70"
+                          : "text-secondary hover:bg-subtle hover:text-primary"
+                      }`}
+                    >
+                      {s.label}
+                    </a>
+                  );
+                })}
+              </div>
+              <span className="text-[11px] font-mono text-muted pl-2 hidden sm:inline flex-none">
+                {scrollProgress}% read
+              </span>
+            </div>
           </div>
 
           {/* Metric Highlights Strip */}
