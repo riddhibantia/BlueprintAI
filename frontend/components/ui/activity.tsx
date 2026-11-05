@@ -61,14 +61,17 @@ export function ArtifactLink({ code, href, pid }: { code: string; href?: string;
   const [copied, setCopied] = useState(false);
   let targetHref = href;
   if (!targetHref && pid) {
-    const raw = code.includes(":") ? code.split(":")[1] : code;
-    if (raw.startsWith("REQ-")) targetHref = `/projects/${pid}/requirements`;
-    else if (raw.startsWith("US-")) targetHref = `/projects/${pid}/stories`;
-    else if (raw.startsWith("DB-")) targetHref = `/projects/${pid}/database`;
-    else if (raw.startsWith("API-")) targetHref = `/projects/${pid}/apis`;
-    else if (raw.startsWith("SEC-")) targetHref = `/projects/${pid}/security`;
-    else if (raw.startsWith("TASK-")) targetHref = `/projects/${pid}/tasks`;
-    else if (raw.startsWith("TEST-")) targetHref = `/projects/${pid}/tests`;
+    const parts = code.split(":");
+    const prefix = parts.length > 1 ? parts[0].toLowerCase() : "";
+    const raw = parts.length > 1 ? parts[1] : code;
+
+    if (prefix === "requirement" || raw.startsWith("REQ-")) targetHref = `/projects/${pid}/requirements`;
+    else if (prefix === "story" || raw.startsWith("US-") || raw.startsWith("STORY-")) targetHref = `/projects/${pid}/stories`;
+    else if (prefix === "db" || raw.startsWith("DB-")) targetHref = `/projects/${pid}/database`;
+    else if (prefix === "api" || raw.startsWith("API-")) targetHref = `/projects/${pid}/apis`;
+    else if (prefix === "security" || raw.startsWith("SEC-")) targetHref = `/projects/${pid}/security`;
+    else if (prefix === "task" || raw.startsWith("TASK-")) targetHref = `/projects/${pid}/tasks`;
+    else if (prefix === "test" || raw.startsWith("TEST-")) targetHref = `/projects/${pid}/tests`;
   }
 
   const copy = async (e: React.MouseEvent) => {

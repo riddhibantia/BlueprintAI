@@ -59,12 +59,6 @@ const STARTER_ARCHETYPES: IndustryStarter[] = [
   },
 ];
 
-const PROMPT_SUGGESTIONS = [
-  "Employee expense management platform with receipt OCR and manager approvals",
-  "B2B SaaS subscription billing with Stripe, multi-tenant RBAC, and usage metering",
-  "Healthcare patient portal with appointment booking and HIPAA-compliant messaging",
-];
-
 const STOP = new Set("a,an,the,to,for,of,and,or,with,app,application,my,our,new,do,does,did,make,build,create".split(","));
 
 /** Short title-case project name from a raw idea (B7: never use the raw sentence). */

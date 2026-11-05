@@ -87,6 +87,7 @@ export default function Traceability() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [sel, setSel] = useState<string | null>(initialFocus ? (initialFocus.includes(":") ? initialFocus : `requirement:${initialFocus}`) : null);
   const [selLinks, setSelLinks] = useState<any[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeLayer, setActiveLayer] = useState<string>("all");
   const [lookup, setLookup] = useState("REQ-001");
   const [trace, setTrace] = useState<any>(null);
@@ -225,6 +226,7 @@ export default function Traceability() {
   const clearSelection = useCallback(() => {
     setSel(null);
     setSelLinks([]);
+    setDrawerOpen(false);
   }, []);
 
   const lookupGo = async () => {
@@ -285,7 +287,11 @@ export default function Traceability() {
   };
 
   useEffect(() => {
-    if (sel) onNodeClick({}, { id: sel } as Node);
+    if (sel) {
+      traceArtifact(pid, sel.split(":").pop() || "")
+        .then((t) => setSelLinks([...(t.forward || []), ...(t.backward || [])]))
+        .catch(() => setSelLinks([]));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
@@ -371,6 +377,7 @@ export default function Traceability() {
 
           {(sel || activeLayer !== "all") && (
             <button
+              type="button"
               onClick={() => { clearSelection(); setActiveLayer("all"); }}
               className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-0.5 text-[11.5px] font-medium text-secondary hover:bg-elevated hover:text-primary transition-colors"
             >
@@ -386,13 +393,23 @@ export default function Traceability() {
               <Sparkles size={13} className="text-accent" aria-hidden />
               <span>Isolated path for <b className="font-mono">{sel}</b>: <b>{connectedNodeIds.size}</b> artifacts in connected lineage.</span>
             </span>
-            <button
-              onClick={clearSelection}
-              className="flex items-center gap-1 text-[11.5px] font-semibold text-secondary hover:text-primary hover:underline ml-2"
-              title="Clear selection"
-            >
-              <X size={12} /> Clear path
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                className="rounded border border-accent/40 bg-elevated px-2.5 py-0.5 text-[11px] font-semibold text-accent hover:bg-accent/20 transition-colors"
+              >
+                Inspect relationships
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="flex items-center gap-1 text-[11.5px] font-semibold text-secondary hover:text-primary hover:underline ml-1"
+                title="Clear selection"
+              >
+                <X size={12} /> Clear path
+              </button>
+            </div>
           </div>
         )}
 
@@ -449,7 +466,7 @@ export default function Traceability() {
         </Card>
       )}
 
-      <Drawer open={!!sel} onClose={() => setSel(null)} label={`Artifact ${sel}`} title={<span className="font-mono">{sel}</span>}>
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} label={`Artifact ${sel}`} title={<span className="font-mono">{sel}</span>}>
         <p className="mb-2 text-[13px] text-secondary">{selLinks.length} touching relationships · downstream links: {sel && sel.startsWith("requirement:") ? counts[sel.split(":")[1]] || 0 : "—"}</p>
         <ul className="grid gap-1.5">
           {selLinks.map((l: any, i: number) => (

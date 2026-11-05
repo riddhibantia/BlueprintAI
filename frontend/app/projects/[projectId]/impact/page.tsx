@@ -57,6 +57,7 @@ const DOMAINS: DomainConfig[] = [
   { key: "security", label: "Security & Threat Rules", icon: ShieldAlert, color: "#c53030", desc: "Authentication & policy mitigations" },
   { key: "task", label: "Implementation Tasks", icon: CheckSquare, color: "#2f855a", desc: "Engineering sprint deliverables" },
   { key: "test", label: "Verification Tests", icon: TestTube2, color: "#7c5cd6", desc: "Unit, contract & security tests" },
+  { key: "component", label: "UI Components", icon: Layers, color: "#8a857d", desc: "Frontend view components" },
 ];
 
 /** Impact workspace (§28): deterministic branching tree, blast radius metrics, LLM architectural synthesis. */
