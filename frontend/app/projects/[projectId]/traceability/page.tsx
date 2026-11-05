@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ReactFlow, Background, Controls, Handle, Position, Node, Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Layers, X, Sparkles, Filter, RefreshCw } from "lucide-react";
 import { useTraceability } from "../../../../lib/query/useArtifacts";
 import { api } from "../../../../lib/api/client";
 import { suggestLinks, traceArtifact } from "../../../../lib/api/endpoints";
@@ -27,18 +28,47 @@ const LEGEND: Record<string, string> = {
 };
 const COLORS = LEGEND;
 
-type TypeNodeData = { type: string; code: string; selected?: boolean };
+type TypeNodeData = {
+  type: string;
+  code: string;
+  selected?: boolean;
+  dimmed?: boolean;
+  inPath?: boolean;
+};
 
 function TypeNode({ data, selected }: { data: TypeNodeData; selected?: boolean }) {
   const node = data as TypeNodeData;
   const color = COLORS[node.type] || "var(--color-secondary)";
   const isSel = selected ?? node.selected;
+  const isDimmed = node.dimmed;
+  const inPath = node.inPath;
+
   return (
-    <div style={{ borderColor: color }}
-      className={`rounded-xl border-2 bg-elevated px-3 py-1.5 text-center shadow ${isSel ? "ring-2 ring-white/40" : ""}`}>
+    <div
+      style={{
+        borderColor: isDimmed ? "var(--color-border)" : isSel ? color : inPath ? color : "var(--color-border-strong)",
+        opacity: isDimmed ? 0.22 : 1,
+        boxShadow: isSel ? `0 0 16px ${color}66` : inPath ? `0 0 8px ${color}33` : undefined,
+      }}
+      className={`relative rounded-xl border-2 bg-elevated px-3 py-1.5 text-center transition-all duration-200 ${
+        isSel
+          ? "ring-2 ring-primary ring-offset-2 ring-offset-canvas scale-105 z-10"
+          : inPath
+          ? "scale-[1.02] z-[5]"
+          : "hover:border-border-strong"
+      }`}
+    >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <p className="font-mono text-[12px] font-bold" style={{ color }}>{node.code}</p>
-      <p className="text-[10.5px] uppercase tracking-wide text-secondary">{node.type}</p>
+      <p className="font-mono text-[12px] font-bold" style={{ color: isDimmed ? "var(--color-muted)" : color }}>
+        {node.code}
+      </p>
+      <p className="text-[10px] uppercase tracking-wide text-secondary">{node.type}</p>
+      {inPath && !isSel && (
+        <span className="absolute -top-1 -right-1 flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: color }} />
+          <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: color }} />
+        </span>
+      )}
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   );
@@ -49,11 +79,15 @@ const nodeTypes = { typed: TypeNode };
 /** Traceability workspace (§26): stored relationships as an interactive graph. No invented edges. */
 export default function Traceability() {
   const { projectId: pid } = useParams() as { projectId: string };
+  const searchParams = useSearchParams();
+  const initialFocus = searchParams.get("focus");
+
   const { setSelection } = useShell();
   const traceQ = useTraceability(pid);
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [sel, setSel] = useState<string | null>(null);
+  const [sel, setSel] = useState<string | null>(initialFocus ? (initialFocus.includes(":") ? initialFocus : `requirement:${initialFocus}`) : null);
   const [selLinks, setSelLinks] = useState<any[]>([]);
+  const [activeLayer, setActiveLayer] = useState<string>("all");
   const [lookup, setLookup] = useState("REQ-001");
   const [trace, setTrace] = useState<any>(null);
   const [err, setErr] = useState("");
@@ -73,6 +107,43 @@ export default function Traceability() {
     return [...s].sort();
   }, [data]);
 
+  // Transitive path isolation: Find all ancestors and descendants reachable from `sel`
+  const connectedNodeIds = useMemo(() => {
+    if (!sel || !data?.links) return new Set<string>();
+    const connected = new Set<string>([sel]);
+
+    // Transitive forward (descendants)
+    let frontier = [sel];
+    while (frontier.length > 0) {
+      const next: string[] = [];
+      for (const curr of frontier) {
+        for (const l of data.links) {
+          if (l.from === curr && !connected.has(l.to)) {
+            connected.add(l.to);
+            next.push(l.to);
+          }
+        }
+      }
+      frontier = next;
+    }
+
+    // Transitive backward (ancestors)
+    frontier = [sel];
+    while (frontier.length > 0) {
+      const next: string[] = [];
+      for (const curr of frontier) {
+        for (const l of data.links) {
+          if (l.to === curr && !connected.has(l.from)) {
+            connected.add(l.from);
+            next.push(l.from);
+          }
+        }
+      }
+      frontier = next;
+    }
+    return connected;
+  }, [sel, data?.links]);
+
   const { nodes, edges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
     const seen = new Map<string, { type: string; code: string }>();
@@ -88,33 +159,58 @@ export default function Traceability() {
     const nodes: Node[] = [];
     ORDER.forEach((t, ci) => {
       (cols[t] || []).forEach((n, ri) => {
+        const nodeId = `${n.type}:${n.code}`;
+        const isSel = sel === nodeId;
+        const isInPath = sel ? connectedNodeIds.has(nodeId) : false;
+        const isLayerMatch = activeLayer === "all" || n.type === activeLayer;
+        const isDimmed = sel ? !isInPath : !isLayerMatch;
+
         nodes.push({
-          id: `${n.type}:${n.code}`, type: "typed", position: { x: ci * 190, y: ri * 92 },
-          data: { ...n, selected: sel === `${n.type}:${n.code}` }, draggable: true,
+          id: nodeId,
+          type: "typed",
+          position: { x: ci * 190, y: ri * 92 },
+          data: {
+            ...n,
+            selected: isSel,
+            dimmed: isDimmed,
+            inPath: isInPath,
+          },
+          draggable: true,
         });
       });
     });
+
     const ids = new Set(nodes.map((n) => n.id));
     const edges: Edge[] = data.links
       .filter((l: any) => ids.has(l.from) && ids.has(l.to))
       .map((l: any, i: number) => {
-        const isConnected = sel ? l.from === sel || l.to === sel : false;
+        const isDirect = sel ? l.from === sel || l.to === sel : false;
+        const isTransitive = sel ? connectedNodeIds.has(l.from) && connectedNodeIds.has(l.to) : false;
+        const isLayerEdge = activeLayer === "all" || (l.from.startsWith(`${activeLayer}:`) || l.to.startsWith(`${activeLayer}:`));
+
+        const isHighlighted = sel ? isTransitive : isLayerEdge;
+        const isDimmed = sel ? !isTransitive : !isLayerEdge;
+
         return {
           id: `e${i}`,
           source: l.from,
           target: l.to,
           label: l.rel,
-          animated: isConnected,
+          animated: isDirect || isTransitive,
           style: {
-            stroke: isConnected ? "var(--color-accent)" : "var(--color-border)",
-            strokeWidth: isConnected ? 2 : 1,
-            opacity: sel ? (isConnected ? 1 : 0.25) : 0.8,
+            stroke: isDirect ? "var(--color-primary)" : isTransitive ? "var(--color-accent)" : "var(--color-border)",
+            strokeWidth: isDirect ? 2.5 : isTransitive ? 2 : 1,
+            opacity: isDimmed ? 0.12 : isHighlighted ? 1 : 0.7,
           },
-          labelStyle: { fill: isConnected ? "var(--color-accent)" : "var(--color-secondary)", fontSize: 10 },
+          labelStyle: {
+            fill: isDirect ? "var(--color-primary)" : isTransitive ? "var(--color-accent)" : "var(--color-secondary)",
+            fontSize: 10,
+            fontWeight: isDirect || isTransitive ? 600 : 400,
+          },
         };
       });
     return { nodes, edges };
-  }, [data, sel]);
+  }, [data, sel, connectedNodeIds, activeLayer]);
 
   const onNodeClick = useCallback(async (_: any, node: Node) => {
     const id = node.id as string;
@@ -125,6 +221,11 @@ export default function Traceability() {
       setSelLinks([...(t.forward || []), ...(t.backward || [])]);
     } catch { setSelLinks([]); }
   }, [pid, setSelection]);
+
+  const clearSelection = useCallback(() => {
+    setSel(null);
+    setSelLinks([]);
+  }, []);
 
   const lookupGo = async () => {
     try {
@@ -228,14 +329,74 @@ export default function Traceability() {
         <EmptyState title="No relationships yet" hint="Approve artifacts to begin building the traceability graph." />
       ) : (
         <>
-        <p className="mb-2 flex flex-wrap gap-x-3 gap-y-1" aria-label="Node type legend">
-          {ORDER.filter((t) => t !== "component").map((t) => (
-            <span key={t} className="inline-flex items-center gap-1 font-mono text-[11px] text-muted">
-              <span className="h-2 w-2 rounded-sm" style={{ background: LEGEND[t] }} aria-hidden />{t}
+        {/* Layer Filters & Path Isolation Controls */}
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Layer filter">
+            <span className="flex items-center gap-1 text-[11.5px] font-semibold text-secondary mr-1">
+              <Layers size={13} aria-hidden /> Filter layer:
             </span>
-          ))}
-        </p>
-        <div className="mb-3.5 h-[clamp(320px,50vh,520px)] overflow-hidden rounded-xl border border-border bg-surface">
+            <button
+              role="tab"
+              aria-selected={activeLayer === "all"}
+              onClick={() => setActiveLayer("all")}
+              className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-medium transition-colors ${
+                activeLayer === "all"
+                  ? "bg-primary text-canvas font-semibold shadow-xs"
+                  : "bg-surface border border-border text-secondary hover:text-primary hover:border-border-strong"
+              }`}
+            >
+              All layers
+            </button>
+            {ORDER.filter((t) => t !== "component").map((t) => {
+              const isActive = activeLayer === t;
+              return (
+                <button
+                  key={t}
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveLayer(isActive ? "all" : t)}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-mono text-[11px] transition-colors ${
+                    isActive
+                      ? "bg-elevated font-semibold text-primary border-2 shadow-xs"
+                      : "bg-surface border border-border text-muted hover:text-secondary hover:border-border-strong"
+                  }`}
+                  style={{ borderColor: isActive ? LEGEND[t] : undefined }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: LEGEND[t] }} aria-hidden />
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+
+          {(sel || activeLayer !== "all") && (
+            <button
+              onClick={() => { clearSelection(); setActiveLayer("all"); }}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-0.5 text-[11.5px] font-medium text-secondary hover:bg-elevated hover:text-primary transition-colors"
+            >
+              <RefreshCw size={11} aria-hidden /> Reset view
+            </button>
+          )}
+        </div>
+
+        {/* Selected Path Status Banner */}
+        {sel && (
+          <div className="mb-2 flex items-center justify-between rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-[12px] text-accent animate-in fade-in duration-150">
+            <span className="flex items-center gap-1.5">
+              <Sparkles size={13} className="text-accent" aria-hidden />
+              <span>Isolated path for <b className="font-mono">{sel}</b>: <b>{connectedNodeIds.size}</b> artifacts in connected lineage.</span>
+            </span>
+            <button
+              onClick={clearSelection}
+              className="flex items-center gap-1 text-[11.5px] font-semibold text-secondary hover:text-primary hover:underline ml-2"
+              title="Clear selection"
+            >
+              <X size={12} /> Clear path
+            </button>
+          </div>
+        )}
+
+        <div className="mb-3.5 h-[clamp(340px,54vh,540px)] overflow-hidden rounded-xl border border-border bg-surface shadow-xs">
           <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={onNodeClick}
             fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.3} maxZoom={1.5}
             colorMode={typeof document !== "undefined" && document.documentElement.dataset.theme === "light" ? "light" : "dark"}>

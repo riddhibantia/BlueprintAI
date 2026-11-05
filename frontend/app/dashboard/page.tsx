@@ -15,6 +15,50 @@ import { useToast } from "../../components/ui/toast";
 
 type Project = { id: string; name: string; idea?: string; status?: string };
 
+interface IndustryStarter {
+  id: string;
+  emoji: string;
+  title: string;
+  tagline: string;
+  badge: string;
+  prompt: string;
+}
+
+const STARTER_ARCHETYPES: IndustryStarter[] = [
+  {
+    id: "fintech",
+    emoji: "💳",
+    title: "Fintech & Subscription Billing",
+    tagline: "Stripe Connect, multi-tenant RBAC, usage metering, and PCI-DSS compliance.",
+    badge: "Fintech / PCI-DSS",
+    prompt: "B2B SaaS subscription billing platform with Stripe Connect, multi-tenant RBAC, usage metering, webhook idempotency keys, and PCI-DSS audit compliance.",
+  },
+  {
+    id: "healthcare",
+    emoji: "🏥",
+    title: "HIPAA Telehealth Patient Portal",
+    tagline: "Doctor booking, telehealth sessions, HIPAA audit trails, and encrypted EHR records.",
+    badge: "Healthcare / HIPAA",
+    prompt: "Healthcare patient portal with appointment booking, real-time doctor-patient messaging, HIPAA-compliant encryption at rest, and role-based medical records access.",
+  },
+  {
+    id: "ecommerce",
+    emoji: "📦",
+    title: "Multi-Warehouse Inventory",
+    tagline: "Real-time stock reservation, carrier fulfillment routing, and tracking webhooks.",
+    badge: "E-Commerce",
+    prompt: "Multi-warehouse logistics and inventory management system with stock reservations, split-order fulfillment routing, carrier rate calculation, and shipment tracking webhooks.",
+  },
+  {
+    id: "ai-saas",
+    emoji: "🤖",
+    title: "AI Agent & Copilot SaaS",
+    tagline: "Hybrid vector RAG, SSE token streaming, rate-limiting, and prompt versioning.",
+    badge: "AI / LLM",
+    prompt: "Developer AI Copilot platform with hybrid vector RAG retrieval over markdown docs, server-sent event token streaming, tenant rate-limiting middleware, and prompt versioning.",
+  },
+];
+
 const PROMPT_SUGGESTIONS = [
   "Employee expense management platform with receipt OCR and manager approvals",
   "B2B SaaS subscription billing with Stripe, multi-tenant RBAC, and usage metering",
@@ -444,23 +488,55 @@ export default function Dashboard() {
           placeholder="Describe the product to blueprint… (press Ctrl+Enter to create)"
           className="w-full rounded-xl border border-border bg-canvas p-3 text-[13.5px] leading-relaxed placeholder:text-muted focus:border-primary focus:outline-none" />
         
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-muted">
-            <Sparkles size={12} className="text-muted" aria-hidden /> Starter templates:
-          </span>
-          {PROMPT_SUGGESTIONS.map((s, idx) => (
-            <button key={idx} type="button" onClick={() => setIdea(s)}
-              className="rounded-full border border-border bg-subtle/80 px-2.5 py-0.5 text-[11.5px] text-secondary transition-colors hover:border-border-strong hover:bg-elevated hover:text-primary">
-              {s.split(" with ")[0]}
-            </button>
-          ))}
+        <div className="mt-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[12px] font-semibold text-secondary">
+              <Sparkles size={13} className="text-accent" aria-hidden />
+              Industry Archetypes & Architecture Starters
+            </span>
+            <span className="text-[11.5px] text-muted">Click to prefill engineered requirements</span>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {STARTER_ARCHETYPES.map((arch) => {
+              const isSelected = idea === arch.prompt;
+              return (
+                <div
+                  key={arch.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setIdea(arch.prompt)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setIdea(arch.prompt); } }}
+                  className={`cursor-pointer rounded-xl border p-2.5 text-left transition-all ${
+                    isSelected
+                      ? "border-primary bg-elevated shadow-xs ring-1 ring-primary/30"
+                      : "border-border bg-subtle/50 hover:border-border-strong hover:bg-elevated/60"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[16px]">{arch.emoji}</span>
+                    <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-muted uppercase tracking-wider border border-border/60">
+                      {arch.badge}
+                    </span>
+                  </div>
+                  <p className="text-[12.5px] font-semibold text-primary">{arch.title}</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-secondary line-clamp-2">{arch.tagline}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-border pt-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
           <div className="flex items-center gap-2">
             <Button onClick={create} loading={state === "busy"}><Plus size={14} />Create project</Button>
             {createError && <p className="text-[13px] text-danger" role="alert">{createError}</p>}
           </div>
+          {idea.trim() && (
+            <span className="font-mono text-[11.5px] text-muted">
+              Project title: <b className="text-primary font-sans font-semibold">{shortName(idea)}</b>
+            </span>
+          )}
         </div>
       </Card>
       {projects.length === 0 ? (
