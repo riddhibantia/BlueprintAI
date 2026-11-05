@@ -20,7 +20,7 @@ from app.rag.retriever import retrieve
 from app.rag.standards_pack import seed_default_standards
 
 router = APIRouter(tags=["knowledge"])
-ALLOWED_EXT = (".pdf", ".txt", ".md", ".docx")
+ALLOWED_EXT = (".pdf", ".txt", ".md", ".docx", ".json", ".yaml", ".yml", ".sql")
 MAX_BYTES = 15 * 1024 * 1024
 
 logger = logging.getLogger("blueprintai.rag")

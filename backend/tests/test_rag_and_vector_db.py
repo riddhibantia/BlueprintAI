@@ -163,3 +163,67 @@ def test_docx_document_ingestion_and_stats(client):
     req_run = next((r for r in runs if r["agent"] == "requirements"), None)
     assert req_run is not None
     assert "grounded" in req_run["output"] or "drafted" in req_run["output"]
+
+
+def test_upload_json_yaml_sql_and_requirements_filtering(client):
+    """Verify JSON/YAML/SQL upload support and requirements query filtering."""
+    # Register user
+    email = "polyglot_knowledge@test.com"
+    client.post("/auth/register", json={"email": email, "password": "password123", "name": "Polyglot"})
+    login_res = client.post("/auth/login", json={"email": email, "password": "password123"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create project
+    proj_res = client.post("/projects", json={"name": "Polyglot Project", "product_idea": "Database API gateway"}, headers=headers)
+    pid = proj_res.json()["id"]
+
+    # 1. Upload JSON schema
+    json_bytes = b'{"openapi": "3.0.0", "info": {"title": "Payment API", "version": "1.0.0"}, "paths": {"/pay": {"post": {"summary": "Process transaction"}}}}'
+    res_json = client.post(
+        f"/projects/{pid}/documents",
+        files={"file": ("openapi.json", json_bytes, "application/json")},
+        headers=headers,
+    )
+    assert res_json.status_code == 200
+    assert res_json.json()["chunks"] >= 1
+
+    # 2. Upload YAML config
+    yaml_bytes = b"service: payment-gateway\nversion: 2.1\nrate_limit: 100 requests per minute\nsecurity: tls_1_3"
+    res_yaml = client.post(
+        f"/projects/{pid}/documents",
+        files={"file": ("gateway_config.yaml", yaml_bytes, "text/yaml")},
+        headers=headers,
+    )
+    assert res_yaml.status_code == 200
+    assert res_yaml.json()["chunks"] >= 1
+
+    # 3. Upload SQL schema
+    sql_bytes = b"CREATE TABLE transactions (id UUID PRIMARY KEY, amount NUMERIC(10, 2), currency VARCHAR(3), status VARCHAR(20));"
+    res_sql = client.post(
+        f"/projects/{pid}/documents",
+        files={"file": ("schema.sql", sql_bytes, "text/sql")},
+        headers=headers,
+    )
+    assert res_sql.status_code == 200
+    assert res_sql.json()["chunks"] >= 1
+
+    # 4. Generate requirements
+    client.post(f"/projects/{pid}/requirements/generate", json={"answers": "high throughput and low latency"}, headers=headers)
+
+    # 5. Test requirements filtering: by status, by type, and by search term
+    all_reqs = client.get(f"/projects/{pid}/requirements", headers=headers).json()
+    assert len(all_reqs) > 0
+
+    draft_reqs = client.get(f"/projects/{pid}/requirements?status=draft", headers=headers).json()
+    assert len(draft_reqs) == len(all_reqs)
+
+    non_existent = client.get(f"/projects/{pid}/requirements?status=rejected", headers=headers).json()
+    assert len(non_existent) == 0
+
+    # Search filtering
+    first_title_word = all_reqs[0]["title"].split()[0]
+    matched = client.get(f"/projects/{pid}/requirements?search={first_title_word}", headers=headers).json()
+    assert len(matched) >= 1
+    assert any(first_title_word.lower() in r["title"].lower() for r in matched)
+

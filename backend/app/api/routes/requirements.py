@@ -91,12 +91,24 @@ def add_one(pid: str, body: RequirementIn, db: Session = Depends(get_db), user=D
 
 
 @router.get("/projects/{pid}/requirements")
-def list_req(pid: str, limit: int = Query(default=500, ge=1, le=2000),
+def list_req(pid: str,
+             status: str | None = None,
+             type: str | None = None,
+             search: str | None = None,
+             limit: int = Query(default=500, ge=1, le=2000),
              offset: int = Query(default=0, ge=0),
              db: Session = Depends(get_db), user=Depends(current_user)):
     """List requirements ordered by stable code (with version + timestamps for the workspace table)."""
     project_or_403(pid, db, user)
-    rows = db.query(Requirement).filter_by(project_id=pid).order_by(Requirement.code).offset(offset).limit(limit).all()
+    q = db.query(Requirement).filter_by(project_id=pid)
+    if status:
+        q = q.filter(Requirement.status == status)
+    if type:
+        q = q.filter(Requirement.type == type)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        q = q.filter(Requirement.title.ilike(term) | Requirement.code.ilike(term) | Requirement.description.ilike(term))
+    rows = q.order_by(Requirement.code).offset(offset).limit(limit).all()
     return [{"code": r.code, "title": r.title, "type": r.type, "status": r.status,
              "priority": r.priority, "id": r.id, "version": r.version,
              "description": r.description or "", "acceptance_criteria": r.acceptance_criteria or "",

@@ -37,10 +37,13 @@ export function shortName(idea: string): string {
 export default function Dashboard() {
   const router = useRouter();
   const [authed, setAuthed] = useState(false);
-  const [mode, setMode] = useState<"login" | "register">("register");
+  const [mode, setMode] = useState<"login" | "register" | "forgot" | "reset">("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetInfo, setResetInfo] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectSearch, setProjectSearch] = useState("");
   const [idea, setIdea] = useState("Build an employee expense management platform.");
@@ -166,6 +169,64 @@ export default function Dashboard() {
     }
   };
 
+  const requestReset = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setFieldErrors({ email: "Enter a valid email address." });
+      return;
+    }
+    setFieldErrors({});
+    setAuthError("");
+    setResetInfo("");
+    setState("busy");
+    try {
+      const res = await api<{ status: string; message: string; dev_token?: string }>("/auth/request-reset", {
+        method: "POST",
+        body: { email: email.trim() },
+      });
+      if (res.dev_token) {
+        setResetToken(res.dev_token);
+        setResetInfo("A reset token was generated. It has been prefilled below.");
+      } else {
+        setResetInfo(res.message || "Reset token sent to your email.");
+      }
+      setMode("reset");
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Failed to request password reset.");
+    } finally {
+      setState("idle");
+    }
+  };
+
+  const doResetPassword = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const errs: Record<string, string> = {};
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) errs.email = "Enter a valid email address.";
+    if (!resetToken.trim()) errs.token = "Enter the reset token.";
+    if (newPassword.length < 8) errs.newPassword = "Password must be at least 8 characters.";
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setAuthError("");
+    setState("busy");
+    try {
+      await api<{ status: string; message: string }>("/auth/reset-password", {
+        method: "POST",
+        body: { email: email.trim(), reset_token: resetToken.trim(), new_password: newPassword },
+      });
+      toast.success("Password reset successfully! You can now log in.");
+      setPassword(newPassword);
+      setNewPassword("");
+      setResetToken("");
+      setResetInfo("");
+      setMode("login");
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Password reset failed.");
+    } finally {
+      setState("idle");
+    }
+  };
+
   const create = async () => {
     const trimmed = idea.trim();
     if (!trimmed) { setCreateError("Describe your product idea first."); return; }
@@ -208,52 +269,138 @@ export default function Dashboard() {
           </ul>
         </div>
         <Card className="w-full self-center">
-          <div className="mb-3 flex gap-2" role="tablist" aria-label="Auth mode">
-            <button role="tab" aria-selected={mode === "login"} onClick={() => { setMode("login"); setFieldErrors({}); setAuthError(""); }}
-              className={`relative min-h-9 rounded-full px-3.5 py-1.5 text-[13px] font-medium after:absolute after:left-0 after:right-0 after:-top-1 after:-bottom-1 after:content-[''] ${mode === "login" ? "bg-elevated font-semibold text-primary" : "text-secondary hover:text-primary"}`}>Log in</button>
-            <button role="tab" aria-selected={mode === "register"} onClick={() => { setMode("register"); setFieldErrors({}); setAuthError(""); }}
-              className={`relative min-h-9 rounded-full px-3.5 py-1.5 text-[13px] font-medium after:absolute after:left-0 after:right-0 after:-top-1 after:-bottom-1 after:content-[''] ${mode === "register" ? "bg-elevated font-semibold text-primary" : "text-secondary hover:text-primary"}`}>Sign up</button>
-          </div>
-          <form onSubmit={auth} noValidate>
-            <ErrorSummary
-              id="auth-error-summary"
-              errors={Object.entries(fieldErrors).map(([field, message]) => ({ fieldId: `auth-${field}`, message }))}
-            />
-            {mode === "register" && (
-              <>
-                <label className="block text-[13px]" htmlFor="auth-name">Name</label>
-                <input id="auth-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada" autoComplete="name"
-                  aria-invalid={!!fieldErrors.name} aria-describedby={fieldErrors.name ? "auth-name-error" : undefined}
+          {mode === "forgot" ? (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-[16px] font-semibold">Forgot Password</h2>
+                <button type="button" onClick={() => { setMode("login"); setFieldErrors({}); setAuthError(""); setResetInfo(""); }}
+                  className="text-[12px] text-accent hover:underline">
+                  Back to Log in
+                </button>
+              </div>
+              <p className="mb-3 text-[13px] text-secondary">
+                Enter your registered email and we'll send a password reset token.
+              </p>
+              <form onSubmit={requestReset} noValidate>
+                <label className="block text-[13px]" htmlFor="auth-reset-email">Email</label>
+                <input id="auth-reset-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" autoComplete="email"
+                  aria-invalid={!!fieldErrors.email}
                   className="mt-1 h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" />
-                <FieldError id="auth-name-error">{fieldErrors.name}</FieldError>
-              </>
-            )}
-            <label className={`${mode === "register" ? "mt-2 " : ""}block text-[13px]`} htmlFor="auth-email">Email</label>
-            <input id="auth-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" autoComplete="email"
-              aria-invalid={!!fieldErrors.email} aria-describedby={fieldErrors.email ? "auth-email-error" : undefined}
-              className="mt-1 h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" />
-            <FieldError id="auth-email-error">{fieldErrors.email}</FieldError>
-            <label className="mt-2 block text-[13px]" htmlFor="auth-password">Password</label>
-            <span className="relative mt-1 block">
-              <input id="auth-password" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="•••••••• (min 8)"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                aria-invalid={!!fieldErrors.password} aria-describedby={fieldErrors.password ? "auth-password-error" : undefined}
-                className="h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 pr-10 placeholder:text-muted focus:border-primary focus:outline-none" />
-              <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? "Hide password" : "Show password"}
-                className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-secondary transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-elevated hover:text-primary">
-                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </span>
-            <FieldError id="auth-password-error">{fieldErrors.password}</FieldError>
-            {mode === "register" && pwStrength && (
-              <p className="mt-1 text-[12px] text-secondary" role="status">Strength: {pwStrength}</p>
-            )}
-            <div className="mt-3">
-              <Button type="submit" loading={state === "busy"}>{mode === "login" ? "Log in" : "Create account"}</Button>
+                <FieldError id="auth-reset-email-error">{fieldErrors.email}</FieldError>
+                <div className="mt-3">
+                  <Button type="submit" loading={state === "busy"}>Send Reset Token</Button>
+                </div>
+                <button type="button" onClick={() => { setMode("reset"); setFieldErrors({}); setAuthError(""); }}
+                  className="mt-3 block w-full text-center text-[12.5px] text-secondary hover:text-primary">
+                  Already have a token? Reset password
+                </button>
+                {authError && <p className="mt-2 text-[13px] text-danger" role="alert">{authError}</p>}
+              </form>
             </div>
+          ) : mode === "reset" ? (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-[16px] font-semibold">Reset Password</h2>
+                <button type="button" onClick={() => { setMode("login"); setFieldErrors({}); setAuthError(""); setResetInfo(""); }}
+                  className="text-[12px] text-accent hover:underline">
+                  Back to Log in
+                </button>
+              </div>
+              {resetInfo && (
+                <div className="mb-3 rounded-lg border border-border bg-surface p-2.5 text-[12.5px] text-secondary">
+                  {resetInfo}
+                </div>
+              )}
+              <form onSubmit={doResetPassword} noValidate>
+                <label className="block text-[13px]" htmlFor="auth-reset-email2">Email</label>
+                <input id="auth-reset-email2" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" autoComplete="email"
+                  aria-invalid={!!fieldErrors.email}
+                  className="mt-1 h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" />
+                <FieldError id="auth-reset-email2-error">{fieldErrors.email}</FieldError>
 
-            {authError && <p className="mt-2 text-[13px] text-danger" role="alert">{authError}</p>}
-          </form>
+                <label className="mt-2 block text-[13px]" htmlFor="auth-token">Reset Token</label>
+                <input id="auth-token" value={resetToken} onChange={(e) => setResetToken(e.target.value)} placeholder="Paste your reset token"
+                  aria-invalid={!!fieldErrors.token}
+                  className="mt-1 h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 font-mono text-[12.5px] placeholder:text-muted focus:border-primary focus:outline-none" />
+                <FieldError id="auth-token-error">{fieldErrors.token}</FieldError>
+
+                <label className="mt-2 block text-[13px]" htmlFor="auth-new-password">New Password</label>
+                <span className="relative mt-1 block">
+                  <input id="auth-new-password" type={showPw ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="•••••••• (min 8)"
+                    autoComplete="new-password"
+                    aria-invalid={!!fieldErrors.newPassword}
+                    className="h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 pr-10 placeholder:text-muted focus:border-primary focus:outline-none" />
+                  <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? "Hide password" : "Show password"}
+                    className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-secondary transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-elevated hover:text-primary">
+                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </span>
+                <FieldError id="auth-new-password-error">{fieldErrors.newPassword}</FieldError>
+
+                <div className="mt-3">
+                  <Button type="submit" loading={state === "busy"}>Update Password</Button>
+                </div>
+                {authError && <p className="mt-2 text-[13px] text-danger" role="alert">{authError}</p>}
+              </form>
+            </div>
+          ) : (
+            <>
+              <div className="mb-3 flex gap-2" role="tablist" aria-label="Auth mode">
+                <button role="tab" aria-selected={mode === "login"} onClick={() => { setMode("login"); setFieldErrors({}); setAuthError(""); }}
+                  className={`relative min-h-9 rounded-full px-3.5 py-1.5 text-[13px] font-medium after:absolute after:left-0 after:right-0 after:-top-1 after:-bottom-1 after:content-[''] ${mode === "login" ? "bg-elevated font-semibold text-primary" : "text-secondary hover:text-primary"}`}>Log in</button>
+                <button role="tab" aria-selected={mode === "register"} onClick={() => { setMode("register"); setFieldErrors({}); setAuthError(""); }}
+                  className={`relative min-h-9 rounded-full px-3.5 py-1.5 text-[13px] font-medium after:absolute after:left-0 after:right-0 after:-top-1 after:-bottom-1 after:content-[''] ${mode === "register" ? "bg-elevated font-semibold text-primary" : "text-secondary hover:text-primary"}`}>Sign up</button>
+              </div>
+              <form onSubmit={auth} noValidate>
+                <ErrorSummary
+                  id="auth-error-summary"
+                  errors={Object.entries(fieldErrors).map(([field, message]) => ({ fieldId: `auth-${field}`, message }))}
+                />
+                {mode === "register" && (
+                  <>
+                    <label className="block text-[13px]" htmlFor="auth-name">Name</label>
+                    <input id="auth-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada" autoComplete="name"
+                      aria-invalid={!!fieldErrors.name} aria-describedby={fieldErrors.name ? "auth-name-error" : undefined}
+                      className="mt-1 h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" />
+                    <FieldError id="auth-name-error">{fieldErrors.name}</FieldError>
+                  </>
+                )}
+                <label className={`${mode === "register" ? "mt-2 " : ""}block text-[13px]`} htmlFor="auth-email">Email</label>
+                <input id="auth-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@team.com" autoComplete="email"
+                  aria-invalid={!!fieldErrors.email} aria-describedby={fieldErrors.email ? "auth-email-error" : undefined}
+                  className="mt-1 h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 placeholder:text-muted focus:border-primary focus:outline-none" />
+                <FieldError id="auth-email-error">{fieldErrors.email}</FieldError>
+                <label className="mt-2 block text-[13px]" htmlFor="auth-password">Password</label>
+                <span className="relative mt-1 block">
+                  <input id="auth-password" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="•••••••• (min 8)"
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    aria-invalid={!!fieldErrors.password} aria-describedby={fieldErrors.password ? "auth-password-error" : undefined}
+                    className="h-11 w-full rounded-md border border-border bg-canvas px-3.5 py-2 pr-10 placeholder:text-muted focus:border-primary focus:outline-none" />
+                  <button type="button" onClick={() => setShowPw(!showPw)} aria-label={showPw ? "Hide password" : "Show password"}
+                    className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-secondary transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-elevated hover:text-primary">
+                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </span>
+                <FieldError id="auth-password-error">{fieldErrors.password}</FieldError>
+                {mode === "login" && (
+                  <div className="mt-1 flex justify-end">
+                    <button type="button" onClick={() => { setMode("forgot"); setFieldErrors({}); setAuthError(""); setResetInfo(""); }}
+                      className="text-[12px] text-accent hover:underline">
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+                {mode === "register" && pwStrength && (
+                  <p className="mt-1 text-[12px] text-secondary" role="status">Strength: {pwStrength}</p>
+                )}
+                <div className="mt-3">
+                  <Button type="submit" loading={state === "busy"}>{mode === "login" ? "Log in" : "Create account"}</Button>
+                </div>
+
+                {authError && <p className="mt-2 text-[13px] text-danger" role="alert">{authError}</p>}
+              </form>
+            </>
+          )}
         </Card>
       </div>
     );
