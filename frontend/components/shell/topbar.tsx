@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Check, ChevronRight, HelpCircle, Menu, MessageSquarePlus, MoreHorizontal, Search, Share2 } from "lucide-react";
+import { Check, ChevronRight, HelpCircle, Menu, MessageSquarePlus, MoreHorizontal, Search, Share2, Download } from "lucide-react";
 import { useShell } from "./context";
 import { Button, IconButton } from "../ui/button";
 import { ThemeToggle } from "../ui/theme-toggle";
@@ -11,6 +11,7 @@ import { apiDownload, logout, me } from "../../lib/api/client";
 import { checkConsistency } from "../../lib/api/endpoints";
 import { copyText } from "../../lib/clipboard";
 import { useToast } from "../ui/toast";
+import { ExportModal } from "./export-modal";
 
 type SessionUser = { name?: string; email?: string };
 
@@ -44,6 +45,7 @@ export function TopBar({
   const { pid, project, reload, setCopilotOpen } = useShell();
   const toast = useToast();
   const [copied, setCopied] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [validating, setValidating] = useState(false);
   const [actionError, setActionError] = useState("");
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -131,12 +133,17 @@ export function TopBar({
           <IconButton label="Ask Copilot (Ctrl+J)" onClick={() => setCopilotOpen(true)}>
             <MessageSquarePlus size={17} />
           </IconButton>
+          <Button variant="subtle" size="sm" onClick={() => setExportOpen(true)} aria-label="Export architecture blueprint">
+            <Download size={13} />
+            <span>Export</span>
+          </Button>
           {/* A stable accessible name: the visible text flips to "Copied",
               which would otherwise silently rename the control mid-interaction. */}
           <Button variant="ghost" size="sm" onClick={share} aria-label="Copy project link">
             <span aria-hidden>{copied ? <><Check size={14} className="text-success" />Copied</> : <>Share</>}</span>
           </Button>
           <Dropdown labelText="More actions" label={<MoreHorizontal size={16} />} items={[
+            { label: "Export Hub (All Formats)", onSelect: () => setExportOpen(true) },
             { label: validating ? "Validating…" : "Run validation", onSelect: validate },
             { label: "Export Markdown", onSelect: () => download("markdown") },
             { label: "Export PDF", onSelect: () => download("pdf") },
@@ -156,6 +163,7 @@ export function TopBar({
         </div>
       </div>
       {actionError && <p role="alert" className="border-t border-danger/40 bg-danger/5 px-5 py-1.5 text-[12.5px] text-danger">{actionError}</p>}
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} pid={pid} projectName={project?.name} />
     </header>
   );
 }

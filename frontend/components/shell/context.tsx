@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProject, useActivity } from "../../lib/query/useArtifacts";
 import type { ProjectDetail } from "../../lib/api/types";
@@ -15,9 +15,22 @@ type Shell = {
   reload: () => Promise<void>;
   copilotOpen: boolean;
   setCopilotOpen: (v: boolean) => void;
+  copilotMode: "dock" | "drawer";
+  setCopilotMode: (mode: "dock" | "drawer") => void;
 };
 
-const Ctx = createContext<Shell>({ pid: "", project: null, activity: [], selection: "", setSelection: () => {}, reload: async () => {}, copilotOpen: false, setCopilotOpen: () => {} });
+const Ctx = createContext<Shell>({
+  pid: "",
+  project: null,
+  activity: [],
+  selection: "",
+  setSelection: () => {},
+  reload: async () => {},
+  copilotOpen: false,
+  setCopilotOpen: () => {},
+  copilotMode: "dock",
+  setCopilotMode: () => {},
+});
 
 export const useShell = () => useContext(Ctx);
 
@@ -28,11 +41,41 @@ export function ShellProvider({ pid, children }: { pid: string; children: React.
   const { data: activity } = useActivity(pid);
   const [selection, setSelection] = useState("");
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const [copilotMode, setCopilotModeState] = useState<"dock" | "drawer">(() => {
+    try {
+      const saved = localStorage.getItem("dbp-copilot-mode");
+      return saved === "drawer" ? "drawer" : "dock";
+    } catch {
+      return "dock";
+    }
+  });
+
+  const setCopilotMode = (mode: "dock" | "drawer") => {
+    setCopilotModeState(mode);
+    try {
+      localStorage.setItem("dbp-copilot-mode", mode);
+    } catch {}
+  };
+
   const reload = async () => {
     await qc.invalidateQueries({ queryKey: ["p", pid] });
   };
+
   return (
-    <Ctx.Provider value={{ pid, project: project || null, activity: activity || [], selection, setSelection, reload, copilotOpen, setCopilotOpen }}>
+    <Ctx.Provider
+      value={{
+        pid,
+        project: project || null,
+        activity: activity || [],
+        selection,
+        setSelection,
+        reload,
+        copilotOpen,
+        setCopilotOpen,
+        copilotMode,
+        setCopilotMode,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

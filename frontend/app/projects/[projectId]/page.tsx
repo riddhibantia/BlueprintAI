@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   GitBranch,
   Sparkles,
+  Zap,
 } from "lucide-react";
 import { useShell } from "../../../components/shell/context";
 import { useIssues, useTraceability, useWrite } from "../../../lib/query/useArtifacts";
@@ -84,6 +85,43 @@ export default function InboxHome() {
   const next = stages.find((s) => s.route === continueRoute(stages)) || stages[0];
   const nextIdx = Math.max(0, stages.indexOf(next));
 
+  // Visual Architecture Readiness Scorecard Calculation
+  const approvedReqs = reqs.filter((r) => r.status === "approved").length;
+  const specPct = reqs.length > 0 ? Math.round((approvedReqs / reqs.length) * 100) : 0;
+  const hasPrd = !!(bundle.prd?.content && Object.keys(bundle.prd.content).length > 0);
+  const specScore = Math.round((specPct * 0.7) + (hasPrd ? 30 : 0));
+
+  const hasApis = bundle.apis.length > 0;
+  const hasDb = (bundle.db?.entities?.length || 0) > 0;
+  const contractsScore = Math.round((hasApis ? 50 : 0) + (hasDb ? 50 : 0));
+
+  const hasSecurity = (bundle.security?.length || 0) > 0;
+  const secScore = hasSecurity ? 100 : 0;
+
+  const tracePct = bundle.coverage?.coverage_pct || 0;
+  const hasTests = bundle.tests.length > 0;
+  const verifyScore = Math.round((tracePct * 0.7) + (hasTests ? 30 : 0));
+
+  const overallReadiness = Math.round(
+    specScore * 0.35 +
+    contractsScore * 0.25 +
+    secScore * 0.15 +
+    verifyScore * 0.25
+  );
+
+  let readinessLabel = "Early Draft";
+  let readinessBadge = "text-muted border-border bg-subtle";
+  let ringStroke = "#a8a29e";
+  if (overallReadiness >= 80) {
+    readinessLabel = "Production Ready";
+    readinessBadge = "text-success border-success/30 bg-success/10";
+    ringStroke = "#12693a";
+  } else if (overallReadiness >= 45) {
+    readinessLabel = "Hardening Needed";
+    readinessBadge = "text-warning border-warning/30 bg-warning/10";
+    ringStroke = "#8a5206";
+  }
+
   return (
     <div className="space-y-4">
       {/* Header section with project title & metadata */}
@@ -102,6 +140,113 @@ export default function InboxHome() {
           </div>
         </div>
       </div>
+
+      {/* Architecture Readiness Scorecard */}
+      <Card className="border-border bg-gradient-to-br from-surface via-surface to-elevated/30 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            {/* Circular Progress Ring */}
+            <div className="relative grid h-16 w-16 flex-none place-items-center">
+              <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
+                <path
+                  className="text-border"
+                  strokeWidth="3.2"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path
+                  strokeDasharray={`${overallReadiness}, 100`}
+                  strokeWidth="3.2"
+                  strokeLinecap="round"
+                  stroke={ringStroke}
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  className="transition-all duration-700 ease-out"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center">
+                <span className="font-mono text-[16px] font-bold text-primary">{overallReadiness}%</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-[14.5px] font-bold text-primary">Architecture Readiness</h3>
+                <span className={cn("rounded-full border px-2 py-0.2 text-[10px] font-bold uppercase tracking-wider", readinessBadge)}>
+                  {readinessLabel}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[12px] text-secondary">
+                Calculated across specification completeness, API contracts, security posture, and test coverage.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick fix / Action buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            {orphans.length > 0 && (
+              <Link
+                href={`/projects/${pid}/traceability`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-warning/40 bg-warning/10 px-2.5 py-1 text-[11.5px] font-semibold text-warning hover:bg-warning/20 transition-colors"
+              >
+                <Zap size={12} /> Auto-heal {orphans.length} orphans
+              </Link>
+            )}
+            {reqs.length - approvedReqs > 0 && (
+              <Link
+                href={`/projects/${pid}/requirements`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1 text-[11.5px] font-medium text-secondary hover:text-primary hover:border-border-strong transition-colors"
+              >
+                Review {reqs.length - approvedReqs} draft specs →
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* 4 Pillars Sub-Gauge Bar */}
+        <div className="mt-3.5 grid gap-2 sm:grid-cols-4 border-t border-border/80 pt-3 text-[11.5px]">
+          <div className="rounded-xl border border-border/60 bg-canvas/60 p-2">
+            <div className="flex items-center justify-between text-muted mb-1">
+              <span>Spec & PRD</span>
+              <span className="font-mono font-bold text-primary">{specScore}%</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+              <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${specScore}%` }} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-canvas/60 p-2">
+            <div className="flex items-center justify-between text-muted mb-1">
+              <span>Contracts & Schema</span>
+              <span className="font-mono font-bold text-primary">{contractsScore}%</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+              <div className="h-full bg-tone-blue rounded-full transition-all duration-500" style={{ width: `${contractsScore}%` }} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-canvas/60 p-2">
+            <div className="flex items-center justify-between text-muted mb-1">
+              <span>Security Baseline</span>
+              <span className="font-mono font-bold text-primary">{secScore}%</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+              <div className="h-full bg-danger rounded-full transition-all duration-500" style={{ width: `${secScore}%` }} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-canvas/60 p-2">
+            <div className="flex items-center justify-between text-muted mb-1">
+              <span>Traceability</span>
+              <span className="font-mono font-bold text-primary">{verifyScore}%</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+              <div className="h-full bg-success rounded-full transition-all duration-500" style={{ width: `${verifyScore}%` }} />
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* KPI Metric Strip */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

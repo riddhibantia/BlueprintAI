@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Check, CheckCircle2, Copy, Search } from "lucide-react";
+import { Check, CheckCircle2, Copy, Search, CheckSquare } from "lucide-react";
 import { useStories, usePrd, useTraceability, useWrite } from "../../../../lib/query/useArtifacts";
 import { siblings } from "../../../../lib/query/links";
 import { Card } from "../../../../components/ui/card";
@@ -13,8 +13,9 @@ import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { useToast } from "../../../../components/ui/toast";
 import { Tooltip } from "../../../../components/ui/overlay";
 import { copyText } from "../../../../lib/clipboard";
+import { api } from "../../../../lib/api/client";
 
-/** User stories (§19): structured narrative + AC + real linked artifacts with search & filters. */
+/** User stories (§19): structured narrative + AC + real linked artifacts with search & filters & bulk triage bar. */
 export default function Stories() {
   const { projectId: pid } = useParams() as { projectId: string };
   const toast = useToast();
@@ -25,6 +26,10 @@ export default function Stories() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DRAFT" | "APPROVED">("ALL");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // Bulk actions state
+  const [checkedStories, setCheckedStories] = useState<Set<string>>(new Set());
+  const [bulkApproving, setBulkApproving] = useState(false);
 
   // All hooks must run before any early return. Putting this useMemo below the
   // loading guard made React see a different hook count on the render where
@@ -56,8 +61,6 @@ export default function Stories() {
 
   const copyStory = async (s: any) => {
     const text = `${s.code}: "${s.story}"\n\nAcceptance Criteria:\n${(s.acceptance || []).map((a: string) => `- ${a}`).join("\n")}`;
-    // Only claim success once the write resolves — a blocked clipboard is a
-    // real outcome the user needs to know about, not a silent no-op.
     if (await copyText(text)) {
       setCopiedCode(s.code);
       toast.success(`Copied ${s.code} to clipboard`);
@@ -66,6 +69,61 @@ export default function Stories() {
       toast.error("Couldn't copy — your browser blocked clipboard access.");
     }
   };
+
+  const toggleCheck = (code: string) => {
+    setCheckedStories((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (checkedStories.size === filteredStories.length) {
+      setCheckedStories(new Set());
+    } else {
+      setCheckedStories(new Set(filteredStories.map((s: any) => s.code)));
+    }
+  };
+
+  const bulkApprove = async () => {
+    if (checkedStories.size === 0 || bulkApproving) return;
+    setBulkApproving(true);
+    try {
+      for (const code of Array.from(checkedStories)) {
+        await api(`/projects/${pid}/stories/${code}/approve`, { method: "POST" });
+      }
+      toast.success(`Approved ${checkedStories.size} user stories!`);
+      setCheckedStories(new Set());
+      await storiesQ.refetch();
+    } catch (e: any) {
+      toast.error(e.message || "Bulk approval failed");
+    } finally {
+      setBulkApproving(false);
+    }
+  };
+
+  const bulkCopy = async () => {
+    const selectedList = stories.filter((s: any) => checkedStories.has(s.code));
+    const text = selectedList
+      .map(
+        (s: any) =>
+          `### ${s.code}: ${s.title || ""}\n"${s.story}"\n\n**Acceptance Criteria:**\n${(
+            s.acceptance || []
+          )
+            .map((a: string) => `- [ ] ${a}`)
+            .join("\n")}`
+      )
+      .join("\n\n---\n\n");
+    if (await copyText(text)) {
+      toast.success(`Copied ${selectedList.length} stories as Markdown`);
+    } else {
+      toast.error("Clipboard blocked");
+    }
+  };
+
+  const allFilteredChecked = filteredStories.length > 0 && checkedStories.size === filteredStories.length;
 
   return (
     <div>
@@ -76,6 +134,16 @@ export default function Stories() {
             {stories.length} stories · each linked to its source requirement and siblings
           </p>
         </div>
+        {filteredStories.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-secondary hover:text-primary transition-colors"
+          >
+            <CheckSquare size={13} className="text-muted" />
+            {allFilteredChecked ? "Deselect all" : "Select all"}
+          </button>
+        )}
       </div>
 
       {approve.isError && <div className="mb-3"><ErrorState message={(approve.error as Error)?.message} /></div>}
@@ -119,12 +187,13 @@ export default function Stories() {
                   <button
                     key={st}
                     onClick={() => setStatusFilter(st)}
-                    className={`rounded-lg px-2.5 py-1 text-[12px] font-medium transition-colors ${
-                      active ? "bg-elevated font-semibold text-primary shadow-sm" : "text-secondary hover:text-primary"
+                    className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                      active
+                        ? "bg-primary font-semibold text-canvas"
+                        : "text-secondary hover:bg-elevated hover:text-primary"
                     }`}
                   >
-                    {st === "ALL" ? "All Stories" : st[0] + st.slice(1).toLowerCase()}{" "}
-                    <span className="font-mono text-[11px] text-muted">({count})</span>
+                    {st === "ALL" ? "All" : st.charAt(0) + st.slice(1).toLowerCase()} ({count})
                   </button>
                 );
               })}
@@ -133,28 +202,49 @@ export default function Stories() {
 
           {filteredStories.length === 0 ? (
             <EmptyState
-              title="No matching stories"
-              hint={`No user stories match "${search}" with status filter ${statusFilter}.`}
+              title="No stories match your filter"
+              hint="Try clearing your search query or switching the status filter."
+              action={
+                <Button variant="ghost" onClick={() => { setSearch(""); setStatusFilter("ALL"); }}>
+                  Reset filters
+                </Button>
+              }
             />
           ) : (
-            <div className="grid gap-3.5 lg:grid-cols-2">
+            <div className="grid gap-3.5 md:grid-cols-2">
               {filteredStories.map((s: any) => {
-                const rel = siblings(links, s.req, `story:${s.code}`);
-                const isCopied = copiedCode === s.code;
+                const rel = siblings(links, "story", s.code);
+                const isChecked = checkedStories.has(s.code);
                 return (
-                  <Card key={s.code} className="flex flex-col justify-between">
+                  <Card
+                    key={s.code}
+                    className={`flex flex-col justify-between transition-all ${
+                      isChecked ? "ring-2 ring-primary/40 border-primary bg-primary/[0.02]" : ""
+                    }`}
+                  >
                     <div>
                       <div className="mb-2 flex items-center justify-between gap-2 border-b border-border/80 pb-2">
                         <div className="flex items-center gap-2">
-                          <code className="font-mono text-[13px] font-bold text-accent">{s.code}</code>
-                          <Tooltip tip="Copy story and acceptance criteria">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleCheck(s.code)}
+                            aria-label={`Select ${s.code}`}
+                            className="h-4 w-4 rounded accent-primary cursor-pointer"
+                          />
+                          <span className="font-mono text-[12.5px] font-bold text-accent">{s.code}</span>
+                          <Tooltip tip="Copy story & criteria">
                             <button
                               type="button"
                               onClick={() => copyStory(s)}
                               className="rounded p-1 text-muted transition-colors hover:bg-elevated hover:text-primary"
-                              aria-label={`Copy ${s.code} story and acceptance criteria`}
+                              aria-label={`Copy ${s.code}`}
                             >
-                              {isCopied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
+                              {copiedCode === s.code ? (
+                                <Check size={12} className="text-success" />
+                              ) : (
+                                <Copy size={12} />
+                              )}
                             </button>
                           </Tooltip>
                         </div>
@@ -207,6 +297,34 @@ export default function Stories() {
                   </Card>
                 );
               })}
+            </div>
+          )}
+
+          {/* Floating Linear-style Bulk Action Bar */}
+          {checkedStories.size > 0 && (
+            <div
+              role="region"
+              aria-label="Bulk actions bar"
+              className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2.5 rounded-2xl border border-border bg-surface/95 px-4 py-2.5 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-4 duration-200 ring-1 ring-border/80"
+            >
+              <span className="rounded-full bg-elevated px-2.5 py-0.5 font-mono text-[11.5px] font-bold text-primary">
+                {checkedStories.size} selected
+              </span>
+              <div className="h-4 w-px bg-border" aria-hidden />
+              <Button size="sm" variant="subtle" onClick={bulkApprove} loading={bulkApproving} className="text-[12px]">
+                <Check size={13} className="text-success" /> Approve selected
+              </Button>
+              <Button size="sm" variant="ghost" onClick={bulkCopy} className="text-[12px]">
+                <Copy size={13} /> Copy Markdown
+              </Button>
+              <div className="h-4 w-px bg-border" aria-hidden />
+              <button
+                type="button"
+                onClick={() => setCheckedStories(new Set())}
+                className="text-[12px] text-muted hover:text-primary transition-colors px-1"
+              >
+                Clear
+              </button>
             </div>
           )}
         </div>

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Bot, Send, Sparkles, Activity as ActivityIcon, Copy, Check } from "lucide-react";
+import { Bot, Send, Sparkles, Activity as ActivityIcon, Copy, Check, Columns2, Maximize2, X } from "lucide-react";
 import { useShell } from "../shell/context";
 import { api, API } from "../../lib/api/client";
 import { checkConsistency, listRuns } from "../../lib/api/endpoints";
@@ -15,15 +15,16 @@ import { useToast } from "../ui/toast";
 import type { CopilotMode, CopilotAnswer, AgentRun } from "../../lib/api/types";
 import { copyText } from "../../lib/clipboard";
 
-/** Blueprint Copilot (§30): contextual, mode-explicit, page-aware prompts, copyable responses. */
-export function CopilotPanel() {
-  const { pid, project, selection } = useShell();
+/** Blueprint Copilot (§30): contextual, mode-explicit, page-aware prompts, copyable responses, dock/drawer support. */
+export function CopilotPanel({ onClose, hideHeader = false }: { onClose?: () => void; hideHeader?: boolean }) {
+  const { pid, project, selection, copilotMode, setCopilotMode } = useShell();
   const path = usePathname() || "";
   const toast = useToast();
   const [tab, setTab] = useState<"ask" | "activity">("ask");
   const [mode, setMode] = useState<CopilotMode | null>(null);
   const [q, setQ] = useState("");
   const [answer, setAnswer] = useState<CopilotAnswer | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState("");
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -46,6 +47,7 @@ export function CopilotPanel() {
 
   const ask = async (question: string) => {
     if (!question.trim()) return;
+    setCurrentQuestion(question);
     setBusy(true); setErr(""); setAnswer(null);
     try {
       const res = await fetch(`${API}/projects/${pid}/copilot/ask/stream`, {
@@ -59,42 +61,55 @@ export function CopilotPanel() {
       }
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
-      if (!reader) throw new Error("No readable stream");
-
+      let buffer = "";
       let accumulated = "";
-      let finalMode: "ai" | "rule" = "rule";
-      let finalEvidence: any[] = [];
+
+      if (!reader) throw new Error("No response body");
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const text = decoder.decode(value, { stream: true });
-        const lines = text.split("\n\n");
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.type === "token") {
-                accumulated += data.text;
-                setAnswer({ mode: finalMode, answer: accumulated, evidence: finalEvidence });
+              if (data.type === "meta") {
+                setAnswer({
+                  answer: "",
+                  evidence: data.evidence || [],
+                  mode: data.mode || "ai",
+                });
+              } else if (data.type === "token") {
+                accumulated += data.token;
+                setAnswer((prev) => prev ? { ...prev, answer: accumulated } : null);
               } else if (data.type === "done") {
-                finalMode = data.mode || "rule";
-                finalEvidence = data.evidence || [];
-                setAnswer({ mode: finalMode, answer: accumulated, evidence: finalEvidence });
+                setAnswer((prev) => prev ? { ...prev, answer: accumulated } : null);
+                setAnsweredAt(fingerprint);
+              } else if (data.type === "error") {
+                setErr(data.error);
               }
-            } catch {
-              /* ignore parse errors */
+            } catch (err) {
+              // Ignore partial JSON parse errors
             }
           }
         }
       }
-      setAnsweredAt(fingerprint);
     } catch (e: any) {
+      // Fallback to non-streaming endpoint
       try {
-        setAnswer(await api(`/projects/${pid}/copilot/ask`, {
+        const res = await fetch(`${API}/projects/${pid}/copilot/ask`, {
           method: "POST",
-          body: { question, page, selection: selection || "" },
-        }));
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ question, page, selection: selection || "" }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setAnswer(data);
         setAnsweredAt(fingerprint);
       } catch (err: any) {
         setErr(err.message || e.message);
@@ -139,30 +154,64 @@ export function CopilotPanel() {
     }
     if (page === "traceability") {
       return [
-        ["Find orphaned nodes", "List all orphaned requirements that have no linked downstream artifacts."],
-        ["Suggest link bridges", "Suggest logical relationships to link requirements to database and APIs."],
-        ["Explain graph coverage", "Explain our current traceability coverage percentage and how to reach 100%."],
+        ["Find orphan artifacts", "List any requirements or code elements with no downstream links."],
+        ["Explain broken links", "How can I auto-heal broken links in this project?"],
       ];
     }
     return [
-      ["Find requirement gaps", "Which requirements are orphaned and what should link them?"],
-      ["Explain this view", `Explain the current ${page} state${selection ? ` and artifact ${selection}` : ""}.`],
+      ["What should I do next?", "What is the next highest priority step in this project lifecycle?"],
+      ["Summarize project scope", "Provide an executive summary of this project and its key artifacts."],
       ["Check consistency", "What changed after the latest consistency check and are there conflicts?"],
     ];
   }, [page, selection]);
 
   return (
-    <div>
-      <h4 className="flex items-center gap-2 text-[13.5px] font-semibold">
-        {busy ? <ActivityIcon size={15} className="text-accent animate-pulse" aria-hidden /> : mode?.mode === "ai" ? <Sparkles size={15} className="text-accent" aria-hidden /> : <Bot size={15} className="text-secondary" aria-hidden />}
-        Blueprint Copilot
-      </h4>
-      <p className="mt-1">
-        {mode ? <StatusBadge value={mode.mode === "ai" ? "AI Copilot" : "Rule-based Copilot"} /> : <span className="text-secondary text-[12px]">Detecting mode…</span>}
-      </p>
+    <div className="flex flex-col h-full">
+      {/* Top action toolbar for docking and mode switching */}
+      {!hideHeader && (
+        <div className="flex items-center justify-between gap-2 border-b border-border/70 pb-2.5 mb-2">
+          <div className="flex items-center gap-2">
+            {busy ? (
+              <ActivityIcon size={15} className="text-accent animate-pulse" aria-hidden />
+            ) : mode?.mode === "ai" ? (
+              <Sparkles size={15} className="text-accent" aria-hidden />
+            ) : (
+              <Bot size={15} className="text-secondary" aria-hidden />
+            )}
+            <span className="text-[13.5px] font-semibold text-primary">Blueprint Copilot</span>
+            {mode && (
+              <span className="rounded bg-elevated px-1.5 py-0.5 text-[10.5px] font-medium text-secondary">
+                {mode.mode === "ai" ? "AI Mode" : "Rule Mode"}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setCopilotMode(copilotMode === "dock" ? "drawer" : "dock")}
+              className="rounded-lg p-1 text-muted hover:bg-elevated hover:text-primary transition-colors"
+              title={copilotMode === "dock" ? "Switch to Modal Overlay" : "Dock to Right Sidebar"}
+              aria-label={copilotMode === "dock" ? "Switch to Modal Overlay" : "Dock to Right Sidebar"}
+            >
+              {copilotMode === "dock" ? <Maximize2 size={13} /> : <Columns2 size={13} />}
+            </button>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg p-1 text-muted hover:bg-elevated hover:text-primary transition-colors"
+                title="Close Copilot"
+                aria-label="Close Copilot"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Context pill */}
-      <div className="mt-2.5 rounded-xl border border-border bg-canvas p-2.5 text-[12px]">
+      <div className="mt-1 rounded-xl border border-border bg-canvas p-2.5 text-[12px]">
         <p className="font-semibold text-primary">Context</p>
         <p className="truncate font-medium text-secondary">{project?.name || "…"}</p>
         <p className="font-mono text-[11px] text-muted">{page}{selection ? ` · ${selection}` : ""}</p>
@@ -178,7 +227,7 @@ export function CopilotPanel() {
       </div>
 
       {tab === "ask" ? (
-        <div className="mt-2.5">
+        <div className="mt-2.5 flex-1 flex flex-col min-h-0">
           <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
             Suggested for {page}
           </p>
@@ -199,31 +248,40 @@ export function CopilotPanel() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && ask(q)}
-              placeholder="Ask about this blueprint…"
-              aria-label="Ask Copilot"
-              className="min-w-0 flex-1 rounded-xl border border-border bg-canvas px-3 py-2 text-[12.5px] outline-none placeholder:text-muted focus:border-primary"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  ask(q);
+                  setQ("");
+                }
+              }}
+              placeholder={`Ask Copilot about ${page}…`}
+              className="flex-1 rounded-xl border border-border bg-canvas px-3 py-1.5 text-[12.5px] placeholder:text-muted focus:border-accent focus:outline-none"
             />
-            <Button size="sm" loading={busy} onClick={() => ask(q)} aria-label="Send question">
+            <Button size="sm" onClick={() => { ask(q); setQ(""); }} disabled={busy}>
               <Send size={13} />
             </Button>
           </div>
 
-          {err && <p className="mt-2 text-[12px] text-danger">{err}</p>}
+          {err && <p className="mt-2 text-[12.5px] text-danger" role="alert">{err}</p>}
 
           {answer && (
-            <div className="mt-3 rounded-xl border border-border bg-canvas p-3 shadow-xs">
-              <div className="mb-2 flex items-center justify-between gap-2 border-b border-border/80 pb-2">
-                <StatusBadge value={answer.mode === "ai" ? "AI Copilot" : "Rule-based Copilot"} />
-                <Button size="sm" variant="ghost" onClick={copyAnswer} title="Copy answer">
-                  {copiedAnswer ? <Check size={12} className="text-success" /> : <Copy size={12} />}
-                  <span className="text-[11px]">{copiedAnswer ? "Copied" : "Copy"}</span>
-                </Button>
+            <div className="mt-3 flex-1 overflow-y-auto rounded-xl border border-border bg-canvas p-3">
+              <div className="mb-2 flex items-center justify-between border-b border-border/80 pb-1.5">
+                <span className="font-semibold text-[12px] text-secondary truncate max-w-[240px]">Q: {currentQuestion}</span>
+                <button
+                  onClick={copyAnswer}
+                  className="flex items-center gap-1 rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-secondary hover:text-primary"
+                  title="Copy answer"
+                >
+                  {copiedAnswer ? <Check size={11} className="text-success" /> : <Copy size={11} />}
+                  {copiedAnswer ? "Copied" : "Copy"}
+                </button>
               </div>
 
               {stale && (
-                <p className="mb-2 rounded-lg border border-warning/40 bg-warning/10 px-2 py-1 text-[11.5px] text-warning" role="status">
-                  Project changed since this answer — re-ask for fresh numbers.
+                <p className="mb-2 rounded bg-warning/10 p-1.5 text-[11px] text-warning" role="status">
+                  Artifacts changed since this answer — regenerate if needed.
                 </p>
               )}
 
@@ -251,7 +309,7 @@ export function CopilotPanel() {
           )}
         </div>
       ) : (
-        <div className="mt-2.5">
+        <div className="mt-2.5 flex-1 overflow-y-auto">
           <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
             <ActivityIcon size={12} />Agent Activity Log
           </p>

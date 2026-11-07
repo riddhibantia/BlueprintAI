@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   ListChecks, FileText, MessagesSquare, Network, Database,
   Globe, ShieldCheck, KanbanSquare, FlaskConical, GitBranch, Scale, Zap, BookOpen,
-  ChevronsLeft, ChevronsRight, Layers, LayoutDashboard,
+  ChevronsLeft, ChevronsRight, Layers, LayoutDashboard, ChevronRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
@@ -50,19 +50,26 @@ const DOT_CLS: Record<Exclude<Dot, null>, string> = {
   ok: "bg-success", warn: "bg-warning", muted: "bg-border-strong",
 };
 
-/** Collapsible project sidebar (§8): lifecycle groups, inbox badge, keyboard accessible. */
+/** Collapsible project sidebar (§8): lifecycle groups, interactive accordion toggling, progress badges. */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const path = usePathname() || "";
   const { pid, project } = useShell();
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("dbp-nav") === "collapsed"; } catch { return false; }
   });
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
   const toggle = () => {
     setCollapsed((c) => {
       try { localStorage.setItem("dbp-nav", c ? "expanded" : "collapsed"); } catch { /* private mode */ }
       return !c;
     });
   };
+
+  const toggleSection = (title: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [title]: !prev[title] }));
+  };
+
   const base = `/projects/${pid}`;
   const { data: trace } = useTraceability(pid);
   const { data: issues } = useIssues(pid);
@@ -71,6 +78,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const cov = trace?.coverage?.coverage_pct || 0;
   const totalReqs = trace?.coverage?.total || 0;
   const m = project?.metrics || {};
+
   // Status dots are data presence from already-loaded queries (never invented):
   // ok = healthy/has data, warn = needs attention, muted = empty, null = no signal.
   const dots: Record<string, Dot> = {
@@ -83,6 +91,30 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     issues: openIssues > 0 ? "warn" : "ok",
   };
   const issuesTitle = `Needs triage: ${orphans} orphaned, ${openIssues} open issues`;
+
+  const getSectionBadge = (title: string | null) => {
+    if (!title) return null;
+    if (title === "Plan") {
+      let count = 0;
+      if (totalReqs > 0) count++;
+      if (m.stories && m.stories > 0) count++;
+      return `${count}/3`;
+    }
+    if (title === "Design") {
+      let count = 0;
+      if (m.apis && m.apis > 0) count++;
+      return `${count}/4`;
+    }
+    if (title === "Delivery") {
+      return (m.tests || 0) > 0 ? `${m.tests} tests` : null;
+    }
+    if (title === "Assure") {
+      if (orphans + openIssues === 0 && cov > 0) return `${cov}%`;
+      if (orphans + openIssues > 0) return `!`;
+      return null;
+    }
+    return null;
+  };
 
   const renderItem = (it: Item) => {
     const active = it.match.test(path);
@@ -121,12 +153,39 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </Link>
       <nav className="scroll-thin mt-1 flex-1 overflow-y-auto" aria-label="Modules">
-        {SECTIONS.map((sec) => (
-          <div key={sec.title || "top"} className="mt-3 first:mt-0">
-            {!collapsed && sec.title && <p className="px-2.5 text-[11px] font-semibold uppercase tracking-[0.96px] text-muted">{sec.title}</p>}
-            {sec.items.map(renderItem)}
-          </div>
-        ))}
+        {SECTIONS.map((sec) => {
+          const hasActiveItem = sec.items.some((it) => it.match.test(path));
+          const isCollapsed = !hasActiveItem && sec.title ? !!collapsedSections[sec.title] : false;
+          const badgeText = getSectionBadge(sec.title);
+
+          return (
+            <div key={sec.title || "top"} className="mt-3 first:mt-0">
+              {!collapsed && sec.title && (
+                <button
+                  type="button"
+                  onClick={() => toggleSection(sec.title!)}
+                  className="flex w-full items-center justify-between px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.96px] text-muted hover:text-primary transition-colors group"
+                  aria-expanded={!isCollapsed}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ChevronRight
+                      size={11}
+                      className={cn("text-muted transition-transform duration-150", !isCollapsed && "rotate-90 text-primary")}
+                      aria-hidden
+                    />
+                    {sec.title}
+                  </span>
+                  {badgeText && (
+                    <span className="rounded bg-elevated px-1.5 py-0.2 font-mono text-[10px] font-semibold text-secondary">
+                      {badgeText}
+                    </span>
+                  )}
+                </button>
+              )}
+              {(!isCollapsed || collapsed) && sec.items.map(renderItem)}
+            </div>
+          );
+        })}
       </nav>
       <div className={cn("border-t border-border pt-2", collapsed && "flex flex-col items-center")}>
         <button onClick={toggle} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}

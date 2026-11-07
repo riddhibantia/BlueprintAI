@@ -380,15 +380,29 @@ export default function Requirements() {
       ) : (
         <>
         {checked.size > 0 && (
-          <div className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-2.5 shadow-2xl backdrop-blur-md" role="status">
-            <span className="text-[13px] font-semibold text-primary">{checked.size} selected</span>
-            <Button size="sm" loading={bulkBusy} onClick={approveSelected}>
-              <Check size={14} />Approve selected
+          <div
+            role="region"
+            aria-label="Bulk actions bar"
+            className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2.5 rounded-2xl border border-border bg-surface/95 px-4 py-2.5 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-4 duration-200 ring-1 ring-border/80"
+          >
+            <span className="rounded-full bg-elevated px-2.5 py-0.5 font-mono text-[11.5px] font-bold text-primary">
+              {checked.size} selected
+            </span>
+            <div className="h-4 w-px bg-border" aria-hidden />
+            <Button size="sm" variant="subtle" loading={bulkBusy} onClick={approveSelected} className="text-[12px]">
+              <Check size={13} className="text-success" /> Approve selected
             </Button>
-            <Button size="sm" variant="danger" onClick={() => setBatchDeleteOpen(true)}>
-              <Trash2 size={14} />Delete selected
+            <Button size="sm" variant="danger" onClick={() => setBatchDeleteOpen(true)} className="text-[12px]">
+              <Trash2 size={13} /> Delete ({checked.size})
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setChecked(new Set())}>Clear</Button>
+            <div className="h-4 w-px bg-border" aria-hidden />
+            <button
+              type="button"
+              onClick={() => setChecked(new Set())}
+              className="text-[12px] text-muted hover:text-primary transition-colors px-1"
+            >
+              Clear
+            </button>
           </div>
         )}
         <DataTable label="Requirements" head={<><th className="w-10"><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} aria-label="Select all approvable requirements" className="h-5 w-5 accent-primary" /></th><th>ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Coverage</th><th>Links</th><th>Updated</th><th><span className="sr-only">Approve</span></th></>}>
