@@ -1,4 +1,6 @@
 """httpOnly cookie session: login sets it, cookie alone authorizes, logout clears it."""
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
@@ -66,6 +68,10 @@ def test_password_change_revokes_older_sessions(client):
     r2 = client.post("/auth/login", json={"email": "revoke@dev.blue", "password": "pass12345"})
     pre_change_token = r2.json()["token"]
 
+    # password_changed_at and JWT `iat` both have whole-second resolution, so a
+    # token minted in the same second as the change is indistinguishable from a
+    # post-change one. Cross a second boundary to make revocation deterministic.
+    time.sleep(1.1)
     assert client.post("/auth/password", json={"current_password": "pass12345",
                                                "new_password": "newpass123"}).status_code == 200
     # Pre-change tokens (registration + login) are revoked...
