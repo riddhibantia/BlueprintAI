@@ -14,6 +14,7 @@ import { useToast } from "../../../../components/ui/toast";
 import { Tooltip } from "../../../../components/ui/overlay";
 import { copyText } from "../../../../lib/clipboard";
 import { api } from "../../../../lib/api/client";
+import type { Story } from "../../../../lib/api/types";
 
 /** User stories (§19): structured narrative + AC + real linked artifacts with search & filters & bulk triage bar. */
 export default function Stories() {
@@ -36,7 +37,7 @@ export default function Stories() {
   // loading finished ("Rendered more hooks than during the previous render").
   const stories = storiesQ.data || [];
   const filteredStories = useMemo(() => {
-    return stories.filter((s: any) => {
+    return stories.filter((s) => {
       const q = search.toLowerCase();
       const matchesSearch =
         (s.code || "").toLowerCase().includes(q) ||
@@ -59,7 +60,7 @@ export default function Stories() {
   const links = traceQ.data?.links || [];
   const hasPrd = !!(prdQ.data?.content && Object.keys(prdQ.data.content).length > 0);
 
-  const copyStory = async (s: any) => {
+  const copyStory = async (s: Story) => {
     const text = `${s.code}: "${s.story}"\n\nAcceptance Criteria:\n${(s.acceptance || []).map((a: string) => `- ${a}`).join("\n")}`;
     if (await copyText(text)) {
       setCopiedCode(s.code);
@@ -83,7 +84,7 @@ export default function Stories() {
     if (checkedStories.size === filteredStories.length) {
       setCheckedStories(new Set());
     } else {
-      setCheckedStories(new Set(filteredStories.map((s: any) => s.code)));
+      setCheckedStories(new Set(filteredStories.map((s) => s.code)));
     }
   };
 
@@ -97,18 +98,18 @@ export default function Stories() {
       toast.success(`Approved ${checkedStories.size} user stories!`);
       setCheckedStories(new Set());
       await storiesQ.refetch();
-    } catch (e: any) {
-      toast.error(e.message || "Bulk approval failed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bulk approval failed");
     } finally {
       setBulkApproving(false);
     }
   };
 
   const bulkCopy = async () => {
-    const selectedList = stories.filter((s: any) => checkedStories.has(s.code));
+    const selectedList = stories.filter((s) => checkedStories.has(s.code));
     const text = selectedList
       .map(
-        (s: any) =>
+        (s) =>
           `### ${s.code}: ${s.title || ""}\n"${s.story}"\n\n**Acceptance Criteria:**\n${(
             s.acceptance || []
           )
@@ -181,7 +182,7 @@ export default function Stories() {
                 const count =
                   st === "ALL"
                     ? stories.length
-                    : stories.filter((s: any) => (s.status || "draft").toUpperCase() === st).length;
+                    : stories.filter((s) => (s.status || "draft").toUpperCase() === st).length;
                 const active = statusFilter === st;
                 return (
                   <button
@@ -212,7 +213,7 @@ export default function Stories() {
             />
           ) : (
             <div className="grid gap-3.5 md:grid-cols-2">
-              {filteredStories.map((s: any) => {
+              {filteredStories.map((s) => {
                 const rel = siblings(links, "story", s.code);
                 const isChecked = checkedStories.has(s.code);
                 return (
@@ -288,7 +289,7 @@ export default function Stories() {
                     <div className="mt-3.5 border-t border-border/80 pt-2.5">
                       <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted">Traces to</p>
                       <div className="flex flex-wrap gap-1.5">
-                        <ArtifactLink code={s.req} href={`/projects/${pid}/requirements`} />
+                        <ArtifactLink code={s.req || ""} href={`/projects/${pid}/requirements`} />
                         {rel.map((l, i) => (
                           <ArtifactLink key={i} code={l.to} />
                         ))}

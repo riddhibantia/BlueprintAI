@@ -24,7 +24,7 @@ export default function Consistency() {
   // Hooks run before the loading guard — see note in stories/page.tsx.
   const issues = issuesQ.data || [];
   const filteredIssues = useMemo(() => {
-    return issues.filter((i: any) => {
+    return issues.filter((i) => {
       const q = search.toLowerCase();
       const matchesSearch =
         (i.description || "").toLowerCase().includes(q) ||
@@ -40,11 +40,11 @@ export default function Consistency() {
 
   if (issuesQ.isLoading) return <LoadingState stage="Loading consistency issues" />;
   if (issuesQ.isError) return <ErrorState message={(issuesQ.error as Error)?.message} onRetry={() => issuesQ.refetch()} />;
-  const open = issues.filter((i: any) => i.status === "open");
-  const warns = open.filter((i: any) => i.severity === "warning").length;
-  const errors = open.filter((i: any) => ["conflict", "high"].includes((i.severity || "").toLowerCase())).length;
-  const withIssues = new Set(open.map((i: any) => i.check));
-  const hasRun = (runsQ.data || []).some((r: any) => r.agent === "consistency");
+  const open = issues.filter((i) => i.status === "open");
+  const warns = open.filter((i) => i.severity === "warning").length;
+  const errors = open.filter((i) => ["conflict", "high"].includes((i.severity || "").toLowerCase())).length;
+  const withIssues = new Set(open.map((i) => i.check));
+  const hasRun = (runsQ.data || []).some((r) => r.agent === "consistency");
   const passed = hasRun ? CHECKS.filter((c) => !withIssues.has(c)).length : "—";
   const decide = (id: string, status: string) => write.mutate({
     path: `/projects/${pid}/consistency/issues/${id}`, init: { method: "PATCH", body: JSON.stringify({ status }) },
@@ -123,7 +123,7 @@ export default function Consistency() {
             />
           ) : (
             <div className="grid gap-2.5">
-              {filteredIssues.map((i: any) => (
+              {filteredIssues.map((i) => (
                 <IssueCard key={i.id} issue={i}>
                   <p className="mt-1 text-[11.5px] text-muted">
                     Found {timeAgo(i.created_at)}

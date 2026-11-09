@@ -79,6 +79,7 @@ export type Traceability = {
 export type Issue = {
   id: string; check: string; severity: string; description: string;
   affected?: string[]; suggestion?: string; status: string;
+  created_at?: string; updated_at?: string;
 };
 
 export type DocEntry = { id: string; name: string; chunks: number; checksum: string; source?: string };

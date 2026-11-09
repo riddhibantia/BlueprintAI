@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_token, decode_token
 from app.api.deps import current_user
 from app.models.db import User
-from app.schemas import RegisterIn, LoginIn, ResetIn, ChangePasswordIn, RequestResetIn, PasswordChangeIn
+from app.schemas import RegisterIn, LoginIn, ResetIn, RequestResetIn, PasswordChangeIn
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -63,15 +63,10 @@ def logout(resp: Response, user: User = Depends(current_user)):
     return {"status": "logged out"}
 
 
-@router.post("/change-password")
-def change_password_compat(body: ChangePasswordIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Authenticated password change."""
-    if not verify_password(body.current_password, user.password_hash):
-        raise HTTPException(400, "Current password incorrect")
-    user.password_hash = hash_password(body.new_password)
-    db.commit()
-    log(db, user_id=user.id, action="user.password_change")
-    return {"status": "ok", "message": "Password changed successfully"}
+def _revocation_ts() -> datetime:
+    """Whole-second UTC timestamp — matches JWT `iat` resolution so the
+    revocation check in deps.current_user compares like-for-like."""
+    return datetime.now(timezone.utc).replace(microsecond=0)
 
 
 @router.post("/password")
@@ -81,7 +76,7 @@ def change_password(body: PasswordChangeIn, db: Session = Depends(get_db),
     if not verify_password(body.current_password, user.password_hash):
         raise HTTPException(401, "Current password is incorrect")
     user.password_hash = hash_password(body.new_password)
-    user.password_changed_at = datetime.now(timezone.utc)
+    user.password_changed_at = _revocation_ts()
     db.commit()
     log(db, user_id=user.id, action="user.password_change")
     return {"status": "ok", "message": "Password updated. Use it the next time you log in."}
@@ -145,7 +140,7 @@ def reset_password(body: ResetIn, db: Session = Depends(get_db)):
         raise HTTPException(404, "User not found")
 
     u.password_hash = hash_password(body.new_password)
-    u.password_changed_at = datetime.now(timezone.utc)
+    u.password_changed_at = _revocation_ts()
     db.add(PasswordResetToken(jti=jti, email=email))
     db.commit()
     log(db, user_id=u.id, action="user.password_reset")

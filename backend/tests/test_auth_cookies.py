@@ -56,3 +56,24 @@ def test_password_change_requires_current_password(client):
                                             "password": "pass12345"}).status_code == 401
     assert client.post("/auth/login", json={"email": "reset@dev.blue",
                                             "password": "newpass123"}).status_code == 200
+
+def test_password_change_revokes_older_sessions(client):
+    """A token issued before a password change must be dead afterwards."""
+    r = client.post("/auth/register", json={"email": "revoke@dev.blue", "password": "pass12345"})
+    assert r.status_code == 200
+    old_token = r.json()["token"]
+    # A second session token, minted after registration but before the change.
+    r2 = client.post("/auth/login", json={"email": "revoke@dev.blue", "password": "pass12345"})
+    pre_change_token = r2.json()["token"]
+
+    assert client.post("/auth/password", json={"current_password": "pass12345",
+                                               "new_password": "newpass123"}).status_code == 200
+    # Pre-change tokens (registration + login) are revoked...
+    for tok in (old_token, pre_change_token):
+        anon = TestClient(app)
+        r = anon.get("/auth/me", headers={"Authorization": f"Bearer {tok}"})
+        assert r.status_code == 401, f"pre-change token should be revoked: {r.status_code}"
+    # ...but the new password still works.
+    fresh = TestClient(app)
+    assert fresh.post("/auth/login", json={"email": "revoke@dev.blue",
+                                           "password": "newpass123"}).status_code == 200

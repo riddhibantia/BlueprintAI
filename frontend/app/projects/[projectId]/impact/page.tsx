@@ -19,6 +19,7 @@ import {
   Network,
   ListTree,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useRequirements } from "../../../../lib/query/useArtifacts";
 import { analyzeImpact } from "../../../../lib/api/endpoints";
 import { Card } from "../../../../components/ui/card";
@@ -42,10 +43,12 @@ function rankOf(code: string): number {
   return RANK[t] ?? 99;
 }
 
+type ImpactResult = { requirement: string; affected: string[]; explanation?: string; provider?: string };
+
 interface DomainConfig {
   key: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
   color: string;
   desc: string;
 }
@@ -65,7 +68,7 @@ export default function Impact() {
   const { projectId: pid } = useParams() as { projectId: string };
   const reqsQ = useRequirements(pid);
   const [code, setCode] = useState("REQ-001");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ImpactResult | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [viewMode, setViewMode] = useState<"tree" | "chain">("tree");
@@ -91,7 +94,7 @@ export default function Impact() {
   }, [result]);
 
   const reqCodes = useMemo(() => {
-    return (reqsQ.data || []).map((r: any) => r.code);
+    return (reqsQ.data || []).map((r) => r.code);
   }, [reqsQ.data]);
 
   // Group affected artifacts by category

@@ -1,8 +1,9 @@
 """Shared dependencies: DB + auth + project access (§34)."""
+from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import decode_token
+from app.core.security import decode_token, token_issued_at
 from app.models.db import User, Project, ProjectMember
 
 COOKIE = "dbp_token"
@@ -27,6 +28,17 @@ def _bearer_token(authorization: str) -> str:
     return ""
 
 
+def _to_utc(dt: datetime | None) -> datetime:
+    """Normalize a possibly-naive DB datetime to aware UTC for comparison.
+
+    SQLite returns naive datetimes; the JWT `iat` is aware. Comparing them
+    directly raises TypeError, so every value goes through here first.
+    """
+    if dt is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
 def current_user(request: Request, authorization: str = Header(default=""),
                  db: Session = Depends(get_db)) -> User:
     # Explicit header wins (scripts/tests/API clients); browser cookie otherwise.
@@ -37,6 +49,13 @@ def current_user(request: Request, authorization: str = Header(default=""),
     u = db.query(User).filter_by(id=sub).first()
     if not u:
         raise HTTPException(401, "User not found")
+    # Session revocation: a token issued before the last password change/reset
+    # is dead, so a stolen token cannot outlive the reset that revoked it.
+    # password_changed_at is written whole-second-truncated (same resolution as
+    # the JWT `iat` claim), so the comparison is exact — see auth.py.
+    iat = token_issued_at(token)
+    if iat and iat < _to_utc(u.password_changed_at):
+        raise HTTPException(401, "Session revoked — please log in again")
     return u
 
 

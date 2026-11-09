@@ -6,8 +6,14 @@ import "@xyflow/react/dist/style.css";
 import { Layers, X, Sparkles, Filter, RefreshCw } from "lucide-react";
 import { useTraceability } from "../../../../lib/query/useArtifacts";
 import { api } from "../../../../lib/api/client";
+import type { TraceLink } from "../../../../lib/api/types";
 import { suggestLinks, traceArtifact } from "../../../../lib/api/endpoints";
 import { linkCounts } from "../../../../lib/query/links";
+
+/** Local API shapes for traceability helpers (kept page-local; not shared contracts). */
+type LinkSuggestion = TraceLink & { reason?: string };
+type TraceResult = { forward?: TraceLink[]; backward?: TraceLink[] };
+type HealReport = { coverage_before: number; coverage_after: number; healed_stories: number; healed_tests: number };
 import { useShell } from "../../../../components/shell/context";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
@@ -84,13 +90,13 @@ export default function Traceability() {
 
   const { setSelection } = useShell();
   const traceQ = useTraceability(pid);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<LinkSuggestion[]>([]);
   const [sel, setSel] = useState<string | null>(initialFocus ? (initialFocus.includes(":") ? initialFocus : `requirement:${initialFocus}`) : null);
-  const [selLinks, setSelLinks] = useState<any[]>([]);
+  const [selLinks, setSelLinks] = useState<TraceLink[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeLayer, setActiveLayer] = useState<string>("all");
   const [lookup, setLookup] = useState("REQ-001");
-  const [trace, setTrace] = useState<any>(null);
+  const [trace, setTrace] = useState<TraceResult | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [healing, setHealing] = useState(false);
@@ -183,8 +189,8 @@ export default function Traceability() {
 
     const ids = new Set(nodes.map((n) => n.id));
     const edges: Edge[] = data.links
-      .filter((l: any) => ids.has(l.from) && ids.has(l.to))
-      .map((l: any, i: number) => {
+      .filter((l) => ids.has(l.from) && ids.has(l.to))
+      .map((l, i) => {
         const isDirect = sel ? l.from === sel || l.to === sel : false;
         const isTransitive = sel ? connectedNodeIds.has(l.from) && connectedNodeIds.has(l.to) : false;
         const isLayerEdge = activeLayer === "all" || (l.from.startsWith(`${activeLayer}:`) || l.to.startsWith(`${activeLayer}:`));
@@ -213,7 +219,7 @@ export default function Traceability() {
     return { nodes, edges };
   }, [data, sel, connectedNodeIds, activeLayer]);
 
-  const onNodeClick = useCallback(async (_: any, node: Node) => {
+  const onNodeClick = useCallback(async (_: unknown, node: Node) => {
     const id = node.id as string;
     setSel(id);
     setSelection(id);
@@ -234,7 +240,7 @@ export default function Traceability() {
       const code = lookup.includes(":") ? lookup : lookup;
       const bare = code.includes(":") ? code.split(":").pop() || "" : code;
       setTrace(await traceArtifact(pid, bare));
-    } catch (e: any) { setErr(e.message); }
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
   };
 
   const suggest = async () => {
@@ -249,11 +255,11 @@ export default function Traceability() {
     setHealing(true);
     setErr("");
     try {
-      const res = await api<any>(`/projects/${pid}/traceability/auto-heal`, { method: "POST" });
+      const res = await api<HealReport>(`/projects/${pid}/traceability/auto-heal`, { method: "POST" });
       setHealReport(`Healed! Coverage: ${res.coverage_before}% → ${res.coverage_after}%, repaired ${res.healed_stories + res.healed_tests} artifacts.`);
       setTimeout(() => setHealReport(null), 5000);
       await traceQ.refetch();
-    } catch (e: any) {
+    } catch (e) {
       setErr(e instanceof Error ? e.message : "Auto-heal failed.");
     } finally {
       setHealing(false);
@@ -435,8 +441,8 @@ export default function Traceability() {
             {(trace.forward || []).length === 0 && (trace.backward || []).length === 0
               ? <p className="text-secondary">Orphaned — no stored relationships.</p>
               : <>
-                {(trace.forward || []).length > 0 && <><b>Downstream</b><ul>{trace.forward.map((l: any, i: number) => <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to}</li>)}</ul></>}
-                {(trace.backward || []).length > 0 && <><b>Upstream</b><ul>{trace.backward.map((l: any, i: number) => <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to}</li>)}</ul></>}
+                {trace.forward && trace.forward.length > 0 && <><b>Downstream</b><ul>{trace.forward.map((l, i) => <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to}</li>)}</ul></>}
+                {trace.backward && trace.backward.length > 0 && <><b>Upstream</b><ul>{trace.backward.map((l, i) => <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to}</li>)}</ul></>}
               </>}
           </div>
         )}
@@ -469,7 +475,7 @@ export default function Traceability() {
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} label={`Artifact ${sel}`} title={<span className="font-mono">{sel}</span>}>
         <p className="mb-2 text-[13px] text-secondary">{selLinks.length} touching relationships · downstream links: {sel && sel.startsWith("requirement:") ? counts[sel.split(":")[1]] || 0 : "—"}</p>
         <ul className="grid gap-1.5">
-          {selLinks.map((l: any, i: number) => (
+          {selLinks.map((l, i) => (
             <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to} <span className="text-secondary">({l.rel})</span></li>
           ))}
         </ul>

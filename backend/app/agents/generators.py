@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 from app.agents.base import complete, complete_json
 from app.core.config import settings
 
-log = logging.getLogger("devblueprint.generators")
+log = logging.getLogger("devblueprint.agents.generators")
 
 
 def clarify_questions(idea: str) -> list[str]:

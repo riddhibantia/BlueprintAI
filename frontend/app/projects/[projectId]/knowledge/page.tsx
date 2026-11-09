@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { FileUp, Search, Trash2, Database, Cpu, Layers, Sparkles, CheckCircle2 } from "lucide-react";
 import { useDocuments } from "../../../../lib/query/useArtifacts";
+import type { CopilotEvidence } from "../../../../lib/api/types";
 import { queryKnowledge, uploadDocument, deleteDocument, getKnowledgeStats, seedStandards } from "../../../../lib/api/endpoints";
 import { Card } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
@@ -30,7 +31,7 @@ export default function Knowledge() {
   const [seeding, setSeeding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<any[]>([]);
+  const [hits, setHits] = useState<CopilotEvidence[]>([]);
   const [note, setNote] = useState("");
   const [querying, setQuerying] = useState(false);
   const [err, setErr] = useState("");
@@ -50,7 +51,7 @@ export default function Knowledge() {
   }, [pid]);
 
   const docs = docsQ.data || [];
-  const chunks = docs.reduce((acc: number, d: any) => acc + (d.chunks || 0), 0);
+  const chunks = docs.reduce((acc, d) => acc + (d.chunks || 0), 0);
 
   const doUpload = async (f: File) => {
     if (f.size > MAX_UPLOAD_BYTES) {
@@ -166,7 +167,7 @@ export default function Knowledge() {
                 action={<Button size="sm" onClick={seedDefaults} loading={seeding}>Load default standards</Button>}
               />
             )}
-            {docs.map((d: any) => (
+            {docs.map((d) => (
               <div key={d.id} className="flex items-center justify-between gap-2 rounded-xl border border-border bg-canvas px-3.5 py-2.5 text-[13px] hover:border-border-strong transition-colors">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">

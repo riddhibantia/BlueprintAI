@@ -71,7 +71,7 @@ export default function InboxHome() {
     tasks: tasksQ.data || [],
     tests: testsQ.data || [],
     coverage: traceQ.data?.coverage,
-    openIssues: (issuesQ.data || []).filter((i: any) => i.status === "open").length,
+    openIssues: (issuesQ.data || []).filter((i) => i.status === "open").length,
     links: traceQ.data?.links || [],
   };
 
@@ -79,7 +79,7 @@ export default function InboxHome() {
   const completedStages = stages.filter((s) => s.state === "Complete").length;
   const progressPercent = Math.round((completedStages / Math.max(1, stages.length)) * 100);
 
-  const open = (issuesQ.data || []).filter((i: any) => i.status === "open");
+  const open = (issuesQ.data || []).filter((i) => i.status === "open");
   const orphans: string[] = bundle.coverage?.orphans || [];
   const triageCount = open.length + orphans.length;
   const next = stages.find((s) => s.route === continueRoute(stages)) || stages[0];
@@ -389,7 +389,7 @@ export default function InboxHome() {
             <EmptyState title="All clear" hint="No open issues and no orphaned requirements." />
           ) : (
             <div className="space-y-2">
-              {open.slice(0, 3).map((i: any) => (
+              {open.slice(0, 3).map((i) => (
                 <div key={i.id} className="rounded-xl border border-border bg-canvas p-3">
                   <p className="text-[13px] font-medium text-primary" title={i.description}>
                     {i.description}

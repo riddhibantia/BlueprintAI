@@ -28,6 +28,10 @@ import {
   Compass,
 } from "lucide-react";
 import { usePrd, useRequirements, useProject, useWrite } from "../../../../lib/query/useArtifacts";
+import type { Prd } from "../../../../lib/api/types";
+
+/** One saved revision of the PRD artifact, as returned by /versions?artifact_type=prd. */
+type PrdVersion = { id: string; version: number; status?: string; created_at?: string };
 import { fmtDate } from "../../../../lib/utils/time";
 import { Card, Panel, Metric } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
@@ -38,7 +42,7 @@ import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { Dialog } from "../../../../components/ui/overlay";
 import { useToast } from "../../../../components/ui/toast";
 
-function buildPrdMarkdown(title: string, status: string, updatedAt: string, content: Record<string, any>): string {
+function buildPrdMarkdown(title: string, status: string, updatedAt: string, content: Prd["content"]): string {
   const lines: string[] = [];
   lines.push(`# Product Requirements Document (PRD): ${title || "Software Blueprint"}`);
   lines.push(`**Status:** ${status.toUpperCase()}  |  **Last Updated:** ${updatedAt}  |  **Author:** Staff Product Manager\n`);
@@ -116,7 +120,7 @@ function buildPrdMarkdown(title: string, status: string, updatedAt: string, cont
     if (!standardKeys.has(k) && v) {
       lines.push(`## ${k.replace(/_/g, " ").toUpperCase()}`);
       if (Array.isArray(v)) {
-        v.forEach((item: any) => lines.push(`- ${item}`));
+        v.forEach((item) => lines.push(`- ${item}`));
       } else {
         lines.push(String(v));
       }
@@ -137,11 +141,11 @@ export default function Prd() {
   const write = useWrite(pid, ["prd", "activity", "runs"]);
 
   const [viewMode, setViewMode] = useState<"document" | "outline">("document");
-  const [draft, setDraft] = useState<any>(null);
+  const [draft, setDraft] = useState<Prd["content"] | null>(null);
   const [editing, setEditing] = useState(false);
   const [section, setSection] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [versions, setVersions] = useState<any[]>([]);
+  const [versions, setVersions] = useState<PrdVersion[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -196,7 +200,7 @@ export default function Prd() {
     }
   };
 
-  const rollback = async (v: any) => {
+  const rollback = async (v: PrdVersion) => {
     try {
       const res = await fetch(`/api/proxy/projects/${pid}/versions/${v.id}/rollback`, {
         method: "POST",
@@ -218,7 +222,7 @@ export default function Prd() {
   const loaded = prdQ.data;
   useEffect(() => {
     if (!editing && loaded?.content && Object.keys(loaded.content).length > 0) {
-      setDraft((d: Record<string, unknown> | null) => d ?? loaded.content);
+      setDraft((d) => d ?? loaded.content);
       setSection((s: string) => s || Object.keys(loaded.content)[0] || "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,7 +233,7 @@ export default function Prd() {
 
   const prd = prdQ.data ?? { content: {}, status: "draft" };
   const reqs = reqsQ.data || [];
-  const approved = reqs.filter((r: any) => r.status === "approved").length;
+  const approved = reqs.filter((r) => r.status === "approved").length;
   const projectTitle = projectQ.data?.name || "Product Specification";
   const projectIdea = projectQ.data?.idea || projectQ.data?.product_idea || projectQ.data?.description || "";
 
@@ -277,6 +281,7 @@ export default function Prd() {
     );
 
   const setSectionText = (text: string) => {
+    if (!draft) return;
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
     setDraft({ ...draft, [shown]: Array.isArray(draft[shown]) ? lines : text });
   };

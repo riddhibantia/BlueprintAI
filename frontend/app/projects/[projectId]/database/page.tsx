@@ -20,15 +20,16 @@ import { Dialog } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
+import type { DbEntity } from "../../../../lib/api/types";
 import { Code2, Copy, Check, Search, Database as DbIcon, KeyRound, Layers, Network, LayoutGrid } from "lucide-react";
 import { useToast } from "../../../../components/ui/toast";
 import CodeBlock from "../../../../components/ui/code-block";
 import { copyText } from "../../../../lib/clipboard";
 
 /** Render DDL client-side from structured field data (§21: no backend endpoint for SQL). */
-export function toSQL(entities: any[]): string {
+export function toSQL(entities: DbEntity[]): string {
   return entities.map((e) => {
-    const cols = (e.fields || []).map((f: any) => {
+    const cols = (e.fields || []).map((f) => {
       let line = `  ${f.name} ${f.dtype || "text"}`;
       if (f.pk) line += " PRIMARY KEY";
       if (!f.nullable && !f.pk) line += " NOT NULL";
@@ -39,8 +40,8 @@ export function toSQL(entities: any[]): string {
   }).join("\n\n");
 }
 
-export function entityToSQL(e: any): string {
-  const cols = (e.fields || []).map((f: any) => {
+export function entityToSQL(e: DbEntity): string {
+  const cols = (e.fields || []).map((f) => {
     let line = `  ${f.name} ${f.dtype || "text"}`;
     if (f.pk) line += " PRIMARY KEY";
     if (!f.nullable && !f.pk) line += " NOT NULL";
@@ -50,7 +51,7 @@ export function entityToSQL(e: any): string {
   return `CREATE TABLE ${e.name} (\n${cols.join(",\n")}\n);`;
 }
 
-function ErdTableNode({ data }: { data: any }) {
+function ErdTableNode({ data }: { data: DbEntity & { selected?: boolean } }) {
   return (
     <div className={`overflow-hidden rounded-xl border-2 bg-surface shadow-md min-w-[210px] transition-all ${
       data.selected ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-border-strong"
@@ -64,7 +65,7 @@ function ErdTableNode({ data }: { data: any }) {
         <span className="font-mono text-[10px] font-normal text-muted">{data.fields?.length || 0} cols</span>
       </div>
       <div className="divide-y divide-border/40 p-1 font-mono text-[11px]">
-        {(data.fields || []).map((f: any, i: number) => (
+        {(data.fields || []).map((f, i) => (
           <div key={i} className="flex items-center justify-between gap-2 px-2 py-1">
             <span className="flex items-center gap-1.5 font-medium text-primary">
               {f.pk ? (
@@ -151,7 +152,7 @@ export default function Database() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const copyTableSql = async (entity: any) => {
+  const copyTableSql = async (entity: DbEntity) => {
     const sql = entityToSQL(entity);
     if (!(await copyText(sql))) {
       toast.error("Couldn't copy — your browser blocked clipboard access.");
@@ -169,16 +170,16 @@ export default function Database() {
     if (!search.trim()) return entities;
     const q = search.toLowerCase();
     return entities.filter(
-      (e: any) =>
+      (e) =>
         e.name.toLowerCase().includes(q) ||
         (e.code || "").toLowerCase().includes(q) ||
-        (e.fields || []).some((f: any) => f.name.toLowerCase().includes(q))
+        (e.fields || []).some((f) => f.name.toLowerCase().includes(q))
     );
   }, [entities, search]);
 
-  const totalFields = entities.reduce((acc: number, e: any) => acc + (e.fields?.length || 0), 0);
+  const totalFields = entities.reduce((acc, e) => acc + (e.fields?.length || 0), 0);
   const totalFks = entities.reduce(
-    (acc: number, e: any) => acc + (e.fields || []).filter((f: any) => f.fk).length,
+    (acc, e) => acc + (e.fields || []).filter((f) => f.fk).length,
     0
   );
 
@@ -188,7 +189,7 @@ export default function Database() {
     const edgesList: Edge[] = [];
     const COLS_COUNT = 3;
 
-    entities.forEach((e: any, idx: number) => {
+    entities.forEach((e, idx) => {
       const col = idx % COLS_COUNT;
       const row = Math.floor(idx / COLS_COUNT);
       nodesList.push({
@@ -202,7 +203,7 @@ export default function Database() {
       });
 
       // Find FK references
-      (e.fields || []).forEach((f: any) => {
+      (e.fields || []).forEach((f) => {
         if (f.fk && f.references) {
           const targetTable = f.references.split(".")[0]?.trim();
           if (targetTable && targetTable !== e.name) {
@@ -338,7 +339,7 @@ export default function Database() {
             <EmptyState title="No matching tables" hint={`No entity or field matches "${search}".`} />
           ) : (
             <div className="grid gap-3.5 md:grid-cols-2">
-              {filteredEntities.map((e: any) => {
+              {filteredEntities.map((e) => {
                 const rel = touching(links, e.code || e.name);
                 const isCopied = copiedEntity === e.name;
                 const isSelected = selectedTable === e.name;
@@ -368,7 +369,7 @@ export default function Database() {
                       </div>
 
                       <div className="mt-2.5 divide-y divide-border/60 rounded-xl border border-border/80 bg-canvas/50">
-                        {(e.fields || []).map((f: any, i: number) => (
+                        {(e.fields || []).map((f, i) => (
                           <div key={i} className="flex items-center gap-2 px-3 py-1.5 font-mono text-[12px]">
                             <span className="w-8 flex-none text-[10px] font-bold">
                               {f.pk ? (

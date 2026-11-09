@@ -10,6 +10,7 @@ import { ErrorState, EmptyState, TableSkeleton } from "../../../../components/ui
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { siblings } from "../../../../lib/query/links";
+import type { TestCase } from "../../../../lib/api/types";
 
 /** Test workspace (§25): search, kind filters, requirements linkage, full trace chain. */
 export default function Tests() {
@@ -26,12 +27,12 @@ export default function Tests() {
 
   const allKinds = useMemo(() => {
     const s = new Set<string>();
-    tests.forEach((t: any) => s.add((t.kind || "acceptance").toUpperCase()));
+    tests.forEach((t) => s.add((t.kind || "acceptance").toUpperCase()));
     return ["ALL", ...Array.from(s)];
   }, [tests]);
 
   const filteredTests = useMemo(() => {
-    return tests.filter((t: any) => {
+    return tests.filter((t) => {
       const q = search.toLowerCase();
       const matchesSearch =
         (t.code || "").toLowerCase().includes(q) ||
@@ -42,8 +43,8 @@ export default function Tests() {
     });
   }, [tests, search, kindFilter]);
 
-  const kinds: Record<string, any[]> = {};
-  filteredTests.forEach((t: any) => {
+  const kinds: Record<string, TestCase[]> = {};
+  filteredTests.forEach((t) => {
     (kinds[t.kind || "acceptance"] = kinds[t.kind || "acceptance"] || []).push(t);
   });
 
@@ -89,7 +90,7 @@ export default function Tests() {
             </div>
             <div className="flex flex-wrap items-center gap-1">
               {allKinds.map((k) => {
-                const count = k === "ALL" ? tests.length : tests.filter((t: any) => (t.kind || "acceptance").toUpperCase() === k).length;
+                const count = k === "ALL" ? tests.length : tests.filter((t) => (t.kind || "acceptance").toUpperCase() === k).length;
                 const active = kindFilter === k;
                 return (
                   <button
@@ -119,17 +120,17 @@ export default function Tests() {
                   {kind} ({list.length})
                 </p>
                 <DataTable label={`${kind} tests`} head={<><th>ID</th><th>Title</th><th>Req</th><th>Chain</th><th>Steps</th></>}>
-                  {list.map((t: any) => (
+                  {list.map((t) => (
                     <tr key={t.code} className="hover:[&_td]:bg-elevated/40">
                       <td className="font-mono text-[12.5px] font-semibold text-secondary">{t.code}</td>
                       <td>
                         <span className="font-medium text-primary">{t.title}</span>
-                        <div className="mt-1"><StatusBadge value={t.kind} /></div>
+                        <div className="mt-1"><StatusBadge value={t.kind || "acceptance"} /></div>
                       </td>
-                      <td><ArtifactLink code={t.req} href={`/projects/${pid}/requirements`} /></td>
+                      <td><ArtifactLink code={t.req || ""} href={`/projects/${pid}/requirements`} /></td>
                       <td>
                         <div className="flex flex-wrap gap-1">
-                          {siblings(links, t.req, `test:${t.code}`).slice(0, 4).map((l, i) => (
+                          {siblings(links, t.req || "", `test:${t.code}`).slice(0, 4).map((l, i) => (
                             <ArtifactLink key={i} code={l.to} />
                           ))}
                         </div>

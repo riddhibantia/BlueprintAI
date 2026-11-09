@@ -14,8 +14,15 @@ import { LoadingState, ErrorState, EmptyState } from "../../../../components/ui/
 import { Drawer, Dialog } from "../../../../components/ui/overlay";
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { api } from "../../../../lib/api/client";
+import type { Requirement, TraceLink } from "../../../../lib/api/types";
 import { traceArtifact, clarify as clarifyIdea } from "../../../../lib/api/endpoints";
 import { useToast } from "../../../../components/ui/toast";
+
+/** One saved revision of a requirement, as returned by /versions?artifact_type=requirement. */
+type RequirementVersion = {
+  id: string; version: number; artifact_code?: string; created_at?: string;
+  content?: Partial<Requirement>;
+};
 
 /** Requirements workspace (§17): table + search/filter + detail drawer, cache-backed. */
 export default function Requirements() {
@@ -31,8 +38,8 @@ export default function Requirements() {
   const [answers, setAnswers] = useState("");
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [sel, setSel] = useState<any>(null);
-  const [selLinks, setSelLinks] = useState<any[]>([]);
+  const [sel, setSel] = useState<Requirement | null>(null);
+  const [selLinks, setSelLinks] = useState<TraceLink[]>([]);
   const [editingSel, setEditingSel] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -40,7 +47,7 @@ export default function Requirements() {
   const [editAc, setEditAc] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<"details" | "history">("details");
-  const [versions, setVersions] = useState<any[]>([]);
+  const [versions, setVersions] = useState<RequirementVersion[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [rollingBackId, setRollingBackId] = useState<string | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState("");
@@ -50,7 +57,7 @@ export default function Requirements() {
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [batchDeleteBusy, setBatchDeleteBusy] = useState(false);
 
-  const startEdit = (r: any) => {
+  const startEdit = (r: Requirement) => {
     setEditTitle(r.title || "");
     setEditDesc(r.description || "");
     setEditPriority(r.priority || "medium");
@@ -64,18 +71,18 @@ export default function Requirements() {
       path: `/requirements/${sel.id}`,
       init: {
         method: "PUT",
-        body: JSON.stringify({
+        body: {
           title: editTitle.trim(),
           description: editDesc.trim(),
           priority: editPriority,
           acceptance_criteria: editAc.trim(),
           expected_version: sel.version,
-        }),
+        },
       },
     }, {
       onSuccess: () => {
         setEditingSel(false);
-        setSel((prev: any) => ({
+        setSel((prev) => prev && ({
           ...prev,
           title: editTitle.trim(),
           description: editDesc.trim(),
@@ -181,14 +188,14 @@ export default function Requirements() {
     if (!ownTitle.trim()) return;
     write.mutate(
       { path: `/projects/${pid}/requirements`,
-        init: { method: "POST", body: JSON.stringify({ title: ownTitle.trim(), description: ownDesc.trim(), priority: ownPriority }) } },
+        init: { method: "POST", body: { title: ownTitle.trim(), description: ownDesc.trim(), priority: ownPriority } } },
       { onSuccess: () => { setOwnOpen(false); setOwnTitle(""); setOwnDesc(""); setOwnPriority("medium"); } });
   };
   const doGenerate = (replace: boolean) => {
     setConfirmRegen(false);
     write.mutate({
       path: `/projects/${pid}/requirements/generate`,
-      init: { method: "POST", body: JSON.stringify({ answers, replace }) },
+      init: { method: "POST", body: { answers, replace } },
     }, { onSuccess: () => setChecked(new Set()) });
   };
   const checkable = filtered.filter((r) => r.status !== "approved");
@@ -207,7 +214,7 @@ export default function Requirements() {
       setClarifying(false);
     }
   };
-  const open = async (r: any) => {
+  const open = async (r: Requirement) => {
     setSel(r);
     try { setSelLinks((await traceArtifact(pid, r.code)).forward || []); }
     catch { setSelLinks([]); }
@@ -228,7 +235,7 @@ export default function Requirements() {
   const selParam = searchParams.get("sel");
   useEffect(() => {
     if (selParam && reqs.length > 0) {
-      const match = reqs.find((r: any) => r.code === selParam);
+      const match = reqs.find((r) => r.code === selParam);
       if (match && (!sel || sel.code !== match.code)) {
         open(match);
       }
@@ -238,8 +245,8 @@ export default function Requirements() {
   const loadVersions = async (code: string) => {
     setLoadingVersions(true);
     try {
-      const allVers = await api<any[]>(`/projects/${pid}/versions?artifact_type=requirement`);
-      const filteredVers = allVers.filter((v: any) => v.artifact_code === code);
+      const allVers = await api<RequirementVersion[]>(`/projects/${pid}/versions?artifact_type=requirement`);
+      const filteredVers = allVers.filter((v) => v.artifact_code === code);
       setVersions(filteredVers);
     } catch {
       setVersions([]);
@@ -524,7 +531,7 @@ export default function Requirements() {
                     No previous revisions recorded. Current is version <b>v{sel.version}</b>.
                   </div>
                 ) : (
-                  versions.map((v: any) => {
+                  versions.map((v) => {
                     const isCurrent = v.version === sel.version;
                     const vTitle = v.content?.title || "";
                     const vAc = v.content?.acceptance_criteria || "";
@@ -616,7 +623,7 @@ export default function Requirements() {
                   <b className="text-[12px] uppercase tracking-wide text-secondary">Traceability</b>
                   {selLinks.length === 0
                     ? <p className="mt-1 text-secondary">Orphaned — no downstream links yet.</p>
-                    : <ul className="mt-1 grid gap-1.5">{selLinks.map((l: any, i: number) => (
+                    : <ul className="mt-1 grid gap-1.5">{selLinks.map((l, i) => (
                       <li key={i} className="font-mono text-[12.5px]">{l.from} → {l.to} <span className="text-secondary">({l.rel})</span></li>
                     ))}</ul>}
                 </div>
@@ -640,7 +647,7 @@ export default function Requirements() {
                     <Trash2 size={15} />
                   </button>
                 </div>
-                <p className="text-[12px] text-secondary">Linked artifacts: {selLinks.map((l: any, i: number) => <span key={i} className="mr-1"><ArtifactLink code={l.to} /></span>)}</p>
+                <p className="text-[12px] text-secondary">Linked artifacts: {selLinks.map((l, i) => <span key={i} className="mr-1"><ArtifactLink code={l.to} /></span>)}</p>
               </div>
             )}
           </div>

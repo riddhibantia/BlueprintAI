@@ -40,7 +40,7 @@ export default function Security() {
   const controls = controlsQ.data || [];
 
   const filteredControls = useMemo(() => {
-    return controls.filter((c: any) => {
+    return controls.filter((c) => {
       const q = search.toLowerCase();
       const matchesSearch =
         (c.code || "").toLowerCase().includes(q) ||
@@ -55,10 +55,10 @@ export default function Security() {
   if (controlsQ.isLoading || archQ.isLoading) return <LoadingState stage="Loading security controls" />;
   if (controlsQ.isError) return <ErrorState message={(controlsQ.error as Error)?.message} onRetry={() => controlsQ.refetch()} />;
   const hasArch = (archQ.data?.components?.length || 0) > 0;
-  const issues = (issuesQ.data || []).filter((x: any) => x.status === "open");
+  const issues = (issuesQ.data || []).filter((x) => x.status === "open");
   const links = traceQ.data?.links || [];
 
-  const selected = sel ? controls.find((c: any) => c.code === sel) : filteredControls[0] || null;
+  const selected = sel ? controls.find((c) => c.code === sel) : filteredControls[0] || null;
   const selLinks = selected ? touching(links, selected.code) : [];
 
   return (
@@ -89,8 +89,8 @@ export default function Security() {
           {/* Interactive Category Rollup Strip */}
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
             {CATS.map((cat) => {
-              const has = controls.filter((c: any) => inCat(`${c.title} ${c.description}`, cat.keys));
-              const flagged = issues.filter((i: any) => inCat(`${i.description} ${i.check}`, cat.keys));
+              const has = controls.filter((c) => inCat(`${c.title} ${c.description}`, cat.keys));
+              const flagged = issues.filter((i) => inCat(`${i.description} ${i.check}`, cat.keys));
               const ok = has.length > 0 && flagged.length === 0;
               const isSelected = activeCat === cat.label;
               return (
@@ -158,7 +158,7 @@ export default function Security() {
           ) : (
             <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_360px]">
               <div className="grid content-start gap-2.5">
-                {filteredControls.map((s: any) => (
+                {filteredControls.map((s) => (
                   <button
                     key={s.code}
                     onClick={() => setSel(s.code)}

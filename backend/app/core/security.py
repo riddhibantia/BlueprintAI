@@ -52,6 +52,22 @@ def decode_token(token: str) -> str | None:
         return None
 
 
+def token_issued_at(token: str) -> datetime | None:
+    """Aware-UTC `iat` of a valid token, or None.
+
+    Used to enforce session revocation: any token issued before the user's
+    `password_changed_at` instant is dead (see deps.current_user).
+    """
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        return None
+    iat = payload.get("iat")
+    if not isinstance(iat, (int, float)):
+        return None
+    return datetime.fromtimestamp(iat, tz=timezone.utc)
+
+
 def create_reset_token(email: str) -> str:
     """Short-lived, single-use reset token (15 minutes).
 

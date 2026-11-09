@@ -16,6 +16,12 @@ node_modules/
 dist/
 pgdata/
 .pytest_cache/
+.ruff_cache/
 .coverage
+htmlcov/
+.DS_Store
 *.tsbuildinfo
 .verify/
+*.db
+*.sqlite3
+frontend/.env*.local

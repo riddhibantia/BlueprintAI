@@ -31,7 +31,7 @@ export default function Architecture() {
   const arch = archQ.data || { components: [], relationships: [] };
   const hasPrd = !!(prdQ.data?.content && Object.keys(prdQ.data.content).length > 0);
   const links = traceQ.data?.links || [];
-  const selected = sel ? arch.components.find((c: any) => c.name === sel) : null;
+  const selected = sel ? arch.components.find((c) => c.name === sel) : null;
   const selLinks = selected ? touching(links, selected.name) : [];
 
   const add = () => {
@@ -78,7 +78,7 @@ export default function Architecture() {
         </Card>
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="grid content-start gap-2.5">
-            {arch.components.map((c: any, i: number) => (
+            {arch.components.map((c, i) => (
               <div key={c.name} role="button" tabIndex={0} aria-label={`Select ${c.name}`}
                 onClick={() => setSel(sel === c.name ? null : c.name)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(sel === c.name ? null : c.name); } }}
@@ -92,7 +92,7 @@ export default function Architecture() {
                   </span>
                   {c.id && (
                     <button type="button" aria-label={`Remove ${c.name}`}
-                      onClick={(e) => { e.stopPropagation(); setPendingDelete({ id: c.id, name: c.name }); }}
+                      onClick={(e) => { e.stopPropagation(); if (c.id) setPendingDelete({ id: c.id, name: c.name }); }}
                       className="rounded-lg p-1.5 text-muted hover:bg-canvas hover:text-danger"><Trash2 size={15} /></button>
                   )}
                 </span>
@@ -101,7 +101,7 @@ export default function Architecture() {
             <Card>
               <p className="mb-1 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">Relationships</p>
               <ul className="grid gap-1 text-[13px] text-secondary">
-                {arch.relationships.map((r: any, i: number) => (
+                {arch.relationships.map((r, i) => (
                   <li key={i}><code className="font-mono text-[12.5px] text-primary">{r.source}</code> → <code className="font-mono text-[12.5px] text-primary">{r.target}</code> <span>({r.label})</span></li>
                 ))}
               </ul>
@@ -116,7 +116,7 @@ export default function Architecture() {
                 <p className="mt-3 text-[12px] font-bold uppercase tracking-[0.06em] text-muted">Linked artifacts</p>
                 <p className="mt-1 flex flex-wrap gap-1.5">
                   {selLinks.length === 0 ? <span className="text-[12.5px] text-secondary">None yet — confirm links in Traceability.</span>
-                    : selLinks.map((l: any, i: number) => <ArtifactLink key={i} code={l.from.startsWith("component:") || !l.from.includes(String(selected.name)) ? l.from : l.to} />)}
+                    : selLinks.map((l, i) => <ArtifactLink key={i} code={l.from.startsWith("component:") || !l.from.includes(String(selected.name)) ? l.from : l.to} />)}
                 </p>
               </Card>
             ) : <EmptyState title="No component selected" hint="Click a component to inspect its links." />}

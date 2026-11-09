@@ -10,6 +10,7 @@ import { ErrorState, EmptyState, TableSkeleton } from "../../../../components/ui
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
+import { API } from "../../../../lib/api/client";
 import { Check, Copy, Download, FileJson, Play, Search, Terminal, Zap } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useToast } from "../../../../components/ui/toast";
@@ -31,7 +32,7 @@ export default function Apis() {
   const [activeTab, setActiveTab] = useState<"schemas" | "console">("schemas");
   const [customBody, setCustomBody] = useState("");
   const [simulating, setSimulating] = useState(false);
-  const [simResult, setSimResult] = useState<{ status: number; latency: number; body: any } | null>(null);
+  const [simResult, setSimResult] = useState<{ status: number; latency: number; body: unknown } | null>(null);
   const [simCopied, setSimCopied] = useState(false);
 
   // Hooks run before the loading guard — see note in stories/page.tsx.
@@ -47,7 +48,7 @@ export default function Apis() {
   }, [selParam]);
 
   const filteredApis = useMemo(() => {
-    return apis.filter((a: any) => {
+    return apis.filter((a) => {
       const matchesSearch =
         (a.path || "").toLowerCase().includes(search.toLowerCase()) ||
         (a.code || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -57,7 +58,7 @@ export default function Apis() {
     });
   }, [apis, search, methodFilter]);
 
-  const current = (sel ? apis.find((a: any) => a.code === sel) : null) || filteredApis[0] || apis[0];
+  const current = (sel ? apis.find((a) => a.code === sel) : null) || filteredApis[0] || apis[0];
 
   useEffect(() => {
     if (current?.request_schema && Object.keys(current.request_schema).length > 0) {
@@ -95,7 +96,7 @@ export default function Apis() {
   const copyCurl = async () => {
     if (!current) return;
     const method = (current.method || "GET").toUpperCase();
-    let cmd = `curl -X ${method} "http://localhost:8000${current.path}"`;
+    let cmd = `curl -X ${method} "${API}${current.path}"`;
     if (current.auth && current.auth !== "none") {
       cmd += ` \\\n  -H "Authorization: Bearer <YOUR_TOKEN>"`;
     }
@@ -199,7 +200,7 @@ export default function Apis() {
             </div>
             <div className="flex flex-wrap items-center gap-1">
               {methods.map((m) => {
-                const count = m === "ALL" ? apis.length : apis.filter((a: any) => (a.method || "").toUpperCase() === m).length;
+                const count = m === "ALL" ? apis.length : apis.filter((a) => (a.method || "").toUpperCase() === m).length;
                 if (m !== "ALL" && count === 0) return null;
                 const active = methodFilter === m;
                 return (
@@ -222,7 +223,7 @@ export default function Apis() {
               <EmptyState title="No matching endpoints" hint={`No APIs match "${search}" with method filter ${methodFilter}.`} />
             ) : (
               <DataTable label="API endpoints" head={<><th>ID</th><th>Method</th><th>Path</th><th>Auth</th></>}>
-                {filteredApis.map((a: any) => {
+                {filteredApis.map((a) => {
                   const isSelected = current?.code === a.code;
                   return (
                     <tr

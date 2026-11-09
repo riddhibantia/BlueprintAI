@@ -45,7 +45,7 @@ export default function Blueprint() {
   const b: Bundle = {
     reqs: reqsQ.data || [], prd: prdQ.data, stories: storiesQ.data || [], arch: archQ.data, db: dbQ.data,
     apis: apisQ.data || [], security: secQ.data || [], tasks: tasksQ.data || [], tests: testsQ.data || [],
-    coverage: traceQ.data?.coverage, openIssues: (issuesQ.data || []).filter((i: any) => i.status === "open").length,
+    coverage: traceQ.data?.coverage, openIssues: (issuesQ.data || []).filter((i) => i.status === "open").length,
     links: traceQ.data?.links || [],
   };
   const stages = computeLifecycle(b);

@@ -1,6 +1,7 @@
 "use client";
 import { useParams } from "next/navigation";
 import { LayoutGrid, Table2, ListChecks, GripVertical, CheckCircle2, Clock, CircleDot, ArrowRight, RotateCcw } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { Search } from "lucide-react";
 import { useTasks, useRequirements, useWrite } from "../../../../lib/query/useArtifacts";
@@ -12,6 +13,7 @@ import { LoadingState, ErrorState } from "../../../../components/ui/feedback";
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { useToast } from "../../../../components/ui/toast";
+import type { Task as ApiTask } from "../../../../lib/api/types";
 
 /** Delivery workspace (§24): drag-and-drop Kanban board, table, or checklist — one shared cache. */
 const COLS = ["todo", "doing", "done"] as const;
@@ -20,7 +22,7 @@ type ColType = (typeof COLS)[number];
 const NEXT: Record<string, string> = { todo: "doing", doing: "done", done: "todo" };
 const ADVANCE_LABEL: Record<string, string> = { todo: "Start →", doing: "Complete ✓", done: "Reopen" };
 
-const COL_CONFIG: Record<ColType, { label: string; icon: any; dotClass: string }> = {
+const COL_CONFIG: Record<ColType, { label: string; icon: LucideIcon; dotClass: string }> = {
   todo: { label: "To Do", icon: CircleDot, dotClass: "text-muted" },
   doing: { label: "In Progress", icon: Clock, dotClass: "text-accent animate-pulse" },
   done: { label: "Completed", icon: CheckCircle2, dotClass: "text-success" },
@@ -56,7 +58,7 @@ export default function Tasks() {
   const filtered = useMemo(() => {
     if (!q.trim()) return tasks;
     const lower = q.toLowerCase();
-    return tasks.filter((t: any) =>
+    return tasks.filter((t) =>
       (t.code || "").toLowerCase().includes(lower) ||
       (t.title || "").toLowerCase().includes(lower) ||
       (t.epic || "").toLowerCase().includes(lower)
@@ -76,32 +78,32 @@ export default function Tasks() {
   if (tasksQ.isLoading || reqsQ.isLoading) return <LoadingState stage="Loading implementation plan" />;
   if (tasksQ.isError) return <ErrorState message={(tasksQ.error as Error)?.message} onRetry={() => tasksQ.refetch()} />;
   const hasReqs = (reqsQ.data || []).length > 0;
-  const done = tasks.filter((t: any) => t.status === "done").length;
+  const done = tasks.filter((t) => t.status === "done").length;
 
   const patch = (id: string, status: string) => write.mutate({
     path: `/projects/${pid}/tasks/${id}`, init: { method: "PATCH", body: JSON.stringify({ status }) },
   });
 
-  const advance = (t: any) => {
+  const advance = (t: ApiTask) => {
     const nextStatus = NEXT[t.status] || "todo";
     patch(t.id, nextStatus);
     toast.info(`Updated ${t.code} → ${COL_CONFIG[nextStatus as ColType]?.label || nextStatus}`);
   };
 
   const handleDrop = (taskId: string, targetCol: ColType) => {
-    const targetTask = tasks.find((t: any) => String(t.id) === String(taskId));
+    const targetTask = tasks.find((t) => String(t.id) === String(taskId));
     if (!targetTask) return;
     if (targetTask.status === targetCol) return;
     patch(targetTask.id, targetCol);
     toast.success(`Moved ${targetTask.code} to ${COL_CONFIG[targetCol].label}`);
   };
 
-  const checkItems: Task[] = tasks.map((t: any) => ({ id: String(t.id), label: `${t.code} · ${t.title}`, done: t.status === "done" }));
+  const checkItems: Task[] = tasks.map((t) => ({ id: String(t.id), label: `${t.code} · ${t.title}`, done: t.status === "done" }));
   const onCheck = (next: Task[]) => {
     const prev = new Map(checkItems.map((t) => [t.id, t.done]));
     const flipped = next.find((t) => prev.get(t.id) !== t.done);
     if (!flipped) return;
-    const target = tasks.find((t: any) => String(t.id) === flipped.id);
+    const target = tasks.find((t) => String(t.id) === flipped.id);
     if (target) patch(target.id, flipped.done ? "done" : "todo");
   };
 
@@ -150,7 +152,7 @@ export default function Tasks() {
           {COLS.map((col) => {
             const conf = COL_CONFIG[col];
             const ColIcon = conf.icon;
-            const colTasks = filtered.filter((t: any) => t.status === col);
+            const colTasks = filtered.filter((t) => t.status === col);
             const isOver = dragOverCol === col;
 
             return (
@@ -189,9 +191,9 @@ export default function Tasks() {
                 </div>
 
                 <div className="flex flex-1 flex-col gap-2">
-                  {colTasks.map((t: any) => {
+                  {colTasks.map((t) => {
                     const isDragging = draggingTaskId === String(t.id);
-                    const priClass = PRIORITY_BADGES[t.priority] || "bg-subtle text-secondary border-border";
+                    const priClass = PRIORITY_BADGES[t.priority || ""] || "bg-subtle text-secondary border-border";
 
                     return (
                       <Card
@@ -235,7 +237,7 @@ export default function Tasks() {
                         )}
 
                         <div className="mt-2.5 flex items-center justify-between border-t border-border/60 pt-2 text-[11.5px]">
-                          <ArtifactLink code={t.req} href={`/projects/${pid}/requirements`} />
+                          <ArtifactLink code={t.req || ""} href={`/projects/${pid}/requirements`} />
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); advance(t); }}
@@ -268,12 +270,12 @@ export default function Tasks() {
       ) : (
         <>
         <DataTable label="Tasks" head={<><th>ID</th><th>Title</th><th>Epic</th><th>Req</th><th>Priority</th><th>Status</th><th></th></>}>
-          {paginated.map((t: any) => (
+          {paginated.map((t) => (
             <tr key={t.id}>
               <td className="font-mono text-[12.5px]">{t.code}</td>
               <td>{t.title}</td>
               <td className="text-secondary">{t.epic}</td>
-              <td><ArtifactLink code={t.req} href={`/projects/${pid}/requirements`} /></td>
+              <td><ArtifactLink code={t.req || ""} href={`/projects/${pid}/requirements`} /></td>
               <td className="text-secondary">{t.priority}</td>
               <td><StatusBadge value={t.status} /></td>
               <td><button onClick={() => advance(t)} disabled={write.isPending} className="text-[12.5px] font-semibold text-accent hover:underline disabled:opacity-50">{ADVANCE_LABEL[t.status] || "→ todo"}</button></td>

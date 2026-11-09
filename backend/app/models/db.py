@@ -1,6 +1,6 @@
 """Full data model per spec §25/§26. SQLite-compatible; pgvector used only on Postgres."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (Column, String, Text, DateTime, ForeignKey, Integer, Boolean, JSON)
 from app.core.database import Base
 
@@ -9,9 +9,21 @@ def _id():
     return str(uuid.uuid4())
 
 
+def _now():
+    """Timezone-aware UTC now (naive utcnow is deprecated and compares
+    wrongly against the aware values written by the auth routes)."""
+    return datetime.now(timezone.utc)
+
+
+def _now_sec():
+    """Whole-second UTC now — used for password_changed_at so it shares the
+    JWT `iat` clock resolution (see deps.current_user revocation check)."""
+    return _now().replace(microsecond=0)
+
+
 class TimestampMixin:
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
 
 
 class User(Base, TimestampMixin):
@@ -23,7 +35,7 @@ class User(Base, TimestampMixin):
     # Bumped on every password change/reset: any session or reset token issued
     # before this instant is dead, so a stolen token cannot outlive the reset
     # that was meant to revoke it.
-    password_changed_at = Column(DateTime, default=datetime.utcnow)
+    password_changed_at = Column(DateTime, default=_now_sec)
 
 
 class PasswordResetToken(Base):
@@ -31,7 +43,7 @@ class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
     jti = Column(String, primary_key=True)
     email = Column(String, index=True, nullable=False)
-    used_at = Column(DateTime, default=datetime.utcnow)
+    used_at = Column(DateTime, default=_now)
 
 
 class Project(Base, TimestampMixin):
@@ -182,7 +194,7 @@ class TraceabilityLink(Base):
     target_type = Column(String, nullable=False)
     target_id = Column(String, nullable=False)
     relationship_type = Column(String, default="implements")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
 
 class ConsistencyIssue(Base, TimestampMixin):
@@ -204,7 +216,7 @@ class ImpactRun(Base):
     requirement_code = Column(String, nullable=False)
     affected = Column(JSON, default=list)
     explanation = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
 
 class Document(Base, TimestampMixin):
@@ -240,7 +252,7 @@ class AgentRun(Base):
     latency_ms = Column(Integer, default=0)
     tokens = Column(Integer, default=0)
     status = Column(String, default="done")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
 
 class ArtifactVersion(Base):
@@ -252,7 +264,7 @@ class ArtifactVersion(Base):
     version = Column(Integer, default=1)
     content = Column(JSON, default=dict)
     status = Column(String, default="generated")  # generated|approved
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
 
 class AuditLog(Base):
@@ -262,7 +274,7 @@ class AuditLog(Base):
     user_id = Column(String, default="")
     action = Column(String, nullable=False)
     detail = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
 
 class Prd(Base, TimestampMixin):
