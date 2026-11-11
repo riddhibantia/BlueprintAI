@@ -25,6 +25,7 @@ import { Code2, Copy, Check, Search, Database as DbIcon, KeyRound, Layers, Netwo
 import { useToast } from "../../../../components/ui/toast";
 import CodeBlock from "../../../../components/ui/code-block";
 import { copyText } from "../../../../lib/clipboard";
+import { api } from "../../../../lib/api/client";
 
 /** Render DDL client-side from structured field data (§21: no backend endpoint for SQL). */
 export function toSQL(entities: DbEntity[]): string {
@@ -118,12 +119,8 @@ export default function Database() {
   const loadSchema = async (selectedTarget: string) => {
     setLoadingCode(true);
     try {
-      const res = await fetch(`/api/proxy/projects/${pid}/export/schema?target=${selectedTarget}`, { credentials: "include" });
-      if (res.ok) {
-        setCode(await res.text());
-      } else {
-        setCode(toSQL(dbQ.data?.entities || []));
-      }
+      const res = await api<string>(`/projects/${pid}/export/schema?target=${selectedTarget}`);
+      setCode(res);
     } catch {
       setCode(toSQL(dbQ.data?.entities || []));
     } finally {

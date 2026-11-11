@@ -124,7 +124,7 @@ def get_evidence(db: Session, project_id: str, query: str, k: int = 5) -> list[d
     return retrieve(chunks, query, k=k)
 
 
-def format_evidence_text(hits: list[dict], max_chars_per_hit: int = 500) -> str:
+def format_evidence_text(hits: list[dict], max_chars_per_hit: int = 1000) -> str:
     """Format retrieved hits into clean contextual evidence for LLM prompts and generators."""
     if not hits:
         return ""

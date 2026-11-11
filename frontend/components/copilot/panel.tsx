@@ -84,10 +84,19 @@ export function CopilotPanel({ onClose, hideHeader = false }: { onClose?: () => 
                   mode: data.mode || "ai",
                 });
               } else if (data.type === "token") {
-                accumulated += data.token;
-                setAnswer((prev) => prev ? { ...prev, answer: accumulated } : null);
+                const tokenText = data.text !== undefined ? data.text : (data.token ?? "");
+                accumulated += tokenText;
+                setAnswer((prev) => ({
+                  answer: accumulated,
+                  evidence: prev?.evidence || [],
+                  mode: prev?.mode || "ai",
+                }));
               } else if (data.type === "done") {
-                setAnswer((prev) => prev ? { ...prev, answer: accumulated } : null);
+                setAnswer((prev) => ({
+                  answer: accumulated,
+                  evidence: data.evidence || prev?.evidence || [],
+                  mode: data.mode || prev?.mode || "ai",
+                }));
                 setAnsweredAt(fingerprint);
               } else if (data.type === "error") {
                 setErr(data.error);

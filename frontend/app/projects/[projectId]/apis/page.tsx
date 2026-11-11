@@ -10,7 +10,7 @@ import { ErrorState, EmptyState, TableSkeleton } from "../../../../components/ui
 import { ArtifactLink } from "../../../../components/ui/activity";
 import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { touching } from "../../../../lib/query/links";
-import { API } from "../../../../lib/api/client";
+import { API, apiDownload } from "../../../../lib/api/client";
 import { Check, Copy, Download, FileJson, Play, Search, Terminal, Zap } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useToast } from "../../../../components/ui/toast";
@@ -77,16 +77,7 @@ export default function Apis() {
 
   const downloadJson = async (endpoint: string, filename: string) => {
     try {
-      const res = await fetch(`/api/proxy/projects/${pid}/export/${endpoint}`, { credentials: "include" });
-      if (!res.ok) return;
-      const data = await res.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      await apiDownload(`/projects/${pid}/export/${endpoint}`, filename, true);
       toast.success(`Downloaded ${filename}`);
     } catch {
       toast.error("Export error");

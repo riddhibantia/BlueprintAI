@@ -41,6 +41,7 @@ import { ApprovalBanner } from "../../../../components/ui/activity";
 import { PrereqBanner, StageEmpty } from "../../../../components/ui/stage";
 import { Dialog } from "../../../../components/ui/overlay";
 import { useToast } from "../../../../components/ui/toast";
+import { api } from "../../../../lib/api/client";
 
 function buildPrdMarkdown(title: string, status: string, updatedAt: string, content: Prd["content"]): string {
   const lines: string[] = [];
@@ -189,10 +190,8 @@ export default function Prd() {
     setHistoryOpen(true);
     setLoadingVersions(true);
     try {
-      const res = await fetch(`/api/proxy/projects/${pid}/versions?artifact_type=prd`, { credentials: "include" });
-      if (res.ok) {
-        setVersions(await res.json());
-      }
+      const data = await api<PrdVersion[]>(`/projects/${pid}/versions?artifact_type=prd`);
+      setVersions(Array.isArray(data) ? data : []);
     } catch {
       setVersions([]);
     } finally {
@@ -202,17 +201,12 @@ export default function Prd() {
 
   const rollback = async (v: PrdVersion) => {
     try {
-      const res = await fetch(`/api/proxy/projects/${pid}/versions/${v.id}/rollback`, {
+      await api(`/projects/${pid}/versions/${v.id}/rollback`, {
         method: "POST",
-        credentials: "include",
       });
-      if (res.ok) {
-        toast.success(`Rolled back PRD to version ${v.version}!`);
-        setHistoryOpen(false);
-        prdQ.refetch();
-      } else {
-        toast.error("Rollback failed");
-      }
+      toast.success(`Rolled back PRD to version ${v.version}!`);
+      setHistoryOpen(false);
+      prdQ.refetch();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rollback failed");
     }
